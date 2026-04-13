@@ -108,6 +108,25 @@ body {
 }
 .btn-primary:hover { opacity: 0.85; }
 
+/* ── DASHBOARD DROP OVERLAY ──────────────────────────── */
+#dashboard-drop-overlay {
+  display: none;
+  position: fixed;
+  inset: 56px 0 0 0;
+  background: rgba(88,166,255,0.07);
+  border: 3px dashed var(--accent);
+  z-index: 400;
+  pointer-events: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+#dashboard-drop-overlay.active { display: flex; }
+
 /* ── DASHBOARD ───────────────────────────────────────── */
 #dashboard { display: none; flex: 1; flex-direction: column; overflow: hidden; }
 
@@ -154,15 +173,17 @@ body {
   border-bottom: 1px solid rgba(48,54,61,0.5);
   font-size: 0.8rem;
   user-select: none;
+  cursor: pointer;
 }
-.gantt-row:hover { background: rgba(88,166,255,0.04); }
+.gantt-row:hover { background: rgba(88,166,255,0.07); }
 .g-wbs { font-size: 0.7rem; font-family: monospace; }
 .g-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
 .g-team { color: var(--muted); font-size: 0.72rem; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-pct { text-align: right; font-size: 0.75rem; font-weight: 700; }
 
 /* Right scrollable area */
-#gantt-right { flex: 1; overflow: auto; }
+#gantt-right { flex: 1; overflow: auto; cursor: grab; }
+#gantt-right.dragging { cursor: grabbing; user-select: none; }
 #gantt-right::-webkit-scrollbar { height: 6px; width: 4px; }
 #gantt-right::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
@@ -224,6 +245,54 @@ body {
 .badge-achieved { background: rgba(63,185,80,0.2); color: #3fb950; }
 .badge-target   { background: rgba(88,166,255,0.2); color: #58a6ff; }
 .badge-tbd      { background: rgba(210,153,34,0.2); color: #d29922; }
+
+/* ── ORG CHART ───────────────────────────────────────── */
+#org-panel { background: var(--bg); }
+#org-container {
+  flex: 1;
+  overflow: auto;
+  padding: 32px;
+  cursor: grab;
+}
+#org-container.dragging { cursor: grabbing; user-select: none; }
+#org-container::-webkit-scrollbar { width: 6px; height: 6px; }
+#org-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+#org-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+#org-empty code {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+
+/* ── TOOLTIP ─────────────────────────────────────────── */
+#tooltip {
+  position: fixed;
+  display: none;
+  z-index: 600;
+  background: #1c2128;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.8rem;
+  max-width: 280px;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  line-height: 1.5;
+}
+.tt-title { font-weight: 700; font-size: 0.88rem; margin-bottom: 5px; }
+.tt-row { color: var(--muted); display: flex; gap: 6px; }
+.tt-row strong { color: var(--text); }
 
 /* ── SIDE PANEL ──────────────────────────────────────── */
 #side-panel {
@@ -299,6 +368,7 @@ body {
   text-transform: uppercase;
   margin-bottom: 10px;
 }
+.sp-section-label + .sp-section-label { margin-top: 16px; }
 
 .task-card {
   background: var(--bg);
@@ -312,6 +382,8 @@ body {
 .task-card.warn  { border-left-color: var(--warning); }
 .task-card.done  { border-left-color: var(--success); }
 .task-card.future{ border-left-color: var(--border); }
+.task-card.clickable { cursor: pointer; }
+.task-card.clickable:hover { border-color: var(--accent); }
 
 .tc-id   { font-size: 0.7rem; color: var(--muted); margin-bottom: 2px; }
 .tc-name { font-weight: 700; font-size: 0.88rem; margin-bottom: 5px; }
@@ -333,6 +405,7 @@ body {
     <div class="tabs" id="tabs" style="display:none">
       <button class="tab-btn active" data-tab="gantt" onclick="switchTab(this,'gantt')">Gantt Chart</button>
       <button class="tab-btn"        data-tab="specs" onclick="switchTab(this,'specs')">Vehicle Specifications</button>
+      <button class="tab-btn" id="org-tab-btn" data-tab="org" onclick="switchTab(this,'org')" style="display:none">Org Chart</button>
     </div>
     <button class="btn-secondary" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
   </div>
@@ -348,11 +421,18 @@ body {
       <div class="drop-title">Drop your Excel file here</div>
       <div class="drop-sub">
         Accepts any .xlsx file with <strong>Project Info</strong>, <strong>Schedule</strong>, and <strong>Specifications</strong> sheets<br>
+        <em style="font-size:0.82em">Optional: add an <strong>Org Chart</strong> sheet to enable the org chart view</em><br><br>
         — or click below to generate a sample file first —
       </div>
       <button class="btn-primary" onclick="document.getElementById('file-input').click()">Browse for File</button>
     </div>
     <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
+  </div>
+
+  <!-- DASHBOARD DROP OVERLAY (shown when dragging over loaded dashboard) -->
+  <div id="dashboard-drop-overlay">
+    <div style="font-size:2rem">📂</div>
+    <div>Drop to reload dashboard</div>
   </div>
 
   <!-- DASHBOARD (shown after load) -->
@@ -389,21 +469,38 @@ body {
       </div>
     </div>
 
+    <!-- ORG CHART TAB -->
+    <div class="tab-panel" id="org-panel">
+      <div id="org-empty" style="display:none">
+        <div style="font-size:2rem">👥</div>
+        <div>No org chart data found.</div>
+        <div>Add an <code>Org Chart</code> sheet to your Excel file with columns:<br>
+          <code>Name</code>, <code>Title</code>, <code>Team</code>, <code>Reports To</code>, <code>Email</code>
+        </div>
+      </div>
+      <div id="org-container">
+        <div id="org-svg-wrap"></div>
+      </div>
+    </div>
+
   </div><!-- /dashboard -->
 </div><!-- /main -->
 
 <!-- SIDE PANEL -->
 <div id="side-panel">
   <div id="sp-header">
-    <div id="sp-title">Task Dependencies</div>
+    <div id="sp-title">Details</div>
     <button id="sp-close" onclick="closeSidePanel()">✕</button>
   </div>
   <div id="sp-body"></div>
 </div>
 
+<!-- TOOLTIP -->
+<div id="tooltip"></div>
+
 <script>
 // ─── App State ────────────────────────────────────────────────────────────────
-const S = { info: {}, tasks: [], specs: [] };
+const S = { info: {}, tasks: [], specs: [], org: [] };
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
@@ -422,6 +519,18 @@ const SPEC_COLORS = {
   Safety:      { bg: 'rgba(248,113,113,.12)', text: '#f87171' },
   Software:    { bg: 'rgba(167,139,250,.12)', text: '#a78bfa' },
 };
+const TEAM_COLORS = {
+  Powertrain:    '#ef4444',
+  Chassis:       '#60a5fa',
+  Electrical:    '#fbbf24',
+  Software:      '#a78bfa',
+  Safety:        '#f87171',
+  Body:          '#34d399',
+  Systems:       '#0891b2',
+  Manufacturing: '#d97706',
+  'All Teams':   '#58a6ff',
+};
+function teamColor(t) { return TEAM_COLORS[t] || '#58a6ff'; }
 
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 function switchTab(btn, id) {
@@ -429,15 +538,29 @@ function switchTab(btn, id) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById(id + '-panel').classList.add('active');
-  if (id !== 'specs') closeSidePanel();
+  closeSidePanel();
 }
 
-// ─── Drag & Drop ──────────────────────────────────────────────────────────────
+// ─── Drag & Drop file loading ─────────────────────────────────────────────────
 const dz = document.getElementById('dropzone');
-document.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
-document.addEventListener('dragleave', e => { if (!e.relatedTarget) dz.classList.remove('drag-over'); });
+const overlay = document.getElementById('dashboard-drop-overlay');
+let dashboardLoaded = false;
+
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  if (dashboardLoaded) overlay.classList.add('active');
+  else dz.classList.add('drag-over');
+});
+document.addEventListener('dragleave', e => {
+  if (!e.relatedTarget) {
+    dz.classList.remove('drag-over');
+    overlay.classList.remove('active');
+  }
+});
 document.addEventListener('drop', e => {
-  e.preventDefault(); dz.classList.remove('drag-over');
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  overlay.classList.remove('active');
   const f = e.dataTransfer.files[0];
   if (f) loadFile(f);
 });
@@ -459,16 +582,14 @@ function loadFile(file) {
 
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
 function parseWorkbook(wb) {
-  S.info = {}; S.tasks = []; S.specs = [];
+  S.info = {}; S.tasks = []; S.specs = []; S.org = [];
 
-  // Project Info
   const ws1 = wb.Sheets['Project Info'];
   if (ws1) {
     XLSX.utils.sheet_to_json(ws1, { header:1 })
       .forEach(r => { if (r[0] && r[1] != null) S.info[String(r[0]).trim()] = r[1]; });
   }
 
-  // Schedule
   const ws2 = wb.Sheets['Schedule'];
   if (ws2) {
     const rows = XLSX.utils.sheet_to_json(ws2, { header:1 });
@@ -491,7 +612,6 @@ function parseWorkbook(wb) {
     });
   }
 
-  // Specifications
   const ws3 = wb.Sheets['Specifications'];
   if (ws3) {
     const rows = XLSX.utils.sheet_to_json(ws3, { header:1 });
@@ -508,6 +628,22 @@ function parseWorkbook(wb) {
         group:    String(g('Responsible Group') || ''),
         notes:    String(g('Notes') || ''),
         depIds:   parseDeps(g('Dependent Task IDs')),
+      };
+    });
+  }
+
+  const ws4 = wb.Sheets['Org Chart'];
+  if (ws4) {
+    const rows = XLSX.utils.sheet_to_json(ws4, { header:1 });
+    const h = rows[0] || [];
+    S.org = rows.slice(1).filter(r => r[h.indexOf('Name')] != null).map(r => {
+      const g = k => r[h.indexOf(k)];
+      return {
+        name:      String(g('Name') || ''),
+        title:     String(g('Title') || ''),
+        team:      String(g('Team') || ''),
+        reportsTo: String(g('Reports To') || ''),
+        email:     String(g('Email') || ''),
       };
     });
   }
@@ -535,16 +671,54 @@ function renderDashboard() {
   document.getElementById('dropzone').style.display = 'none';
   document.getElementById('dashboard').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
+  document.getElementById('org-tab-btn').style.display = S.org.length ? '' : 'none';
+  dashboardLoaded = true;
   renderGantt();
   renderSpecs();
+  renderOrgChart();
 }
 
 // ─── GANTT ────────────────────────────────────────────────────────────────────
-const PX = 4;   // pixels per day
-const RH = 36;  // row height
-const HH = 60;  // header height
+const PX = 4;
+const RH = 36;
+const HH = 60;
 
 function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
+
+// Drag-pan state for gantt-right
+let ganttDragging = false, ganttDragDidMove = false, ganttDragStartX, ganttDragScrollLeft;
+
+function initGanttPan() {
+  const right = document.getElementById('gantt-right');
+  right.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    ganttDragging = true; ganttDragDidMove = false;
+    ganttDragStartX = e.pageX;
+    ganttDragScrollLeft = right.scrollLeft;
+    right.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!ganttDragging) return;
+    const dx = e.pageX - ganttDragStartX;
+    if (Math.abs(dx) > 4) ganttDragDidMove = true;
+    right.scrollLeft = ganttDragScrollLeft - dx;
+  });
+  document.addEventListener('mouseup', () => {
+    if (!ganttDragging) return;
+    ganttDragging = false;
+    document.getElementById('gantt-right').classList.remove('dragging');
+  });
+}
+initGanttPan();
+
+// Scroll sync (set up once)
+document.getElementById('gantt-right').addEventListener('scroll', () => {
+  document.getElementById('gantt-left-body').scrollTop = document.getElementById('gantt-right').scrollTop;
+}, { passive: true });
+document.getElementById('gantt-left-body').addEventListener('scroll', () => {
+  document.getElementById('gantt-right').scrollTop = document.getElementById('gantt-left-body').scrollTop;
+}, { passive: true });
 
 function renderGantt() {
   if (!S.tasks.length) return;
@@ -570,6 +744,9 @@ function renderGantt() {
       <span class="g-name" style="padding-left:${depth*10}px" title="${t.name}">${t.milestone ? '◆ ' : ''}${t.name}</span>
       <span class="g-team" title="${t.team}">${t.team}</span>
       <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>`;
+    div.addEventListener('click', () => openTaskPanel(t.id));
+    div.addEventListener('mouseenter', e => showTooltip(t, e));
+    div.addEventListener('mouseleave', hideTooltip);
     lb.appendChild(div);
   });
 
@@ -578,7 +755,7 @@ function renderGantt() {
   svg.setAttribute('width', W); svg.setAttribute('height', H);
   svg.style.display = 'block';
 
-  // Defs (arrowhead)
+  // Arrowhead marker
   const defs = document.createElementNS(NS, 'defs');
   const mk = document.createElementNS(NS, 'marker');
   mk.setAttribute('id', 'arr'); mk.setAttribute('markerWidth', '7');
@@ -589,45 +766,49 @@ function renderGantt() {
   poly.setAttribute('fill', 'rgba(139,148,158,0.5)');
   mk.appendChild(poly); defs.appendChild(mk); svg.appendChild(defs);
 
-  // Header background
   appendRect(svg, NS, 0, 0, W, HH, '#161b22');
 
-  // Alternating row stripes
   S.tasks.forEach((_, i) => {
     if (i % 2 === 0) appendRect(svg, NS, 0, HH + i*RH, W, RH, 'rgba(255,255,255,0.015)');
   });
 
-  // Month / week header
   renderHeader(svg, NS, minD, maxD, W);
 
-  // Row dividers
   for (let i = 0; i <= S.tasks.length; i++) {
     appendLine(svg, NS, 0, W, HH + i*RH, HH + i*RH, 'rgba(48,54,61,0.5)', 1);
   }
 
-  // Bar positions for arrows
   const barPos = {};
 
-  // Bars
   S.tasks.forEach((t, i) => {
     if (!t.start || !t.end) return;
-    const x  = daysBetween(minD, t.start) * PX;
-    const w  = Math.max(daysBetween(t.start, t.end) * PX, PX);
+    const x   = daysBetween(minD, t.start) * PX;
+    const w   = Math.max(daysBetween(t.start, t.end) * PX, PX);
     const midY = HH + i*RH + RH/2;
     const color = GANTT_COLORS[t.category] || '#58a6ff';
+
+    // Invisible hit area for the full row
+    const hit = document.createElementNS(NS, 'rect');
+    hit.setAttribute('x', 0); hit.setAttribute('y', HH + i*RH);
+    hit.setAttribute('width', W); hit.setAttribute('height', RH);
+    hit.setAttribute('fill', 'transparent');
+    hit.style.cursor = 'pointer';
+    hit.addEventListener('mouseenter', e => showTooltip(t, e));
+    hit.addEventListener('mouseleave', hideTooltip);
+    hit.addEventListener('click', () => { if (!ganttDragDidMove) openTaskPanel(t.id); });
+    svg.appendChild(hit);
 
     if (t.milestone) {
       const mx = x + w, sz = 7;
       const pts = `${mx},${midY-sz} ${mx+sz},${midY} ${mx},${midY+sz} ${mx-sz},${midY}`;
       const d = document.createElementNS(NS, 'polygon');
       d.setAttribute('points', pts); d.setAttribute('fill', color);
+      d.style.pointerEvents = 'none';
       svg.appendChild(d);
       barPos[t.id] = { sx: mx - sz, ex: mx + sz, my: midY };
     } else {
       const by = HH + i*RH + RH*0.28, bh = RH*0.44;
-      // track
       appendRect(svg, NS, x, by, w, bh, color + '30', 4);
-      // fill
       if (t.pct > 0) appendRect(svg, NS, x, by, w*(t.pct/100), bh, color, 4);
       else {
         const r = document.createElementNS(NS, 'rect');
@@ -635,6 +816,7 @@ function renderGantt() {
         r.setAttribute('width', w); r.setAttribute('height', bh);
         r.setAttribute('rx', 4); r.setAttribute('fill', 'none');
         r.setAttribute('stroke', color); r.setAttribute('stroke-width', 1.5);
+        r.style.pointerEvents = 'none';
         svg.appendChild(r);
       }
       barPos[t.id] = { sx: x, ex: x + w, my: midY };
@@ -653,6 +835,7 @@ function renderGantt() {
       p.setAttribute('d', pathD); p.setAttribute('fill', 'none');
       p.setAttribute('stroke', 'rgba(139,148,158,0.35)'); p.setAttribute('stroke-width', 1.5);
       p.setAttribute('marker-end', 'url(#arr)');
+      p.style.pointerEvents = 'none';
       svg.appendChild(p);
     });
   });
@@ -665,38 +848,32 @@ function renderGantt() {
     tl.setAttribute('x', tx+4); tl.setAttribute('y', 13);
     tl.setAttribute('fill', '#f85149'); tl.setAttribute('font-size', '10');
     tl.setAttribute('font-weight', '700'); tl.textContent = 'Today';
+    tl.style.pointerEvents = 'none';
     svg.appendChild(tl);
   }
 
   document.getElementById('gantt-svg-wrap').innerHTML = '';
   document.getElementById('gantt-svg-wrap').appendChild(svg);
 
-  // Sync vertical scroll
+  // Scroll to today on first load
   const right = document.getElementById('gantt-right');
-  right.addEventListener('scroll', () => { lb.scrollTop = right.scrollTop; }, { passive:true });
-  lb.addEventListener('scroll', () => { right.scrollTop = lb.scrollTop; }, { passive:true });
+  if (tx > right.clientWidth / 2) {
+    right.scrollLeft = tx - right.clientWidth / 2;
+  }
 }
 
 function renderHeader(svg, NS, minD, maxD, W) {
-  // Header bottom border
   appendLine(svg, NS, 0, W, HH, HH, '#30363d', 1);
-
   const cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
   while (cur <= maxD) {
     const x = daysBetween(minD, cur) * PX;
-
-    // Month divider
     appendLine(svg, NS, x, x, 0, HH + 9999, 'rgba(48,54,61,0.6)', 1);
-
-    // Month label
     const ml = document.createElementNS(NS, 'text');
     ml.setAttribute('x', x+5); ml.setAttribute('y', 30);
     ml.setAttribute('fill', '#8b949e'); ml.setAttribute('font-size', '11');
     ml.setAttribute('font-weight', '700');
     ml.textContent = cur.toLocaleString('default', { month: 'short' }) + ' ' + cur.getFullYear();
     svg.appendChild(ml);
-
-    // Week ticks
     const nxt = new Date(cur); nxt.setMonth(nxt.getMonth()+1);
     const wk = new Date(cur); wk.setDate(wk.getDate() + (7 - wk.getDay()));
     while (wk < nxt && wk <= maxD) {
@@ -713,7 +890,6 @@ function renderHeader(svg, NS, minD, maxD, W) {
   }
 }
 
-// SVG helpers
 function appendRect(svg, NS, x, y, w, h, fill, rx=0) {
   const r = document.createElementNS(NS, 'rect');
   r.setAttribute('x',x); r.setAttribute('y',y);
@@ -729,6 +905,44 @@ function appendLine(svg, NS, x1, x2, y1, y2, stroke, sw, dash='') {
   if (dash) l.setAttribute('stroke-dasharray',dash);
   svg.appendChild(l); return l;
 }
+
+// ─── TOOLTIP ─────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(t, e) {
+  const color = GANTT_COLORS[t.category] || '#58a6ff';
+  const depNames = t.deps.map(id => {
+    const dep = S.tasks.find(d => d.id === id);
+    return dep ? `Task ${id}: ${dep.name}` : `Task ${id}`;
+  });
+  tooltip.innerHTML = `
+    <div class="tt-title">${t.milestone ? '◆ ' : ''}${t.name}</div>
+    <div class="tt-row"><strong style="color:${color}">${t.category}</strong></div>
+    <div class="tt-row"><strong>Team:</strong>${t.team || '—'}</div>
+    <div class="tt-row"><strong>Start:</strong>${fmt(t.start)}</div>
+    <div class="tt-row"><strong>End:</strong>${fmt(t.end)}</div>
+    <div class="tt-row"><strong>Progress:</strong>${t.pct}% complete</div>
+    ${t.deps.length ? `<div class="tt-row"><strong>Depends on:</strong>${depNames.join(', ')}</div>` : ''}
+    ${t.notes ? `<div class="tt-row" style="margin-top:4px;font-style:italic">${t.notes}</div>` : ''}
+    <div class="tt-row" style="margin-top:6px;font-size:0.72rem;color:var(--muted)">Click for full details</div>`;
+  tooltip.style.display = 'block';
+  positionTooltip(e);
+}
+
+function hideTooltip() {
+  tooltip.style.display = 'none';
+}
+
+function positionTooltip(e) {
+  const x = e.clientX + 18;
+  const y = e.clientY - 10;
+  tooltip.style.left = Math.min(x, window.innerWidth - tooltip.offsetWidth - 10) + 'px';
+  tooltip.style.top  = Math.min(y, window.innerHeight - tooltip.offsetHeight - 10) + 'px';
+}
+
+document.addEventListener('mousemove', e => {
+  if (tooltip.style.display === 'block') positionTooltip(e);
+});
 
 // ─── SPECS ────────────────────────────────────────────────────────────────────
 function renderSpecs() {
@@ -769,7 +983,7 @@ function renderSpecTable() {
         ? `<span style="color:${hasRisk?'var(--danger)':'var(--muted)'};font-weight:${hasRisk?700:400}">${s.depIds.length}${hasRisk?' ⚠':''}</span>`
         : `<span style="color:#484f58">—</span>`;
       const safeId = s.id.replace(/"/g, '&quot;');
-      html += `<tr class="spec-row" onclick="openSidePanel('${safeId}')">
+      html += `<tr class="spec-row" onclick="openSpecPanel('${safeId}')">
         <td><code style="color:${col.text};font-size:0.78rem">${s.id}</code></td>
         <td><strong>${s.name}</strong></td>
         <td>${s.value}</td>
@@ -786,11 +1000,10 @@ function renderSpecTable() {
   document.getElementById('specs-table-wrap').innerHTML = html;
 }
 
-// ─── SIDE PANEL ───────────────────────────────────────────────────────────────
-function openSidePanel(specId) {
+// ─── SIDE PANEL – SPEC ───────────────────────────────────────────────────────
+function openSpecPanel(specId) {
   const s = S.specs.find(s => s.id === specId);
   if (!s) return;
-
   const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
   document.getElementById('sp-title').textContent = s.name;
 
@@ -809,22 +1022,20 @@ function openSidePanel(specId) {
       const t = S.tasks.find(t => t.id === id);
       return t && t.start && t.start <= TODAY;
     });
-
     if (hasRisk) html += `<div class="risk-alert">⚠ BLOCKED RISK — Spec is TBD but dependent task(s) have started</div>`;
-
     html += `<div class="sp-section-label">Dependent Tasks (${s.depIds.length})</div>`;
-
     s.depIds.forEach(id => {
       const t = S.tasks.find(t => t.id === id);
-      if (!t) { html += `<div class="task-card future"><div class="tc-id">Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found in Schedule</div></div>`; return; }
-
+      if (!t) {
+        html += `<div class="task-card future"><div class="tc-id">Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found in Schedule</div></div>`;
+        return;
+      }
       const started = t.start && t.start <= TODAY;
       const done    = t.pct === 100;
       const cardCls = done ? 'done' : started && t.pct > 0 ? 'warn' : started ? 'risk' : 'future';
       const gc      = GANTT_COLORS[t.category] || '#58a6ff';
       const showRisk = started && !done && s.status === 'TBD';
-
-      html += `<div class="task-card ${cardCls}">
+      html += `<div class="task-card clickable ${cardCls}" onclick="openTaskPanel(${t.id})">
         <div class="tc-id">Task ${t.id} · ${t.wbs} · <span style="color:${gc}">${t.category}</span></div>
         <div class="tc-name">${t.milestone ? '◆ ' : ''}${t.name}</div>
         <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${t.team} · ${t.pct}% complete</div>
@@ -837,15 +1048,296 @@ function openSidePanel(specId) {
   document.getElementById('side-panel').classList.add('open');
 }
 
+// ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
+function openTaskPanel(taskId) {
+  const t = S.tasks.find(t => t.id === taskId);
+  if (!t) return;
+  const gc = GANTT_COLORS[t.category] || '#58a6ff';
+  document.getElementById('sp-title').textContent = t.name;
+
+  const started = t.start && t.start <= TODAY;
+  const done = t.pct === 100;
+  const statusBadge = done
+    ? `<span class="badge badge-achieved">Complete</span>`
+    : started
+      ? `<span class="badge badge-target">${t.pct}% In Progress</span>`
+      : `<span class="badge badge-tbd">Not Started</span>`;
+
+  let html = `<div class="sp-meta">
+    <div class="sp-meta-id">
+      <code style="color:${gc}">Task ${t.id}</code> · WBS ${t.wbs} · <span style="color:${gc}">${t.category}</span>
+      ${t.milestone ? ' · <strong>◆ MILESTONE</strong>' : ''}
+    </div>
+    <div class="sp-meta-val" style="font-size:1rem">${t.team}</div>
+    ${statusBadge}
+    <div class="sp-meta-notes">
+      <strong>Start:</strong> ${fmt(t.start)} &nbsp;·&nbsp; <strong>End:</strong> ${fmt(t.end)}<br>
+      ${t.notes ? `<strong>Notes:</strong> ${t.notes}` : ''}
+    </div>
+  </div>`;
+
+  // Dependencies (tasks this one depends on)
+  if (t.deps.length) {
+    html += `<div class="sp-section-label">Depends On (${t.deps.length})</div>`;
+    t.deps.forEach(id => {
+      const dep = S.tasks.find(d => d.id === id);
+      if (!dep) { html += `<div class="task-card future"><div class="tc-id">Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`; return; }
+      const dc = GANTT_COLORS[dep.category] || '#58a6ff';
+      html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" onclick="openTaskPanel(${dep.id})">
+        <div class="tc-id">Task ${dep.id} · ${dep.wbs} · <span style="color:${dc}">${dep.category}</span></div>
+        <div class="tc-name">${dep.name}</div>
+        <div class="tc-meta">${fmt(dep.start)} → ${fmt(dep.end)} · ${dep.pct}% complete</div>
+      </div>`;
+    });
+  }
+
+  // Linked specs
+  const linkedSpecs = S.specs.filter(s => s.depIds.includes(t.id));
+  if (linkedSpecs.length) {
+    html += `<div class="sp-section-label" style="margin-top:16px">Linked Specifications (${linkedSpecs.length})</div>`;
+    linkedSpecs.forEach(s => {
+      const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
+      const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
+      const hasRisk = s.status === 'TBD' && started && !done;
+      html += `<div class="task-card clickable ${hasRisk?'risk':'future'}" onclick="openSpecPanel('${s.id}')">
+        <div class="tc-id"><code style="color:${col.text}">${s.id}</code> · ${s.category}</div>
+        <div class="tc-name">${s.name}</div>
+        <div class="tc-meta">${s.value} ${s.units} &nbsp; <span class="badge ${sc}">${s.status}</span></div>
+        ${hasRisk ? '<div class="tc-risk">⚠ Spec not locked while task is active</div>' : ''}
+      </div>`;
+    });
+  }
+
+  document.getElementById('sp-body').innerHTML = html;
+  document.getElementById('side-panel').classList.add('open');
+}
+
+// ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
+function openOrgPanel(name) {
+  const person = S.org.find(p => p.name === name);
+  if (!person) return;
+  const col = teamColor(person.team);
+  document.getElementById('sp-title').textContent = person.name;
+
+  let html = `<div class="sp-meta">
+    <div class="sp-meta-id" style="color:${col};font-weight:700">${person.team || 'No Team'}</div>
+    <div class="sp-meta-val" style="font-size:1rem">${person.title || '—'}</div>
+    ${person.email ? `<div class="sp-meta-notes">${person.email}</div>` : ''}
+    ${person.reportsTo ? `<div class="sp-meta-notes"><strong>Reports to:</strong> ${person.reportsTo}</div>` : ''}
+  </div>`;
+
+  // Direct reports
+  const reports = S.org.filter(p => p.reportsTo === name);
+  if (reports.length) {
+    html += `<div class="sp-section-label">Direct Reports (${reports.length})</div>`;
+    reports.forEach(r => {
+      const rc = teamColor(r.team);
+      html += `<div class="task-card clickable future" onclick="openOrgPanel('${r.name.replace(/'/g,"\\'")}')">
+        <div class="tc-id" style="color:${rc}">${r.team}</div>
+        <div class="tc-name">${r.name}</div>
+        <div class="tc-meta">${r.title}</div>
+      </div>`;
+    });
+  }
+
+  // Tasks owned by this person's team
+  const myTasks = S.tasks.filter(t => t.team === person.team);
+  if (myTasks.length) {
+    html += `<div class="sp-section-label" style="margin-top:16px">Team Tasks (${myTasks.length})</div>`;
+    myTasks.forEach(t => {
+      const gc = GANTT_COLORS[t.category] || '#58a6ff';
+      const done2 = t.pct === 100;
+      const started2 = t.start && t.start <= TODAY;
+      const cardCls = done2 ? 'done' : started2 && t.pct > 0 ? 'warn' : started2 ? 'risk' : 'future';
+      html += `<div class="task-card clickable ${cardCls}" onclick="openTaskPanel(${t.id})">
+        <div class="tc-id">Task ${t.id} · ${t.wbs} · <span style="color:${gc}">${t.category}</span></div>
+        <div class="tc-name">${t.milestone ? '◆ ' : ''}${t.name}</div>
+        <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${t.pct}% complete</div>
+      </div>`;
+    });
+  } else {
+    html += `<div class="no-deps">No tasks assigned to the ${person.team} team.</div>`;
+  }
+
+  document.getElementById('sp-body').innerHTML = html;
+  document.getElementById('side-panel').classList.add('open');
+}
+
 function closeSidePanel() {
   document.getElementById('side-panel').classList.remove('open');
+}
+
+// ─── ORG CHART ───────────────────────────────────────────────────────────────
+const NW = 180, NH = 72, HG = 28, VG = 80;
+
+function calcSubW(node) {
+  if (!node.children.length) return NW;
+  const total = node.children.reduce((s, c) => s + calcSubW(c), 0);
+  return Math.max(NW, total + HG * (node.children.length - 1));
+}
+
+function assignPos(node, left, depth) {
+  node.y = depth * (NH + VG);
+  const sw = calcSubW(node);
+  node.x = left + (sw - NW) / 2;
+  if (node.children.length) {
+    let childLeft = left;
+    node.children.forEach(c => {
+      const csw = calcSubW(c);
+      assignPos(c, childLeft, depth + 1);
+      childLeft += csw + HG;
+    });
+  }
+}
+
+function renderOrgChart() {
+  const empty = document.getElementById('org-empty');
+  const container = document.getElementById('org-container');
+
+  if (!S.org.length) {
+    empty.style.display = 'flex';
+    container.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  container.style.display = 'block';
+
+  // Build tree
+  const nodeMap = {};
+  S.org.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
+  const roots = [];
+  S.org.forEach(p => {
+    if (p.reportsTo && nodeMap[p.reportsTo]) nodeMap[p.reportsTo].children.push(nodeMap[p.name]);
+    else roots.push(nodeMap[p.name]);
+  });
+
+  // Layout
+  let offsetX = 20;
+  roots.forEach(r => {
+    const sw = calcSubW(r);
+    assignPos(r, offsetX, 0);
+    offsetX += sw + HG * 2;
+  });
+
+  const allNodes = Object.values(nodeMap);
+  const svgW = Math.max(...allNodes.map(n => n.x + NW)) + 40;
+  const svgH = Math.max(...allNodes.map(n => n.y + NH)) + 40;
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('width', svgW);
+  svg.setAttribute('height', svgH);
+  svg.style.display = 'block';
+
+  // Draw edges
+  allNodes.forEach(node => {
+    node.children.forEach(child => {
+      const x1 = node.x + NW/2, y1 = node.y + NH;
+      const x2 = child.x + NW/2, y2 = child.y;
+      const midY = (y1 + y2) / 2;
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'rgba(88,166,255,0.25)');
+      path.setAttribute('stroke-width', '1.5');
+      svg.appendChild(path);
+    });
+  });
+
+  // Draw nodes
+  allNodes.forEach(node => {
+    const nx = node.x, ny = node.y;
+    const col = teamColor(node.team);
+
+    // Card
+    const card = document.createElementNS(NS, 'g');
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', () => openOrgPanel(node.name));
+
+    const rect = document.createElementNS(NS, 'rect');
+    rect.setAttribute('x', nx); rect.setAttribute('y', ny);
+    rect.setAttribute('width', NW); rect.setAttribute('height', NH);
+    rect.setAttribute('rx', 8); rect.setAttribute('fill', '#161b22');
+    rect.setAttribute('stroke', col); rect.setAttribute('stroke-width', '1.5');
+    card.appendChild(rect);
+
+    // Hover effect
+    card.addEventListener('mouseenter', () => rect.setAttribute('fill', '#1c2128'));
+    card.addEventListener('mouseleave', () => rect.setAttribute('fill', '#161b22'));
+
+    // Name
+    const nameEl = document.createElementNS(NS, 'text');
+    nameEl.setAttribute('x', nx + NW/2); nameEl.setAttribute('y', ny + 24);
+    nameEl.setAttribute('text-anchor', 'middle');
+    nameEl.setAttribute('fill', '#e6edf3'); nameEl.setAttribute('font-size', '12');
+    nameEl.setAttribute('font-weight', '700');
+    nameEl.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
+    nameEl.textContent = node.name.length > 22 ? node.name.slice(0,21)+'…' : node.name;
+    card.appendChild(nameEl);
+
+    // Title
+    const titleEl = document.createElementNS(NS, 'text');
+    titleEl.setAttribute('x', nx + NW/2); titleEl.setAttribute('y', ny + 40);
+    titleEl.setAttribute('text-anchor', 'middle');
+    titleEl.setAttribute('fill', '#8b949e'); titleEl.setAttribute('font-size', '10');
+    titleEl.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
+    titleEl.textContent = node.title.length > 26 ? node.title.slice(0,25)+'…' : node.title;
+    card.appendChild(titleEl);
+
+    // Team badge
+    if (node.team) {
+      const label = node.team.length > 14 ? node.team.slice(0,13)+'…' : node.team;
+      const badgeW = label.length * 6.5 + 14;
+      const bx = nx + NW/2 - badgeW/2, by2 = ny + NH - 20;
+      const badgeBg = document.createElementNS(NS, 'rect');
+      badgeBg.setAttribute('x', bx); badgeBg.setAttribute('y', by2);
+      badgeBg.setAttribute('width', badgeW); badgeBg.setAttribute('height', 14);
+      badgeBg.setAttribute('rx', 3);
+      badgeBg.setAttribute('fill', col + '28');
+      card.appendChild(badgeBg);
+      const badgeT = document.createElementNS(NS, 'text');
+      badgeT.setAttribute('x', nx + NW/2); badgeT.setAttribute('y', by2 + 10);
+      badgeT.setAttribute('text-anchor', 'middle');
+      badgeT.setAttribute('fill', col); badgeT.setAttribute('font-size', '8.5');
+      badgeT.setAttribute('font-weight', '700');
+      badgeT.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
+      badgeT.setAttribute('letter-spacing', '0.05em');
+      badgeT.textContent = label.toUpperCase();
+      card.appendChild(badgeT);
+    }
+
+    svg.appendChild(card);
+  });
+
+  document.getElementById('org-svg-wrap').innerHTML = '';
+  document.getElementById('org-svg-wrap').appendChild(svg);
+
+  // Drag-pan for org container
+  let oDragging = false, oDragX, oDragY, oDragSL, oDragST;
+  container.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    oDragging = true;
+    oDragX = e.pageX; oDragY = e.pageY;
+    oDragSL = container.scrollLeft; oDragST = container.scrollTop;
+    container.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!oDragging) return;
+    container.scrollLeft = oDragSL - (e.pageX - oDragX);
+    container.scrollTop  = oDragST - (e.pageY - oDragY);
+  });
+  document.addEventListener('mouseup', () => {
+    if (!oDragging) return;
+    oDragging = false;
+    container.classList.remove('dragging');
+  });
 }
 
 // ─── GENERATE SAMPLE EXCEL ────────────────────────────────────────────────────
 function generateSampleExcel() {
   const wb = XLSX.utils.book_new();
 
-  // Sheet 1: Project Info
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Field','Value'],
     ['Project Title','Next-Gen EV Platform'],
@@ -855,7 +1347,6 @@ function generateSampleExcel() {
     ['Target SOP','2026-12-31'],
   ]), 'Project Info');
 
-  // Sheet 2: Schedule
   const sh = ['Task ID','WBS','Task Name','Category','Start Date','End Date','Duration','% Complete','Dependencies','Responsible Team','Milestone','Notes'];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sh,
     [1,'1.0','Project Kickoff','Concept','2025-01-06','2025-01-10',5,100,'','All Teams','Y','Program start milestone'],
@@ -880,10 +1371,8 @@ function generateSampleExcel() {
     [20,'5.0','Start of Production','Launch','2026-12-31','2026-12-31',1,0,'19','Manufacturing','Y','SOP milestone'],
   ]), 'Schedule');
 
-  // Sheet 3: Specifications
   const sp = ['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs'];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sp,
-    // Powertrain
     ['PT-001','Powertrain','Peak Motor Power',350,'kW','Target','Powertrain','Peak output at max RPM','5,6'],
     ['PT-002','Powertrain','Continuous Motor Power',200,'kW','Target','Powertrain','Sustained output at rated conditions','5,6'],
     ['PT-003','Powertrain','Peak Torque (at wheel)',600,'Nm','Target','Powertrain','Combined front and rear axle','5,7'],
@@ -891,36 +1380,52 @@ function generateSampleExcel() {
     ['PT-005','Powertrain','Battery Capacity (Net)',92,'kWh','Achieved','Powertrain','92% usable SoC window','6'],
     ['PT-006','Powertrain','Range (WLTP Combined)',480,'km','Target','Powertrain','At 20°C, 100% SoC','16'],
     ['PT-007','Powertrain','DC Fast Charge Rate',250,'kW','Target','Powertrain','Peak CCS2; 10–80% in 18 min','8'],
-    // Chassis
     ['CH-001','Chassis','Curb Weight',2100,'kg','TBD','Chassis','Target < 2150 kg; pending final BOM','7,15'],
     ['CH-002','Chassis','Gross Vehicle Weight Rating',2650,'kg','Target','Chassis','Incl. 5 passengers + 60 kg cargo','7'],
     ['CH-003','Chassis','Wheelbase',2950,'mm','Achieved','Chassis','Fixed by platform architecture','7'],
     ['CH-004','Chassis','Weight Distribution (Front)',46,'%','Target','Chassis','Target 46/54 F/R for handling','7,16'],
     ['CH-005','Chassis','Front Suspension Type','Double Wishbone','—','Achieved','Chassis','Aluminium forged arms','7'],
     ['CH-006','Chassis','Aerodynamic Drag Coefficient',0.23,'Cd','Target','Chassis','Wind tunnel target; < 0.25','16'],
-    // Electrical
     ['EL-001','Electrical','HV Bus Voltage',800,'V','Achieved','Electrical','800 V architecture for fast charging','8,6'],
     ['EL-002','Electrical','LV Bus Voltage',12,'V','Achieved','Electrical','Standard 12 V auxiliary network','8'],
     ['EL-003','Electrical','On-Board Charger (AC)',22,'kW','Target','Electrical','3-phase AC, Type 2 connector','8'],
     ['EL-004','Electrical','Number of ECUs',24,'—','TBD','Electrical','Pending software architecture freeze','8,10'],
-    // Safety
     ['SA-001','Safety','Euro NCAP Star Rating',5,'stars','Target','Safety','2026 assessment protocol','17'],
     ['SA-002','Safety','Functional Safety Level','ASIL D','—','Target','Safety','ISO 26262 highest integrity level','17,18'],
     ['SA-003','Safety','AEB Pedestrian Detection Range',60,'m','Target','Software','Automatic Emergency Braking system','10,18'],
     ['SA-004','Safety','Side Impact Intrusion Limit',120,'mm','TBD','Safety','Per ECE R95 regulation','17'],
-    // Body
     ['BD-001','Body','Overall Length',4850,'mm','Achieved','Body','Including charge port door','3'],
     ['BD-002','Body','Overall Width (excl. mirrors)',1960,'mm','Achieved','Body','','3'],
     ['BD-003','Body','Overall Height',1520,'mm','Target','Body','Unloaded at nominal ride height','3'],
     ['BD-004','Body','Rear Cargo Volume',520,'L','Target','Body','VDA measurement method','3'],
     ['BD-005','Body','Maximum Towing Capacity',2000,'kg','Target','Body','Braked trailer, Class II hitch','7'],
-    // Software
     ['SW-001','Software','OTA Update Support','Full Vehicle','—','Achieved','Software','All ECUs support OTA updates','10,14'],
     ['SW-002','Software','VCU Main Loop Cycle Time',10,'ms','Target','Software','Hard real-time constraint','10'],
     ['SW-003','Software','Map Data Update Frequency','Monthly','—','Target','Software','Cloud-based delta updates','10,18'],
     ['SW-004','Software','AUTOSAR Compliance','Classic + Adaptive','—','TBD','Software','Vendor selection pending','10'],
     ['SW-005','Software','Cybersecurity Standard','ISO 21434','—','Target','Software','UNECE WP.29 compliance required','10,14'],
   ]), 'Specifications');
+
+  // Org Chart sheet
+  const og = ['Name','Title','Team','Reports To','Email'];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([og,
+    ['J. Smith',    'Program Manager',        'All Teams',    '',          'jsmith@nx1.com'],
+    ['A. Johnson',  'Systems Lead',            'Systems',      'J. Smith',  'ajohnson@nx1.com'],
+    ['B. Chen',     'Powertrain Lead',         'Powertrain',   'J. Smith',  'bchen@nx1.com'],
+    ['C. Patel',    'Battery Engineer',        'Powertrain',   'B. Chen',   'cpatel@nx1.com'],
+    ['D. Kim',      'Motor Engineer',          'Powertrain',   'B. Chen',   'dkim@nx1.com'],
+    ['E. Rodriguez','Thermal Engineer',        'Powertrain',   'B. Chen',   'erodriguez@nx1.com'],
+    ['F. Wilson',   'Chassis Lead',            'Chassis',      'J. Smith',  'fwilson@nx1.com'],
+    ['G. Thompson', 'Suspension Engineer',     'Chassis',      'F. Wilson', 'gthompson@nx1.com'],
+    ['H. Martinez', 'Electrical Lead',         'Electrical',   'J. Smith',  'hmartinez@nx1.com'],
+    ['I. Davis',    'HV Systems Engineer',     'Electrical',   'H. Martinez','idavis@nx1.com'],
+    ['J. Lee',      'Software Lead',           'Software',     'J. Smith',  'jlee@nx1.com'],
+    ['K. Anderson', 'VCU Engineer',            'Software',     'J. Lee',    'kanderson@nx1.com'],
+    ['L. Taylor',   'ADAS Engineer',           'Software',     'J. Lee',    'ltaylor@nx1.com'],
+    ['M. Harris',   'Safety Lead',             'Safety',       'J. Smith',  'mharris@nx1.com'],
+    ['N. Clark',    'Body Lead',               'Body',         'J. Smith',  'nclark@nx1.com'],
+    ['O. Lewis',    'Manufacturing Lead',      'Manufacturing','J. Smith',  'olewis@nx1.com'],
+  ]), 'Org Chart');
 
   XLSX.writeFile(wb, 'vehicle_project.xlsx');
 }
