@@ -424,6 +424,97 @@ body {
 .tc-risk { font-size: 0.73rem; color: var(--danger); margin-top: 4px; font-weight: 600; }
 
 .no-deps { text-align: center; color: var(--muted); font-size: 0.9rem; padding: 32px 0; }
+
+/* ── PROGRAM DASHBOARD ───────────────────────────────── */
+#prog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.kpi-row { display: flex; gap: 14px; flex-wrap: wrap; }
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  flex: 1;
+  min-width: 160px;
+}
+.kpi-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+.kpi-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+.kpi-sub   { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+.dash-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.dash-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.prog-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 0.82rem; }
+.prog-bar-label { width: 180px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.prog-bar-track { flex: 1; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
+.prog-bar-fill  { height: 100%; border-radius: 5px; transition: width 0.3s; }
+.prog-bar-pct   { width: 40px; text-align: right; color: var(--muted); font-size: 0.78rem; }
+.spec-pill-row  { display: flex; gap: 16px; flex-wrap: wrap; }
+.spec-pill {
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.spec-pill .pill-count { font-size: 1.8rem; font-weight: 700; line-height: 1; }
+.spec-pill.achieved { background: rgba(63,185,80,0.15); border: 1px solid #3fb950; color: #3fb950; }
+.spec-pill.target   { background: rgba(88,166,255,0.12); border: 1px solid #58a6ff; color: #58a6ff; }
+.spec-pill.tbd      { background: rgba(139,148,158,0.12); border: 1px solid var(--border); color: var(--muted); }
+.two-col { display: flex; gap: 14px; flex-wrap: wrap; }
+.two-col > * { flex: 1; min-width: 280px; }
+
+/* ── WEIGHT BUDGET ───────────────────────────────────── */
+#weight-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.wt-row {
+  display: grid;
+  grid-template-columns: 200px 1fr 80px 80px 80px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-size: 0.82rem;
+}
+.wt-row-header {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+.wt-bar-wrap { position: relative; height: 16px; background: var(--border); border-radius: 4px; }
+.wt-bar-est  { height: 100%; border-radius: 4px; position: absolute; left: 0; top: 0; }
+.wt-bar-tgt  { position: absolute; top: -4px; bottom: -4px; width: 2px; background: rgba(255,255,255,0.6); border-radius: 1px; }
+.wt-margin-pos { color: #3fb950; }
+.wt-margin-neg { color: #f85149; }
 </style>
 </head>
 <body>
@@ -437,8 +528,10 @@ body {
   <div style="display:flex;align-items:center;gap:8px">
     <div class="tabs" id="tabs" style="display:none">
       <button class="tab-btn active" data-tab="gantt" onclick="switchTab(this,'gantt')">Gantt Chart</button>
-      <button class="tab-btn"        data-tab="specs" onclick="switchTab(this,'specs')">Vehicle Specifications</button>
-      <button class="tab-btn" id="org-tab-btn" data-tab="org" onclick="switchTab(this,'org')" style="display:none">Org Chart</button>
+      <button class="tab-btn"        data-tab="specs"   onclick="switchTab(this,'specs')">Vehicle Specifications</button>
+      <button class="tab-btn"        data-tab="prog"    onclick="switchTab(this,'prog')">Program Dashboard</button>
+      <button class="tab-btn" id="weight-tab-btn" data-tab="weight" onclick="switchTab(this,'weight')" style="display:none">Weight Budget</button>
+      <button class="tab-btn" id="org-tab-btn"    data-tab="org"    onclick="switchTab(this,'org')"    style="display:none">Org Chart</button>
     </div>
     <button class="btn-secondary" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
   </div>
@@ -454,7 +547,7 @@ body {
       <div class="drop-title">Drop your Excel file here</div>
       <div class="drop-sub">
         Accepts any .xlsx file with <strong>Project Info</strong>, <strong>Schedule</strong>, and <strong>Specifications</strong> sheets<br>
-        <em style="font-size:0.82em">Optional: add an <strong>Org Chart</strong> sheet to enable the org chart view</em><br><br>
+        <em style="font-size:0.82em">Optional: add an <strong>Org Chart</strong> sheet to enable the org chart view, or a <strong>Weight Budget</strong> sheet to enable mass tracking</em><br><br>
         — or click below to generate a sample file first —
       </div>
       <button class="btn-primary" onclick="document.getElementById('file-input').click()">Browse for File</button>
@@ -513,6 +606,16 @@ body {
       </div>
     </div>
 
+    <!-- PROGRAM DASHBOARD TAB -->
+    <div class="tab-panel" id="prog-panel">
+      <div id="prog-body"></div>
+    </div>
+
+    <!-- WEIGHT BUDGET TAB -->
+    <div class="tab-panel" id="weight-panel">
+      <div id="weight-body"></div>
+    </div>
+
     <!-- ORG CHART TAB -->
     <div class="tab-panel" id="org-panel">
       <div id="org-toolbar" style="display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
@@ -550,7 +653,7 @@ body {
 
 <script>
 // ─── App State ────────────────────────────────────────────────────────────────
-const S = { info: {}, tasks: [], specs: [], org: [] };
+const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
@@ -692,7 +795,7 @@ function loadFile(file) {
 
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
 function parseWorkbook(wb) {
-  S.info = {}; S.tasks = []; S.specs = []; S.org = [];
+  S.info = {}; S.tasks = []; S.specs = []; S.org = []; S.weights = [];
 
   const ws1 = wb.Sheets['Project Info'];
   if (ws1) {
@@ -757,6 +860,23 @@ function parseWorkbook(wb) {
       };
     });
   }
+
+  const ws5 = wb.Sheets['Weight Budget'];
+  if (ws5) {
+    const rows = XLSX.utils.sheet_to_json(ws5, { header: 1 });
+    const h = rows[0] || [];
+    S.weights = rows.slice(1).filter(r => r[h.indexOf('Subsystem')] != null).map(r => {
+      const g = k => r[h.indexOf(k)];
+      return {
+        subsystem: String(g('Subsystem') || ''),
+        group:     String(g('Group') || ''),
+        target:    Number(g('Target Weight (lb)')) || 0,
+        estimated: Number(g('Estimated Weight (lb)')) || 0,
+        status:    String(g('Status') || 'TBD'),
+        notes:     String(g('Notes') || ''),
+      };
+    });
+  }
 }
 
 function parseDate(v) {
@@ -782,9 +902,12 @@ function renderDashboard() {
   document.getElementById('dashboard').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
   document.getElementById('org-tab-btn').style.display = S.org.length ? '' : 'none';
+  document.getElementById('weight-tab-btn').style.display = S.weights.length ? '' : 'none';
   dashboardLoaded = true;
   renderGantt();
   renderSpecs();
+  renderProgDash();
+  renderWeightBudget();
   renderOrgChart();
 }
 
@@ -1113,6 +1236,183 @@ function positionTooltip(e) {
 document.addEventListener('mousemove', e => {
   if (tooltip.style.display === 'block') positionTooltip(e);
 });
+
+// ─── PROGRAM DASHBOARD ────────────────────────────────────────────────────────
+const PHASE_NAMES = ['Concept','Preliminary Design','Detail Design','Prototype & Ground Test','Flight Test','Certification'];
+
+function renderProgDash() {
+  const body = document.getElementById('prog-body');
+  if (!body) return;
+
+  const totalTasks = S.tasks.length;
+  const overallPct = totalTasks
+    ? Math.round(S.tasks.reduce((s, t) => s + (t.pct || 0), 0) / totalTasks)
+    : 0;
+  const doneTasks = S.tasks.filter(t => t.pct >= 100).length;
+
+  const milestones = S.tasks.filter(t => t.milestone);
+  const milestoneDone = milestones.filter(t => t.pct >= 100).length;
+  const nextMs = milestones
+    .filter(t => t.pct < 100)
+    .sort((a, b) => a.start - b.start)[0];
+  const daysToNext = nextMs ? daysBetween(TODAY, nextMs.start) : null;
+
+  const tcRaw = S.info['Target FAA Type Certificate'];
+  const tcDate = tcRaw ? new Date(tcRaw) : null;
+  const daysToTC = tcDate ? daysBetween(TODAY, tcDate) : null;
+  const tcStr = tcDate ? tcDate.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : 'TBD';
+  const daysToTCStr = daysToTC !== null ? (daysToTC > 0 ? `${daysToTC} days remaining` : 'Past target date') : '';
+
+  const specAchieved = S.specs.filter(s => s.status === 'Achieved').length;
+  const specTarget   = S.specs.filter(s => s.status === 'Target').length;
+  const specTBD      = S.specs.filter(s => s.status === 'TBD').length;
+
+  const phaseMap = {};
+  S.tasks.forEach(t => {
+    const ph = parseInt(String(t.wbs).split('.')[0]) || 1;
+    if (!phaseMap[ph]) phaseMap[ph] = [];
+    phaseMap[ph].push(t);
+  });
+  const phaseNums = Object.keys(phaseMap).map(Number).sort((a, b) => a - b);
+
+  const teamMap = {};
+  S.tasks.forEach(t => {
+    const team = t.team || 'Unassigned';
+    teamMap[team] = (teamMap[team] || 0) + 1;
+  });
+  const maxTeamCount = Math.max(...Object.values(teamMap), 1);
+
+  const pctColor = overallPct >= 75 ? '#3fb950' : overallPct >= 40 ? '#58a6ff' : '#d29922';
+
+  let nextMsCard = '';
+  if (nextMs) {
+    const dLabel = daysToNext > 0 ? daysToNext + ' days away' : daysToNext === 0 ? 'Today' : Math.abs(daysToNext) + ' days ago';
+    nextMsCard = `<div class="kpi-card">
+      <div class="kpi-label">Next Milestone</div>
+      <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.2">${nextMs.name}</div>
+      <div class="kpi-sub">${dLabel}</div>
+    </div>`;
+  }
+
+  body.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Overall Complete</div>
+        <div class="kpi-value" style="color:${pctColor}">${overallPct}%</div>
+        <div class="kpi-sub">${totalTasks} tasks · ${doneTasks} done</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Milestones</div>
+        <div class="kpi-value">${milestoneDone}<span style="font-size:1rem;font-weight:400;color:var(--muted)"> / ${milestones.length}</span></div>
+        <div class="kpi-sub">${milestones.length - milestoneDone} remaining</div>
+      </div>
+      ${nextMsCard}
+      <div class="kpi-card">
+        <div class="kpi-label">Target TC Date</div>
+        <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.2">${tcStr}</div>
+        <div class="kpi-sub">${daysToTCStr}</div>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="dash-section">
+        <div class="dash-section-title">Phase Progress</div>
+        ${phaseNums.map(ph => {
+          const pts = phaseMap[ph];
+          const avg = Math.round(pts.reduce((s, t) => s + (t.pct || 0), 0) / pts.length);
+          const name = PHASE_NAMES[ph - 1] || ('Phase ' + ph);
+          const color = phaseColor(ph + '.0');
+          return `<div class="prog-bar-row">
+            <div class="prog-bar-label" title="${ph}. ${name}">${ph}. ${name}</div>
+            <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${avg}%;background:${color}"></div></div>
+            <div class="prog-bar-pct">${avg}%</div>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div class="dash-section">
+        <div class="dash-section-title">Specification Status</div>
+        <div class="spec-pill-row">
+          <div class="spec-pill achieved"><div class="pill-count">${specAchieved}</div>Achieved</div>
+          <div class="spec-pill target"><div class="pill-count">${specTarget}</div>Target</div>
+          <div class="spec-pill tbd"><div class="pill-count">${specTBD}</div>TBD</div>
+        </div>
+        <div style="margin-top:14px;font-size:0.8rem;color:var(--muted)">${S.specs.length} specifications total</div>
+      </div>
+    </div>
+
+    <div class="dash-section">
+      <div class="dash-section-title">Team Workload (tasks assigned)</div>
+      ${Object.entries(teamMap).sort((a, b) => b[1] - a[1]).map(([team, count]) => `
+        <div class="prog-bar-row">
+          <div class="prog-bar-label" title="${team}">${team}</div>
+          <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${Math.round(count / maxTeamCount * 100)}%;background:var(--accent)"></div></div>
+          <div class="prog-bar-pct">${count}</div>
+        </div>`).join('')}
+    </div>
+  `;
+}
+
+// ─── WEIGHT BUDGET ────────────────────────────────────────────────────────────
+function renderWeightBudget() {
+  const body = document.getElementById('weight-body');
+  if (!body || !S.weights.length) return;
+
+  const totalTarget = S.weights.reduce((s, w) => s + w.target, 0);
+  const totalEst    = S.weights.reduce((s, w) => s + w.estimated, 0);
+  const totalMargin = totalTarget - totalEst;
+  const maxVal = Math.max(...S.weights.map(w => Math.max(w.target, w.estimated)), 1);
+  const marginColor = totalMargin >= 0 ? '#3fb950' : '#f85149';
+  const marginSign  = totalMargin >= 0 ? '+' : '';
+  const marginPct   = Math.round(Math.abs(totalMargin) / totalTarget * 100);
+
+  body.innerHTML = `
+    <div class="kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Target</div>
+        <div class="kpi-value" style="font-size:1.6rem">${totalTarget.toLocaleString()} lb</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Estimated</div>
+        <div class="kpi-value" style="font-size:1.6rem">${totalEst.toLocaleString()} lb</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Margin Remaining</div>
+        <div class="kpi-value" style="font-size:1.6rem;color:${marginColor}">${marginSign}${totalMargin.toLocaleString()} lb</div>
+        <div class="kpi-sub">${marginPct}% of target</div>
+      </div>
+    </div>
+
+    <div class="dash-section">
+      <div class="dash-section-title">Subsystem Mass Budget</div>
+      <div class="wt-row wt-row-header">
+        <div>Subsystem</div>
+        <div>Estimated vs Target <span style="font-size:0.65rem;opacity:0.7">│ = target</span></div>
+        <div style="text-align:right">Est. (lb)</div>
+        <div style="text-align:right">Tgt (lb)</div>
+        <div style="text-align:right">Margin</div>
+      </div>
+      ${S.weights.map(w => {
+        const margin  = w.target - w.estimated;
+        const estPct  = Math.min(100, Math.round(w.estimated / maxVal * 100));
+        const tgtPct  = Math.min(100, Math.round(w.target    / maxVal * 100));
+        const barColor = margin < 0 ? '#f85149' : (w.target > 0 && margin / w.target < 0.05) ? '#d29922' : '#3fb950';
+        const mSign   = margin >= 0 ? '+' : '';
+        const mClass  = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
+        return `<div class="wt-row">
+          <div title="${w.subsystem} (${w.group})">${w.subsystem}</div>
+          <div class="wt-bar-wrap">
+            <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
+            <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
+          </div>
+          <div style="text-align:right">${w.estimated.toLocaleString()}</div>
+          <div style="text-align:right;color:var(--muted)">${w.target.toLocaleString()}</div>
+          <div style="text-align:right" class="${mClass}">${mSign}${margin.toLocaleString()}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
 
 // ─── SPECS ────────────────────────────────────────────────────────────────────
 function renderSpecs() {
@@ -1626,6 +1926,24 @@ function generateSampleExcel() {
     ['Y. Zhang',     'Certification Manager',       'Certification','S. Torres',  'yzhang@tw2.aero'],
     ['O. Brown',     'Manufacturing Lead',          'Manufacturing','S. Torres',  'obrown@tw2.aero'],
   ]), 'Org Chart');
+
+  // Weight Budget sheet
+  const wb_cols = ['Subsystem','Group','Target Weight (lb)','Estimated Weight (lb)','Status','Notes'];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([wb_cols,
+    ['Wing Assembly',            'Structures', 420, 408, 'Estimated',    'T800 CFRP wing box and skins'],
+    ['Fuselage',                 'Structures', 380, 392, 'Over Budget',  'Heavier than target; titanium frames under review'],
+    ['Tilt Mechanism',           'Structures',  95,  88, 'Estimated',    'Actuators, hinges, fairings'],
+    ['Landing Gear',             'Structures', 120, 115, 'Estimated',    'Retractable tricycle gear'],
+    ['Turbine + Gearbox',        'Propulsion', 310, 318, 'Over Budget',  'Engine heavier than catalog weight due to accessories'],
+    ['Battery Pack',             'Propulsion', 275, 261, 'Estimated',    '85 kWh NMC; cell + module + BMS'],
+    ['Rotor + Hub (×2)',         'Propulsion', 180, 176, 'Estimated',    'Composite blades; titanium hub'],
+    ['Flight Control Computers', 'Avionics',    45,  42, 'Estimated',    'Triplex FCCs; per DO-178C DAL-A'],
+    ['Sensors & Navigation',     'Avionics',    55,  58, 'Over Budget',  'GNSS + INS + pitot-static; integration heavier than estimate'],
+    ['HV Wiring & Bus',          'Systems',     90,  87, 'Estimated',    '800V main bus; shielded cable runs'],
+    ['Hydraulics',               'Systems',     65,  63, 'Estimated',    'Redundant tilt actuator circuit'],
+    ['Fuel System',              'Systems',     55,  52, 'Estimated',    'JP-8 bladder tanks; vent and boost pump'],
+    ['Furnishings & Misc',       'Other',      110, 118, 'Over Budget',  'Crew seats, harness, interior; scope growth'],
+  ]), 'Weight Budget');
 
   XLSX.writeFile(wb, 'vehicle_project.xlsx');
 }
