@@ -482,6 +482,29 @@ body {
 .spec-pill.tbd      { background: rgba(139,148,158,0.12); border: 1px solid var(--border); color: var(--muted); }
 .two-col { display: flex; gap: 14px; flex-wrap: wrap; }
 .two-col > * { flex: 1; min-width: 280px; }
+.team-row {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 4px; font-size: 0.82rem;
+  cursor: pointer; padding: 4px 6px; border-radius: 6px;
+  user-select: none;
+}
+.team-row:hover { background: rgba(88,166,255,0.07); }
+.team-row-arrow { color: var(--muted); font-size: 0.68rem; transition: transform 0.18s; flex-shrink: 0; }
+.team-dropdown {
+  display: none; margin: 0 6px 10px 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 10px;
+}
+.team-task-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+}
+.team-task-item:last-child { border-bottom: none; }
+.tts { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 0.68rem; font-weight: 600; flex-shrink: 0; }
+.tts-done     { background: rgba(63,185,80,0.15); color: #3fb950; }
+.tts-progress { background: rgba(210,153,34,0.15); color: #d29922; }
+.tts-pending  { background: rgba(139,148,158,0.12); color: var(--muted); }
 
 /* ── WEIGHT BUDGET ───────────────────────────────────── */
 #weight-body {
@@ -1240,6 +1263,14 @@ document.addEventListener('mousemove', e => {
 // ─── PROGRAM DASHBOARD ────────────────────────────────────────────────────────
 const PHASE_NAMES = ['Concept','Preliminary Design','Detail Design','Prototype & Ground Test','Flight Test','Certification'];
 
+function toggleTeamRow(el) {
+  const dd    = el.nextElementSibling;
+  const arrow = el.querySelector('.team-row-arrow');
+  const open  = dd.style.display !== 'none';
+  dd.style.display       = open ? 'none' : 'block';
+  arrow.style.transform  = open ? ''     : 'rotate(90deg)';
+}
+
 function renderProgDash() {
   const body = document.getElementById('prog-body');
   if (!body) return;
@@ -1257,11 +1288,16 @@ function renderProgDash() {
     .sort((a, b) => a.start - b.start)[0];
   const daysToNext = nextMs ? daysBetween(TODAY, nextMs.start) : null;
 
-  const tcRaw = S.info['Target FAA Type Certificate'];
-  const tcDate = tcRaw ? new Date(tcRaw) : null;
-  const daysToTC = tcDate ? daysBetween(TODAY, tcDate) : null;
-  const tcStr = tcDate ? tcDate.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' }) : 'TBD';
-  const daysToTCStr = daysToTC !== null ? (daysToTC > 0 ? `${daysToTC} days remaining` : 'Past target date') : '';
+  // Final milestone — last milestone chronologically by end/start date
+  const finalMs = milestones.slice().sort((a, b) => (b.end || b.start) - (a.end || a.start))[0];
+  const finalMsDate = finalMs ? (finalMs.end || finalMs.start) : null;
+  const finalMsDateStr = finalMsDate
+    ? finalMsDate.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' })
+    : 'TBD';
+  const daysToFinal = finalMsDate ? daysBetween(TODAY, finalMsDate) : null;
+  const daysToFinalStr = daysToFinal === null ? '' :
+    daysToFinal > 0 ? `${daysToFinal} days remaining` :
+    daysToFinal === 0 ? 'Today' : 'Completed';
 
   const specAchieved = S.specs.filter(s => s.status === 'Achieved').length;
   const specTarget   = S.specs.filter(s => s.status === 'Target').length;
@@ -1275,12 +1311,14 @@ function renderProgDash() {
   });
   const phaseNums = Object.keys(phaseMap).map(Number).sort((a, b) => a - b);
 
-  const teamMap = {};
+  // Team workload: track both count and task list
+  const teamTaskMap = {};
   S.tasks.forEach(t => {
     const team = t.team || 'Unassigned';
-    teamMap[team] = (teamMap[team] || 0) + 1;
+    if (!teamTaskMap[team]) teamTaskMap[team] = [];
+    teamTaskMap[team].push(t);
   });
-  const maxTeamCount = Math.max(...Object.values(teamMap), 1);
+  const maxTeamCount = Math.max(...Object.values(teamTaskMap).map(v => v.length), 1);
 
   const pctColor = overallPct >= 75 ? '#3fb950' : overallPct >= 40 ? '#58a6ff' : '#d29922';
 
@@ -1293,6 +1331,31 @@ function renderProgDash() {
       <div class="kpi-sub">${dLabel}</div>
     </div>`;
   }
+
+  // Build team workload rows with collapsible task dropdowns
+  const teamRows = Object.entries(teamTaskMap).sort((a, b) => b[1].length - a[1].length).map(([team, tasks]) => {
+    const count = tasks.length;
+    const barW  = Math.round(count / maxTeamCount * 100);
+    const taskItems = tasks.map(t => {
+      const pct = t.pct || 0;
+      const [cls, label] = pct >= 100 ? ['tts-done','Done'] : pct > 0 ? ['tts-progress', pct + '%'] : ['tts-pending','Not Started'];
+      const msIcon = t.milestone ? ' <span title="Milestone" style="color:#d29922">◆</span>' : '';
+      const dateStr = t.end ? t.end.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '';
+      return `<div class="team-task-item">
+        <span class="tts ${cls}">${label}</span>
+        <span style="flex:1">${t.wbs} &nbsp;${t.name}${msIcon}</span>
+        <span style="color:var(--muted);font-size:0.72rem;flex-shrink:0">${dateStr}</span>
+      </div>`;
+    }).join('');
+    return `
+      <div class="team-row" onclick="toggleTeamRow(this)">
+        <div class="prog-bar-label" title="${team}">${team}</div>
+        <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${barW}%;background:var(--accent)"></div></div>
+        <div class="prog-bar-pct">${count}</div>
+        <div class="team-row-arrow">▶</div>
+      </div>
+      <div class="team-dropdown">${taskItems}</div>`;
+  }).join('');
 
   body.innerHTML = `
     <div class="kpi-row">
@@ -1308,9 +1371,10 @@ function renderProgDash() {
       </div>
       ${nextMsCard}
       <div class="kpi-card">
-        <div class="kpi-label">Target TC Date</div>
-        <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.2">${tcStr}</div>
-        <div class="kpi-sub">${daysToTCStr}</div>
+        <div class="kpi-label">Final Milestone</div>
+        <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.3">${finalMs ? finalMs.name : 'None'}</div>
+        <div class="kpi-sub">${finalMsDateStr}</div>
+        <div class="kpi-sub" style="margin-top:2px">${daysToFinalStr}</div>
       </div>
     </div>
 
@@ -1318,8 +1382,8 @@ function renderProgDash() {
       <div class="dash-section">
         <div class="dash-section-title">Phase Progress</div>
         ${phaseNums.map(ph => {
-          const pts = phaseMap[ph];
-          const avg = Math.round(pts.reduce((s, t) => s + (t.pct || 0), 0) / pts.length);
+          const pts  = phaseMap[ph];
+          const avg  = Math.round(pts.reduce((s, t) => s + (t.pct || 0), 0) / pts.length);
           const name = PHASE_NAMES[ph - 1] || ('Phase ' + ph);
           const color = phaseColor(ph + '.0');
           return `<div class="prog-bar-row">
@@ -1342,18 +1406,33 @@ function renderProgDash() {
     </div>
 
     <div class="dash-section">
-      <div class="dash-section-title">Team Workload (tasks assigned)</div>
-      ${Object.entries(teamMap).sort((a, b) => b[1] - a[1]).map(([team, count]) => `
-        <div class="prog-bar-row">
-          <div class="prog-bar-label" title="${team}">${team}</div>
-          <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${Math.round(count / maxTeamCount * 100)}%;background:var(--accent)"></div></div>
-          <div class="prog-bar-pct">${count}</div>
-        </div>`).join('')}
+      <div class="dash-section-title">Team Workload — click a team to see tasks</div>
+      ${teamRows}
     </div>
   `;
 }
 
 // ─── WEIGHT BUDGET ────────────────────────────────────────────────────────────
+function showWtTooltip(e, el) {
+  const est    = Number(el.dataset.est);
+  const tgt    = Number(el.dataset.tgt);
+  const total  = Number(el.dataset.total);
+  const name   = el.dataset.name;
+  const margin = tgt - est;
+  const mSign  = margin >= 0 ? '+' : '';
+  const mColor = margin >= 0 ? '#3fb950' : '#d29922';
+  tooltip.innerHTML = `
+    <div style="font-weight:700;margin-bottom:5px">${name}</div>
+    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Estimated</span><strong>${est.toLocaleString()} lb</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Target</span><strong>${tgt.toLocaleString()} lb</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Margin</span><strong style="color:${mColor}">${mSign}${margin.toLocaleString()} lb</strong></div>
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--muted);font-size:0.75rem">Total vehicle est.: <strong style="color:var(--text)">${total.toLocaleString()} lb</strong></div>
+  `;
+  tooltip.style.display = 'block';
+  positionTooltip(e);
+}
+function hideWtTooltip() { tooltip.style.display = 'none'; }
+
 function renderWeightBudget() {
   const body = document.getElementById('weight-body');
   if (!body || !S.weights.length) return;
@@ -1361,8 +1440,8 @@ function renderWeightBudget() {
   const totalTarget = S.weights.reduce((s, w) => s + w.target, 0);
   const totalEst    = S.weights.reduce((s, w) => s + w.estimated, 0);
   const totalMargin = totalTarget - totalEst;
-  const maxVal = Math.max(...S.weights.map(w => Math.max(w.target, w.estimated)), 1);
-  const marginColor = totalMargin >= 0 ? '#3fb950' : '#f85149';
+  const maxVal      = Math.max(...S.weights.map(w => Math.max(w.target, w.estimated)), 1);
+  const marginColor = totalMargin >= 0 ? '#3fb950' : '#d29922';
   const marginSign  = totalMargin >= 0 ? '+' : '';
   const marginPct   = Math.round(Math.abs(totalMargin) / totalTarget * 100);
 
@@ -1387,21 +1466,23 @@ function renderWeightBudget() {
       <div class="dash-section-title">Subsystem Mass Budget</div>
       <div class="wt-row wt-row-header">
         <div>Subsystem</div>
-        <div>Estimated vs Target <span style="font-size:0.65rem;opacity:0.7">│ = target</span></div>
+        <div>Estimated vs Target <span style="font-size:0.65rem;opacity:0.7">│ = target · hover for details</span></div>
         <div style="text-align:right">Est. (lb)</div>
         <div style="text-align:right">Tgt (lb)</div>
         <div style="text-align:right">Margin</div>
       </div>
       ${S.weights.map(w => {
-        const margin  = w.target - w.estimated;
-        const estPct  = Math.min(100, Math.round(w.estimated / maxVal * 100));
-        const tgtPct  = Math.min(100, Math.round(w.target    / maxVal * 100));
-        const barColor = margin < 0 ? '#f85149' : (w.target > 0 && margin / w.target < 0.05) ? '#d29922' : '#3fb950';
-        const mSign   = margin >= 0 ? '+' : '';
-        const mClass  = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
+        const margin   = w.target - w.estimated;
+        const estPct   = Math.min(100, Math.round(w.estimated / maxVal * 100));
+        const tgtPct   = Math.min(100, Math.round(w.target    / maxVal * 100));
+        const barColor = margin < 0 ? '#d29922' : '#3fb950';
+        const mSign    = margin >= 0 ? '+' : '';
+        const mClass   = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
         return `<div class="wt-row">
           <div title="${w.subsystem} (${w.group})">${w.subsystem}</div>
-          <div class="wt-bar-wrap">
+          <div class="wt-bar-wrap" style="cursor:crosshair"
+            data-name="${w.subsystem}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}"
+            onmouseenter="showWtTooltip(event,this)" onmousemove="positionTooltip(event)" onmouseleave="hideWtTooltip()">
             <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
             <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
           </div>
