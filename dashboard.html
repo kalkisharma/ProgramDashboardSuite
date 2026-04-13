@@ -181,6 +181,37 @@ body {
 .g-team { color: var(--muted); font-size: 0.72rem; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-pct { text-align: right; font-size: 0.75rem; font-weight: 700; }
 
+/* Gantt zoom toolbar */
+#gantt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.zoom-btn {
+  width: 24px; height: 24px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
+#zoom-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 40px;
+  text-align: center;
+}
+
 /* Right scrollable area */
 #gantt-right { flex: 1; overflow: auto; cursor: grab; }
 #gantt-right.dragging { cursor: grabbing; user-select: none; }
@@ -440,6 +471,12 @@ body {
 
     <!-- GANTT TAB -->
     <div class="tab-panel active" id="gantt-panel">
+      <div id="gantt-toolbar">
+        <button class="zoom-btn" onclick="adjustZoom(-1)" title="Zoom out (Ctrl+scroll)">−</button>
+        <span id="zoom-label">100%</span>
+        <button class="zoom-btn" onclick="adjustZoom(1)" title="Zoom in (Ctrl+scroll)">+</button>
+        <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom</span>
+      </div>
       <div id="gantt-container">
         <div id="gantt-left">
           <div id="gantt-left-header">
@@ -505,30 +542,70 @@ const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })()
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
 const GANTT_COLORS = {
-  Concept:     '#7c3aed',
-  Engineering: '#1d6fe8',
-  Prototype:   '#0891b2',
-  Validation:  '#d97706',
-  Launch:      '#dc2626',
+  // Legacy ground-vehicle categories
+  Concept:       '#7c3aed',
+  Engineering:   '#1d6fe8',
+  Prototype:     '#0891b2',
+  Validation:    '#d97706',
+  Launch:        '#dc2626',
+  // Expanded aerospace / tilt-wing categories
+  Aerodynamics:  '#06b6d4',
+  Propulsion:    '#3b82f6',
+  Structures:    '#f59e0b',
+  Avionics:      '#84cc16',
+  Systems:       '#14b8a6',
+  'Ground Test': '#f97316',
+  'Flight Test': '#ec4899',
+  Certification: '#ef4444',
+  Production:    '#8b5cf6',
+  Integration:   '#a78bfa',
+  Testing:       '#fb923c',
 };
+// Dynamic fallback: any unknown category gets a color from the pool, cached per category
+const _colorPool = ['#10b981','#6366f1','#f43f5e','#0ea5e9','#a855f7','#22d3ee','#fbbf24','#4ade80','#fb7185','#38bdf8'];
+const _colorCache = {};
+function ganttColor(category) {
+  if (GANTT_COLORS[category]) return GANTT_COLORS[category];
+  if (!_colorCache[category]) {
+    _colorCache[category] = _colorPool[Object.keys(_colorCache).length % _colorPool.length];
+  }
+  return _colorCache[category];
+}
+
 const SPEC_COLORS = {
-  Powertrain:  { bg: 'rgba(239,68,68,.12)',   text: '#ef4444' },
-  Chassis:     { bg: 'rgba(29,111,232,.12)',  text: '#60a5fa' },
-  Electrical:  { bg: 'rgba(251,191,36,.12)',  text: '#fbbf24' },
-  Body:        { bg: 'rgba(52,211,153,.12)',  text: '#34d399' },
-  Safety:      { bg: 'rgba(248,113,113,.12)', text: '#f87171' },
-  Software:    { bg: 'rgba(167,139,250,.12)', text: '#a78bfa' },
+  // Ground vehicle
+  Powertrain:    { bg: 'rgba(239,68,68,.12)',   text: '#ef4444' },
+  Chassis:       { bg: 'rgba(29,111,232,.12)',  text: '#60a5fa' },
+  Electrical:    { bg: 'rgba(251,191,36,.12)',  text: '#fbbf24' },
+  Body:          { bg: 'rgba(52,211,153,.12)',  text: '#34d399' },
+  Safety:        { bg: 'rgba(248,113,113,.12)', text: '#f87171' },
+  Software:      { bg: 'rgba(167,139,250,.12)', text: '#a78bfa' },
+  // Tilt-wing / aerospace
+  Aerodynamics:  { bg: 'rgba(6,182,212,.12)',   text: '#06b6d4' },
+  Propulsion:    { bg: 'rgba(59,130,246,.12)',  text: '#3b82f6' },
+  Structures:    { bg: 'rgba(245,158,11,.12)',  text: '#f59e0b' },
+  Avionics:      { bg: 'rgba(132,204,22,.12)',  text: '#84cc16' },
+  Systems:       { bg: 'rgba(20,184,166,.12)',  text: '#14b8a6' },
+  Certification: { bg: 'rgba(239,68,68,.12)',   text: '#ef4444' },
 };
 const TEAM_COLORS = {
-  Powertrain:    '#ef4444',
-  Chassis:       '#60a5fa',
-  Electrical:    '#fbbf24',
-  Software:      '#a78bfa',
-  Safety:        '#f87171',
-  Body:          '#34d399',
-  Systems:       '#0891b2',
-  Manufacturing: '#d97706',
-  'All Teams':   '#58a6ff',
+  // Ground vehicle
+  Powertrain:      '#ef4444',
+  Chassis:         '#60a5fa',
+  Electrical:      '#fbbf24',
+  Software:        '#a78bfa',
+  Safety:          '#f87171',
+  Body:            '#34d399',
+  Manufacturing:   '#d97706',
+  // Aerospace / tilt-wing
+  Systems:         '#14b8a6',
+  Aerodynamics:    '#06b6d4',
+  Propulsion:      '#3b82f6',
+  Structures:      '#f59e0b',
+  Avionics:        '#84cc16',
+  'Flight Test':   '#ec4899',
+  Certification:   '#ef4444',
+  'All Teams':     '#58a6ff',
 };
 function teamColor(t) { return TEAM_COLORS[t] || '#58a6ff'; }
 
@@ -679,7 +756,10 @@ function renderDashboard() {
 }
 
 // ─── GANTT ────────────────────────────────────────────────────────────────────
-const PX = 4;
+const ZOOM_STEPS = [1, 2, 3, 4, 6, 8, 12, 16]; // pixels per day
+let zoomIdx = 3;                                 // default: 4px/day = 100%
+let ganttZoom = ZOOM_STEPS[zoomIdx];
+let ganttMinDateRef = null;                      // set during renderGantt for adjustZoom scroll math
 const RH = 36;
 const HH = 60;
 
@@ -712,6 +792,24 @@ function initGanttPan() {
 }
 initGanttPan();
 
+function adjustZoom(dir) {
+  const right = document.getElementById('gantt-right');
+  const oldPx = ganttZoom;
+  const oldScroll = right.scrollLeft;
+  zoomIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, zoomIdx + dir));
+  ganttZoom = ZOOM_STEPS[zoomIdx];
+  document.getElementById('zoom-label').textContent = Math.round((ganttZoom / 4) * 100) + '%';
+  renderGantt();
+  // Scale scroll position proportionally so the view stays anchored to the same date
+  right.scrollLeft = Math.round(oldScroll * (ganttZoom / oldPx));
+}
+
+document.getElementById('gantt-right').addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  adjustZoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+
 // Scroll sync (set up once)
 document.getElementById('gantt-right').addEventListener('scroll', () => {
   document.getElementById('gantt-left-body').scrollTop = document.getElementById('gantt-right').scrollTop;
@@ -725,8 +823,9 @@ function renderGantt() {
   const dates = S.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
   const minD = new Date(Math.min(...dates)); minD.setDate(minD.getDate() - 7);
   const maxD = new Date(Math.max(...dates)); maxD.setDate(maxD.getDate() + 21);
+  ganttMinDateRef = minD;
   const totalDays = daysBetween(minD, maxD);
-  const W = totalDays * PX;
+  const W = totalDays * ganttZoom;
   const H = HH + S.tasks.length * RH;
   const NS = 'http://www.w3.org/2000/svg';
 
@@ -734,7 +833,7 @@ function renderGantt() {
   const lb = document.getElementById('gantt-left-body');
   lb.innerHTML = '';
   S.tasks.forEach(t => {
-    const color = GANTT_COLORS[t.category] || '#58a6ff';
+    const color = ganttColor(t.category);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
     const div = document.createElement('div');
@@ -782,10 +881,10 @@ function renderGantt() {
 
   S.tasks.forEach((t, i) => {
     if (!t.start || !t.end) return;
-    const x   = daysBetween(minD, t.start) * PX;
-    const w   = Math.max(daysBetween(t.start, t.end) * PX, PX);
+    const x   = daysBetween(minD, t.start) * ganttZoom;
+    const w   = Math.max(daysBetween(t.start, t.end) * ganttZoom, ganttZoom);
     const midY = HH + i*RH + RH/2;
-    const color = GANTT_COLORS[t.category] || '#58a6ff';
+    const color = ganttColor(t.category);
 
     // Invisible hit area for the full row
     const hit = document.createElementNS(NS, 'rect');
@@ -841,7 +940,7 @@ function renderGantt() {
   });
 
   // Today line
-  const tx = daysBetween(minD, TODAY) * PX;
+  const tx = daysBetween(minD, TODAY) * ganttZoom;
   if (tx > 0 && tx < W) {
     appendLine(svg, NS, tx, tx, 0, H, '#f85149', 1.5, '4,3');
     const tl = document.createElementNS(NS, 'text');
@@ -866,7 +965,7 @@ function renderHeader(svg, NS, minD, maxD, W) {
   appendLine(svg, NS, 0, W, HH, HH, '#30363d', 1);
   const cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
   while (cur <= maxD) {
-    const x = daysBetween(minD, cur) * PX;
+    const x = daysBetween(minD, cur) * ganttZoom;
     appendLine(svg, NS, x, x, 0, HH + 9999, 'rgba(48,54,61,0.6)', 1);
     const ml = document.createElementNS(NS, 'text');
     ml.setAttribute('x', x+5); ml.setAttribute('y', 30);
@@ -877,7 +976,7 @@ function renderHeader(svg, NS, minD, maxD, W) {
     const nxt = new Date(cur); nxt.setMonth(nxt.getMonth()+1);
     const wk = new Date(cur); wk.setDate(wk.getDate() + (7 - wk.getDay()));
     while (wk < nxt && wk <= maxD) {
-      const wx = daysBetween(minD, wk) * PX;
+      const wx = daysBetween(minD, wk) * ganttZoom;
       appendLine(svg, NS, wx, wx, 42, HH, 'rgba(48,54,61,0.4)', 1);
       const dl = document.createElementNS(NS, 'text');
       dl.setAttribute('x', wx+2); dl.setAttribute('y', 54);
@@ -910,7 +1009,7 @@ function appendLine(svg, NS, x1, x2, y1, y2, stroke, sw, dash='') {
 const tooltip = document.getElementById('tooltip');
 
 function showTooltip(t, e) {
-  const color = GANTT_COLORS[t.category] || '#58a6ff';
+  const color = ganttColor(t.category);
   const depNames = t.deps.map(id => {
     const dep = S.tasks.find(d => d.id === id);
     return dep ? `Task ${id}: ${dep.name}` : `Task ${id}`;
@@ -1033,7 +1132,7 @@ function openSpecPanel(specId) {
       const started = t.start && t.start <= TODAY;
       const done    = t.pct === 100;
       const cardCls = done ? 'done' : started && t.pct > 0 ? 'warn' : started ? 'risk' : 'future';
-      const gc      = GANTT_COLORS[t.category] || '#58a6ff';
+      const gc      = ganttColor(t.category);
       const showRisk = started && !done && s.status === 'TBD';
       html += `<div class="task-card clickable ${cardCls}" onclick="openTaskPanel(${t.id})">
         <div class="tc-id">Task ${t.id} · ${t.wbs} · <span style="color:${gc}">${t.category}</span></div>
@@ -1045,14 +1144,14 @@ function openSpecPanel(specId) {
   }
 
   document.getElementById('sp-body').innerHTML = html;
-  document.getElementById('side-panel').classList.add('open');
+  showSidePanel();
 }
 
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
 function openTaskPanel(taskId) {
   const t = S.tasks.find(t => t.id === taskId);
   if (!t) return;
-  const gc = GANTT_COLORS[t.category] || '#58a6ff';
+  const gc = ganttColor(t.category);
   document.getElementById('sp-title').textContent = t.name;
 
   const started = t.start && t.start <= TODAY;
@@ -1082,7 +1181,7 @@ function openTaskPanel(taskId) {
     t.deps.forEach(id => {
       const dep = S.tasks.find(d => d.id === id);
       if (!dep) { html += `<div class="task-card future"><div class="tc-id">Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`; return; }
-      const dc = GANTT_COLORS[dep.category] || '#58a6ff';
+      const dc = ganttColor(dep.category);
       html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" onclick="openTaskPanel(${dep.id})">
         <div class="tc-id">Task ${dep.id} · ${dep.wbs} · <span style="color:${dc}">${dep.category}</span></div>
         <div class="tc-name">${dep.name}</div>
@@ -1109,7 +1208,7 @@ function openTaskPanel(taskId) {
   }
 
   document.getElementById('sp-body').innerHTML = html;
-  document.getElementById('side-panel').classList.add('open');
+  showSidePanel();
 }
 
 // ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
@@ -1145,7 +1244,7 @@ function openOrgPanel(name) {
   if (myTasks.length) {
     html += `<div class="sp-section-label" style="margin-top:16px">Team Tasks (${myTasks.length})</div>`;
     myTasks.forEach(t => {
-      const gc = GANTT_COLORS[t.category] || '#58a6ff';
+      const gc = ganttColor(t.category);
       const done2 = t.pct === 100;
       const started2 = t.start && t.start <= TODAY;
       const cardCls = done2 ? 'done' : started2 && t.pct > 0 ? 'warn' : started2 ? 'risk' : 'future';
@@ -1160,11 +1259,19 @@ function openOrgPanel(name) {
   }
 
   document.getElementById('sp-body').innerHTML = html;
+  showSidePanel();
+}
+
+function showSidePanel() {
   document.getElementById('side-panel').classList.add('open');
+  // On the org chart tab, push the container right so nodes aren't hidden behind the panel
+  const onOrg = document.getElementById('org-panel').classList.contains('active');
+  document.getElementById('org-container').style.paddingRight = onOrg ? '440px' : '';
 }
 
 function closeSidePanel() {
   document.getElementById('side-panel').classList.remove('open');
+  document.getElementById('org-container').style.paddingRight = '';
 }
 
 // ─── ORG CHART ───────────────────────────────────────────────────────────────
@@ -1340,91 +1447,113 @@ function generateSampleExcel() {
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Field','Value'],
-    ['Project Title','Next-Gen EV Platform'],
-    ['Vehicle Program','NX-1'],
-    ['Project Manager','J. Smith'],
-    ['Program Start','2025-01-06'],
-    ['Target SOP','2026-12-31'],
+    ['Project Title','TW-2 Hybrid-Electric Tilt-Wing UAM'],
+    ['Vehicle Program','TW-2'],
+    ['Project Manager','S. Torres'],
+    ['Program Start','2025-03-03'],
+    ['Target FAA Type Certificate','2027-12-19'],
   ]), 'Project Info');
 
   const sh = ['Task ID','WBS','Task Name','Category','Start Date','End Date','Duration','% Complete','Dependencies','Responsible Team','Milestone','Notes'];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sh,
-    [1,'1.0','Project Kickoff','Concept','2025-01-06','2025-01-10',5,100,'','All Teams','Y','Program start milestone'],
-    [2,'1.1','Requirements Definition','Concept','2025-01-13','2025-02-14',33,100,'1','Systems','N','Define top-level vehicle requirements'],
-    [3,'1.2','Concept Vehicle Architecture','Concept','2025-01-20','2025-03-14',53,100,'1','Systems','N','Overall vehicle layout and concept'],
-    [4,'1.3','Concept Review Gate','Concept','2025-03-17','2025-03-21',5,100,'2,3','All Teams','Y','Concept gate review milestone'],
-    [5,'2.0','Powertrain Sizing','Engineering','2025-03-24','2025-05-16',54,80,'4','Powertrain','N','Motor, battery, inverter sizing'],
-    [6,'2.1','Battery Pack Design','Engineering','2025-04-07','2025-07-04',88,60,'5','Powertrain','N','Cell selection and pack architecture'],
-    [7,'2.2','Chassis & Suspension Design','Engineering','2025-03-24','2025-06-20',89,70,'4','Chassis','N','Frame and suspension design'],
-    [8,'2.3','Electrical Architecture','Engineering','2025-04-07','2025-06-06',61,65,'4','Electrical','N','HV/LV wiring and ECU placement'],
-    [9,'2.4','Thermal Management Design','Engineering','2025-05-05','2025-07-18',74,40,'5','Powertrain','N','Cooling system for battery and motor'],
-    [10,'2.5','Software Architecture','Engineering','2025-04-07','2025-05-30',53,75,'4','Software','N','VCU, BMS, ADAS software stack'],
-    [11,'2.6','Design Freeze Gate','Engineering','2025-09-15','2025-09-19',5,0,'6,7,8,9,10','All Teams','Y','Engineering design freeze'],
-    [12,'3.0','Prototype Vehicle Build','Prototype','2025-09-22','2026-01-16',117,0,'11','Manufacturing','N','Build 3 prototype vehicles'],
-    [13,'3.1','Powertrain Integration','Prototype','2025-10-06','2025-12-05',60,0,'11','Powertrain','N','Install and integrate powertrain'],
-    [14,'3.2','Software Integration','Prototype','2025-11-03','2026-01-02',60,0,'10,13','Software','N','Flash and commission all ECUs'],
-    [15,'4.0','Durability Testing','Validation','2026-01-19','2026-04-17',88,0,'12','Chassis','N','100k km durability program'],
-    [16,'4.1','Performance Testing','Validation','2026-01-19','2026-03-20',60,0,'12,13','Powertrain','N','0-100 km/h, top speed, range validation'],
-    [17,'4.2','Safety Validation','Validation','2026-02-02','2026-05-01',89,0,'12','Safety','N','Crash, FMEA, functional safety testing'],
-    [18,'4.3','Software Validation','Validation','2026-02-16','2026-04-17',60,0,'14','Software','N','HIL, SIL, and road testing'],
-    [19,'4.4','Validation Complete','Validation','2026-05-29','2026-06-05',7,0,'15,16,17,18','All Teams','Y','All validation sign-off gate'],
-    [20,'5.0','Start of Production','Launch','2026-12-31','2026-12-31',1,0,'19','Manufacturing','Y','SOP milestone'],
+    // Phase 1: Concept
+    [1, '1.0','Program Kickoff',                       'Concept',      '2025-03-03','2025-03-07', 5,  100,'',          'All Teams',   'Y','Program initiation milestone'],
+    [2, '1.1','Mission Requirements & Regs Review',    'Concept',      '2025-03-10','2025-04-11',33,  100,'1',         'Systems',     'N','FAA Part 23/27 applicability; AC 21.17-4'],
+    [3, '1.2','Tilt-Wing Aero Concept Selection',      'Aerodynamics', '2025-03-17','2025-05-09',54,  100,'1',         'Aerodynamics','N','Down-select rotor count and tilt axis configuration'],
+    [4, '1.3','Hybrid Propulsion Architecture Trade',  'Propulsion',   '2025-03-24','2025-05-16',54,  100,'1',         'Propulsion',  'N','Series vs parallel hybrid; turbine selection'],
+    [5, '1.4','Concept Design Review (CDR-0)',         'Concept',      '2025-05-19','2025-05-23', 5,  100,'2,3,4',     'All Teams',   'Y','Gate review: concept freeze'],
+    // Phase 2: Preliminary Design
+    [6, '2.0','Rotor & Wing Aerodynamic Analysis',     'Aerodynamics', '2025-05-26','2025-08-22',89,  100,'5',         'Aerodynamics','N','CFD and blade element analysis for hover and cruise'],
+    [7, '2.1','Hybrid Powertrain Preliminary Design',  'Propulsion',   '2025-05-26','2025-08-01',68,  100,'5',         'Propulsion',  'N','Turbine-generator sizing; battery pack architecture'],
+    [8, '2.2','Airframe Structures Preliminary Design','Structures',   '2025-06-02','2025-08-29',89,  100,'5',         'Structures',  'N','Wing box; fuselage frames; primary load cases'],
+    [9, '2.3','Tilt Mechanism Detailed Kinematics',    'Structures',   '2025-06-09','2025-09-05',89,  100,'5',         'Structures',  'N','Actuator selection; transition trajectory analysis'],
+    [10,'2.4','Flight Control System Architecture',    'Avionics',     '2025-06-02','2025-08-15',75,  100,'5',         'Avionics',    'N','Control law framework; actuator redundancy strategy'],
+    [11,'2.5','Electrical & HV Bus Architecture',      'Systems',      '2025-06-16','2025-08-22',68,  100,'5',         'Systems',     'N','800V HV bus; LV secondary; emergency power routing'],
+    [12,'2.6','Preliminary Design Review (PDR)',       'Concept',      '2025-09-08','2025-09-12', 5,  100,'6,7,8,9,10,11','All Teams','Y','Gate review: preliminary design freeze'],
+    // Phase 3: Detail Design
+    [13,'3.0','Rotor Blade Detail Design & Analysis',  'Aerodynamics', '2025-09-15','2025-12-05',82,  100,'12',        'Aerodynamics','N','Composite blade layup; aeroelastic analysis'],
+    [14,'3.1','Hybrid Engine & Gearbox Integration',   'Propulsion',   '2025-09-15','2025-12-19',96,  100,'12',        'Propulsion',  'N','Driveshaft routing; engine mount stress analysis'],
+    [15,'3.2','Airframe Detail Design & FEA',          'Structures',   '2025-09-22','2026-01-09',110, 100,'12',        'Structures',  'N','Full FEM; fatigue analysis; tilt hinge detail'],
+    [16,'3.3','Avionics Hardware & SW Development',    'Avionics',     '2025-10-06','2026-01-30',117,  95,'12',        'Avionics',    'N','FCC hardware; flight software; DO-178C DAL-A'],
+    [17,'3.4','Critical Design Review (CDR)',          'Concept',      '2026-01-12','2026-01-16', 5,  100,'13,14,15,16','All Teams',  'Y','Gate review: design freeze before prototype build'],
+    // Phase 4: Prototype & Ground Test
+    [18,'4.0','Prototype Aircraft Manufacturing',      'Structures',   '2026-01-19','2026-05-29',131,  55,'17',        'Manufacturing','N','Fabricate and assemble 2 prototype airframes'],
+    [19,'4.1','Hybrid Powertrain Ground Run Testing',  'Propulsion',   '2026-04-20','2026-06-26',68,   15,'17,14',     'Propulsion',  'N','Engine-generator bench test; power management validation'],
+    [20,'4.2','Structural Static & Fatigue Testing',   'Structures',   '2026-04-06','2026-06-19',75,   10,'17,15',     'Structures',  'N','Ultimate load demonstration; tilt hinge fatigue test'],
+    [21,'4.3','Tilt Mechanism Endurance Testing',      'Structures',   '2026-05-04','2026-07-10',68,    0,'20',        'Structures',  'N','10,000 tilt cycles at limit loads; actuator endurance'],
+    [22,'4.4','Avionics Integration & HIL Testing',    'Avionics',     '2026-05-11','2026-07-17',68,    0,'16',        'Avionics',    'N','Hardware-in-the-loop simulation; fly-by-wire validation'],
+    [23,'4.5','Ground Test Complete',                  'Concept',      '2026-07-20','2026-07-24', 5,    0,'19,20,21,22','All Teams',  'Y','All ground test objectives met; cleared for flight'],
+    // Phase 5: Flight Test
+    [24,'5.0','First Flight – Hover Mode',             'Flight Test',  '2026-07-27','2026-07-31', 5,    0,'18,23',     'Flight Test', 'Y','Initial untethered hover; FCL Phase 1 objectives'],
+    [25,'5.1','Hover & Low-Speed Envelope Expansion',  'Flight Test',  '2026-08-03','2026-10-02',61,    0,'24',        'Flight Test', 'N','Expand to VNE hover; OGE hover; sideward flight'],
+    [26,'5.2','Tilt Transition Flight Testing',        'Flight Test',  '2026-09-28','2026-12-11',75,    0,'25',        'Flight Test', 'N','Hover-to-cruise transition; corridor mapping'],
+    [27,'5.3','Cruise Performance & Range Testing',    'Flight Test',  '2026-11-30','2027-02-26',89,    0,'26',        'Flight Test', 'N','Max range; endurance; climb performance validation'],
+    [28,'5.4','Flight Test Program Complete',          'Flight Test',  '2027-02-23','2027-02-27', 5,    0,'25,26,27',  'All Teams',   'Y','All FCL objectives closed; data package complete'],
+    // Phase 6: Certification
+    [29,'6.0','FAA Type Certificate Application',      'Certification','2027-02-16','2027-03-28',41,    0,'28',        'Certification','N','Submit TC application; compliance checklist finalized'],
+    [30,'6.1','Compliance Demonstration & Showing',    'Certification','2027-03-03','2027-10-31',243,   0,'29',        'Certification','N','Ground and flight showing per FAA issue papers'],
+    [31,'6.2','FAA Type Inspection Authorization',     'Certification','2027-08-04','2027-09-12',40,    0,'30',        'Certification','N','TIA issued; FAA conducts independent flight evaluation'],
+    [32,'6.3','Type Certificate Awarded',              'Certification','2027-12-15','2027-12-19', 5,    0,'30,31',     'All Teams',   'Y','FAA Type Certificate for TW-2 – program complete'],
   ]), 'Schedule');
 
   const sp = ['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs'];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sp,
-    ['PT-001','Powertrain','Peak Motor Power',350,'kW','Target','Powertrain','Peak output at max RPM','5,6'],
-    ['PT-002','Powertrain','Continuous Motor Power',200,'kW','Target','Powertrain','Sustained output at rated conditions','5,6'],
-    ['PT-003','Powertrain','Peak Torque (at wheel)',600,'Nm','Target','Powertrain','Combined front and rear axle','5,7'],
-    ['PT-004','Powertrain','Battery Capacity (Gross)',100,'kWh','Achieved','Powertrain','Cell chemistry: NMC 811','6'],
-    ['PT-005','Powertrain','Battery Capacity (Net)',92,'kWh','Achieved','Powertrain','92% usable SoC window','6'],
-    ['PT-006','Powertrain','Range (WLTP Combined)',480,'km','Target','Powertrain','At 20°C, 100% SoC','16'],
-    ['PT-007','Powertrain','DC Fast Charge Rate',250,'kW','Target','Powertrain','Peak CCS2; 10–80% in 18 min','8'],
-    ['CH-001','Chassis','Curb Weight',2100,'kg','TBD','Chassis','Target < 2150 kg; pending final BOM','7,15'],
-    ['CH-002','Chassis','Gross Vehicle Weight Rating',2650,'kg','Target','Chassis','Incl. 5 passengers + 60 kg cargo','7'],
-    ['CH-003','Chassis','Wheelbase',2950,'mm','Achieved','Chassis','Fixed by platform architecture','7'],
-    ['CH-004','Chassis','Weight Distribution (Front)',46,'%','Target','Chassis','Target 46/54 F/R for handling','7,16'],
-    ['CH-005','Chassis','Front Suspension Type','Double Wishbone','—','Achieved','Chassis','Aluminium forged arms','7'],
-    ['CH-006','Chassis','Aerodynamic Drag Coefficient',0.23,'Cd','Target','Chassis','Wind tunnel target; < 0.25','16'],
-    ['EL-001','Electrical','HV Bus Voltage',800,'V','Achieved','Electrical','800 V architecture for fast charging','8,6'],
-    ['EL-002','Electrical','LV Bus Voltage',12,'V','Achieved','Electrical','Standard 12 V auxiliary network','8'],
-    ['EL-003','Electrical','On-Board Charger (AC)',22,'kW','Target','Electrical','3-phase AC, Type 2 connector','8'],
-    ['EL-004','Electrical','Number of ECUs',24,'—','TBD','Electrical','Pending software architecture freeze','8,10'],
-    ['SA-001','Safety','Euro NCAP Star Rating',5,'stars','Target','Safety','2026 assessment protocol','17'],
-    ['SA-002','Safety','Functional Safety Level','ASIL D','—','Target','Safety','ISO 26262 highest integrity level','17,18'],
-    ['SA-003','Safety','AEB Pedestrian Detection Range',60,'m','Target','Software','Automatic Emergency Braking system','10,18'],
-    ['SA-004','Safety','Side Impact Intrusion Limit',120,'mm','TBD','Safety','Per ECE R95 regulation','17'],
-    ['BD-001','Body','Overall Length',4850,'mm','Achieved','Body','Including charge port door','3'],
-    ['BD-002','Body','Overall Width (excl. mirrors)',1960,'mm','Achieved','Body','','3'],
-    ['BD-003','Body','Overall Height',1520,'mm','Target','Body','Unloaded at nominal ride height','3'],
-    ['BD-004','Body','Rear Cargo Volume',520,'L','Target','Body','VDA measurement method','3'],
-    ['BD-005','Body','Maximum Towing Capacity',2000,'kg','Target','Body','Braked trailer, Class II hitch','7'],
-    ['SW-001','Software','OTA Update Support','Full Vehicle','—','Achieved','Software','All ECUs support OTA updates','10,14'],
-    ['SW-002','Software','VCU Main Loop Cycle Time',10,'ms','Target','Software','Hard real-time constraint','10'],
-    ['SW-003','Software','Map Data Update Frequency','Monthly','—','Target','Software','Cloud-based delta updates','10,18'],
-    ['SW-004','Software','AUTOSAR Compliance','Classic + Adaptive','—','TBD','Software','Vendor selection pending','10'],
-    ['SW-005','Software','Cybersecurity Standard','ISO 21434','—','Target','Software','UNECE WP.29 compliance required','10,14'],
+    // Aerodynamics
+    ['AD-001','Aerodynamics','Max Cruise Speed',185,'kn','Target','Aerodynamics','At sea level ISA; J=0.8 advance ratio','6,7'],
+    ['AD-002','Aerodynamics','Hover Disk Loading',12.5,'lb/ft²','Target','Aerodynamics','Per rotor; governs hover efficiency and downwash','6'],
+    ['AD-003','Aerodynamics','Hover Figure of Merit',0.72,'—','Target','Aerodynamics','Rotor efficiency target; validated in whirl tower','6,13'],
+    ['AD-004','Aerodynamics','Cruise Lift-to-Drag Ratio',9.5,'—','Target','Aerodynamics','Wing+fuselage at 150 kn cruise altitude','13'],
+    ['AD-005','Aerodynamics','Stall Speed (wing-borne mode)',68,'kn','TBD','Aerodynamics','Clean config; critical for fixed-wing approach','13,15'],
+    ['AD-006','Aerodynamics','Tilt Transition Corridor',55,'–90 kn','Target','Aerodynamics','Safe tilt transition envelope; upper/lower IAS bounds','9,13'],
+    // Propulsion
+    ['PR-001','Propulsion','Turbine Generator Continuous Power',450,'kW','Achieved','Propulsion','Honeywell HGT1700-derived; derated for reliability','7,14'],
+    ['PR-002','Propulsion','Battery Pack Energy (Gross)',85,'kWh','Target','Propulsion','NMC pouch cells; 800V nominal bus','7,11'],
+    ['PR-003','Propulsion','Rotor Tip Speed – Hover',620,'ft/s','Target','Propulsion','Acoustic noise constraint; community noise < 62 dBA','6,13'],
+    ['PR-004','Propulsion','Rotor Tip Speed – Cruise',480,'ft/s','Target','Propulsion','Compressibility limit; Mtip < 0.65','13'],
+    ['PR-005','Propulsion','Electric-Only Range (Turbine-Out)',45,'nm','Target','Propulsion','Emergency contingency at best-range speed','7,11'],
+    ['PR-006','Propulsion','Full-Hybrid Mission Range',320,'nm','Target','Propulsion','At 150 kn; 45-min IFR fuel reserve included','13,19,27'],
+    // Structures
+    ['ST-001','Structures','Max Takeoff Weight (MTOW)',3850,'lb','TBD','Structures','2 crew + 400 lb payload; pending weight audit','8,15,18'],
+    ['ST-002','Structures','Operating Empty Weight',2280,'lb','TBD','Structures','Structural + propulsion + avionics; mass budget open','15,18'],
+    ['ST-003','Structures','Limit Load Factor','+3.8 / −1.5','g','Target','Structures','FAR Part 23 Normal Category; flight + gust cases','15'],
+    ['ST-004','Structures','Wing Box Primary Material','CFRP','—','Achieved','Structures','T800 woven prepreg; autoclave cure at 180°C','15'],
+    ['ST-005','Structures','Tilt Hinge Fatigue Life',30000,'cycles','Target','Structures','10× design life at limit loads; no crack initiation','20,21'],
+    // Avionics
+    ['AV-001','Avionics','Flight Control Computer Redundancy','Triplex','—','Achieved','Avionics','3× FCC with dissimilar SW; single failure survivable','10,16'],
+    ['AV-002','Avionics','GPS/INS Position Accuracy',1.5,'m RMS','Target','Avionics','SBAS-augmented GNSS; degraded mode via INS','10,22'],
+    ['AV-003','Avionics','C2 Data Link Range',25,'nm','Target','Avionics','900 MHz FHSS; BLOS uplink via satcom backup','11,22'],
+    ['AV-004','Avionics','Autopilot Modes',8,'modes','Target','Avionics','Hover hold, track, cruise, transition, ILS, emergency','10,16,22'],
+    ['AV-005','Avionics','Flight-Critical System MTBF',5000,'hr','TBD','Avionics','Per DO-178C DAL-A; pending FMEA closure','16,22'],
+    // Safety / Certification
+    ['SA-001','Certification','Certification Basis','FAR 23 Amd 64 + SC','—','Achieved','Certification','Special Conditions for powered-lift; VTOL SC applied','2,29'],
+    ['SA-002','Certification','Catastrophic Failure Probability','<1×10⁻⁹','/FH','Target','Certification','Per FAA AC 23.1309; DAL-A for all FCS functions','16,30'],
+    ['SA-003','Certification','Emergency Ballistic Parachute','BRS whole-airframe','—','Target','Certification','Ballistic Recovery System; 3,500 lb MTOW limit','15,30'],
+    // Systems
+    ['SY-001','Systems','HV Bus Voltage',800,'V DC','Achieved','Systems','Consistent with PR-002 cell architecture; 800V nominal','11'],
+    ['SY-002','Systems','Tilt Actuator Hydraulic Pressure',3000,'psi','Target','Systems','Redundant hydraulic circuit; dual actuators per wing','9,11'],
+    ['SY-003','Systems','Usable Fuel Capacity',95,'US gal','Target','Systems','JP-8 compatible tankage; 35-min IFR reserve at cruise','14,19'],
   ]), 'Specifications');
 
   // Org Chart sheet
   const og = ['Name','Title','Team','Reports To','Email'];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([og,
-    ['J. Smith',    'Program Manager',        'All Teams',    '',          'jsmith@nx1.com'],
-    ['A. Johnson',  'Systems Lead',            'Systems',      'J. Smith',  'ajohnson@nx1.com'],
-    ['B. Chen',     'Powertrain Lead',         'Powertrain',   'J. Smith',  'bchen@nx1.com'],
-    ['C. Patel',    'Battery Engineer',        'Powertrain',   'B. Chen',   'cpatel@nx1.com'],
-    ['D. Kim',      'Motor Engineer',          'Powertrain',   'B. Chen',   'dkim@nx1.com'],
-    ['E. Rodriguez','Thermal Engineer',        'Powertrain',   'B. Chen',   'erodriguez@nx1.com'],
-    ['F. Wilson',   'Chassis Lead',            'Chassis',      'J. Smith',  'fwilson@nx1.com'],
-    ['G. Thompson', 'Suspension Engineer',     'Chassis',      'F. Wilson', 'gthompson@nx1.com'],
-    ['H. Martinez', 'Electrical Lead',         'Electrical',   'J. Smith',  'hmartinez@nx1.com'],
-    ['I. Davis',    'HV Systems Engineer',     'Electrical',   'H. Martinez','idavis@nx1.com'],
-    ['J. Lee',      'Software Lead',           'Software',     'J. Smith',  'jlee@nx1.com'],
-    ['K. Anderson', 'VCU Engineer',            'Software',     'J. Lee',    'kanderson@nx1.com'],
-    ['L. Taylor',   'ADAS Engineer',           'Software',     'J. Lee',    'ltaylor@nx1.com'],
-    ['M. Harris',   'Safety Lead',             'Safety',       'J. Smith',  'mharris@nx1.com'],
-    ['N. Clark',    'Body Lead',               'Body',         'J. Smith',  'nclark@nx1.com'],
-    ['O. Lewis',    'Manufacturing Lead',      'Manufacturing','J. Smith',  'olewis@nx1.com'],
+    ['S. Torres',    'Program Director',            'All Teams',   '',            'storres@tw2.aero'],
+    ['R. Nakamura',  'Chief Engineer',              'All Teams',   'S. Torres',   'rnakamura@tw2.aero'],
+    ['A. Singh',     'Lead Systems Engineer',       'Systems',     'R. Nakamura', 'asingh@tw2.aero'],
+    ['L. Chen',      'Aerodynamics Lead',           'Aerodynamics','R. Nakamura', 'lchen@tw2.aero'],
+    ['M. Park',      'CFD Engineer',                'Aerodynamics','L. Chen',     'mpark@tw2.aero'],
+    ['B. Osei',      'Rotor Aerodynamicist',        'Aerodynamics','L. Chen',     'bosei@tw2.aero'],
+    ['T. Walsh',     'Propulsion Lead',             'Propulsion',  'R. Nakamura', 'twalsh@tw2.aero'],
+    ['F. Diaz',      'Turbine Systems Engineer',    'Propulsion',  'T. Walsh',    'fdiaz@tw2.aero'],
+    ['N. Patel',     'Battery Systems Engineer',    'Propulsion',  'T. Walsh',    'npatel@tw2.aero'],
+    ['K. Johansson', 'Structures Lead',             'Structures',  'R. Nakamura', 'kjohansson@tw2.aero'],
+    ['P. Nguyen',    'Composite Structures Engineer','Structures',  'K. Johansson','pnguyen@tw2.aero'],
+    ['H. Okonkwo',   'Avionics Lead',               'Avionics',    'R. Nakamura', 'hokonkwo@tw2.aero'],
+    ['D. Lee',       'Flight Control Engineer',     'Avionics',    'H. Okonkwo',  'dlee@tw2.aero'],
+    ['C. Martinez',  'Flight Test Director',        'Flight Test', 'S. Torres',   'cmartinez@tw2.aero'],
+    ['J. Erikson',   'Chief Test Pilot',            'Flight Test', 'C. Martinez', 'jerikson@tw2.aero'],
+    ['Y. Zhang',     'Certification Manager',       'Certification','S. Torres',  'yzhang@tw2.aero'],
+    ['O. Brown',     'Manufacturing Lead',          'Manufacturing','S. Torres',  'obrown@tw2.aero'],
   ]), 'Org Chart');
 
   XLSX.writeFile(wb, 'vehicle_project.xlsx');
