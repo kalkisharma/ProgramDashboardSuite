@@ -204,7 +204,8 @@ body {
   transition: all 0.15s;
 }
 .zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
-#zoom-label {
+/* Shared zoom label style */
+.zoom-label, #zoom-label {
   font-size: 0.76rem;
   font-weight: 700;
   color: var(--muted);
@@ -240,8 +241,9 @@ body {
 #specs-body { flex: 1; overflow: auto; }
 #specs-body::-webkit-scrollbar { width: 6px; height: 6px; }
 #specs-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+#specs-table-wrap { min-width: max-content; }
 
-.specs-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; min-width: 920px; }
+.specs-table { border-collapse: collapse; font-size: 0.84rem; min-width: 920px; width: max-content; }
 .specs-table th {
   background: var(--surface);
   padding: 9px 12px;
@@ -500,6 +502,11 @@ body {
           <option value="all">All Categories</option>
         </select>
         <span id="specs-count" style="font-size:0.8rem;color:var(--muted);margin-left:4px"></span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <button class="zoom-btn" onclick="adjustSpecsZoom(-1)" title="Zoom out (Ctrl+scroll)">−</button>
+          <span id="specs-zoom-label" class="zoom-label">100%</span>
+          <button class="zoom-btn" onclick="adjustSpecsZoom(1)" title="Zoom in (Ctrl+scroll)">+</button>
+        </div>
       </div>
       <div id="specs-body">
         <div id="specs-table-wrap"></div>
@@ -508,6 +515,12 @@ body {
 
     <!-- ORG CHART TAB -->
     <div class="tab-panel" id="org-panel">
+      <div id="org-toolbar" style="display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <button class="zoom-btn" onclick="adjustOrgZoom(-1)" title="Zoom out (Ctrl+scroll)">−</button>
+        <span id="org-zoom-label" class="zoom-label">100%</span>
+        <button class="zoom-btn" onclick="adjustOrgZoom(1)" title="Zoom in (Ctrl+scroll)">+</button>
+        <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom · drag to pan</span>
+      </div>
       <div id="org-empty" style="display:none">
         <div style="font-size:2rem">👥</div>
         <div>No org chart data found.</div>
@@ -561,6 +574,26 @@ const GANTT_COLORS = {
   Integration:   '#a78bfa',
   Testing:       '#fb923c',
 };
+// Phase colors: keyed by top-level WBS number (1.x → index 0, 2.x → index 1, …)
+const PHASE_COLORS = [
+  '#7c3aed', // Phase 1 – purple
+  '#06b6d4', // Phase 2 – cyan
+  '#3b82f6', // Phase 3 – blue
+  '#f59e0b', // Phase 4 – amber
+  '#ec4899', // Phase 5 – pink
+  '#ef4444', // Phase 6 – red
+  '#84cc16', // Phase 7 – lime
+  '#14b8a6', // Phase 8 – teal
+  '#f97316', // Phase 9 – orange
+  '#8b5cf6', // Phase 10 – violet
+  '#10b981', // Phase 11 – green
+  '#6366f1', // Phase 12 – indigo
+];
+function phaseColor(wbs) {
+  const phase = (parseInt(String(wbs).split('.')[0]) || 1) - 1;
+  return PHASE_COLORS[phase % PHASE_COLORS.length];
+}
+
 // Dynamic fallback: any unknown category gets a color from the pool, cached per category
 const _colorPool = ['#10b981','#6366f1','#f43f5e','#0ea5e9','#a855f7','#22d3ee','#fbbf24','#4ade80','#fb7185','#38bdf8'];
 const _colorCache = {};
@@ -810,6 +843,44 @@ document.getElementById('gantt-right').addEventListener('wheel', e => {
   adjustZoom(e.deltaY < 0 ? 1 : -1);
 }, { passive: false });
 
+// ── Specs zoom ────────────────────────────────────────────────────────────────
+const SPECS_ZOOM_STEPS = [0.6, 0.72, 0.84, 1.0, 1.15, 1.3, 1.5];
+let specsZoomIdx = 2; // default 0.84rem = 100%
+function adjustSpecsZoom(dir) {
+  specsZoomIdx = Math.max(0, Math.min(SPECS_ZOOM_STEPS.length - 1, specsZoomIdx + dir));
+  const scale = SPECS_ZOOM_STEPS[specsZoomIdx];
+  document.getElementById('specs-zoom-label').textContent = Math.round((scale / 0.84) * 100) + '%';
+  const tbl = document.querySelector('.specs-table');
+  if (tbl) tbl.style.fontSize = scale + 'rem';
+}
+document.getElementById('specs-body').addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  adjustSpecsZoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+
+// ── Org zoom ──────────────────────────────────────────────────────────────────
+const ORG_ZOOM_STEPS = [0.4, 0.55, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0];
+let orgZoomIdx = 4; // default 1.0 = 100%
+function adjustOrgZoom(dir) {
+  orgZoomIdx = Math.max(0, Math.min(ORG_ZOOM_STEPS.length - 1, orgZoomIdx + dir));
+  const scale = ORG_ZOOM_STEPS[orgZoomIdx];
+  document.getElementById('org-zoom-label').textContent = Math.round(scale * 100) + '%';
+  const wrap = document.getElementById('org-svg-wrap');
+  const svg = wrap.querySelector('svg');
+  if (!svg) return;
+  svg.style.transformOrigin = 'top left';
+  svg.style.transform = `scale(${scale})`;
+  // Update wrapper dimensions so the container scrolls the full scaled area
+  wrap.style.width  = Math.round(parseFloat(svg.getAttribute('width'))  * scale) + 'px';
+  wrap.style.height = Math.round(parseFloat(svg.getAttribute('height')) * scale) + 'px';
+}
+document.getElementById('org-container').addEventListener('wheel', e => {
+  if (!e.ctrlKey) return;
+  e.preventDefault();
+  adjustOrgZoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
+
 // Scroll sync (set up once)
 document.getElementById('gantt-right').addEventListener('scroll', () => {
   document.getElementById('gantt-left-body').scrollTop = document.getElementById('gantt-right').scrollTop;
@@ -833,7 +904,7 @@ function renderGantt() {
   const lb = document.getElementById('gantt-left-body');
   lb.innerHTML = '';
   S.tasks.forEach(t => {
-    const color = ganttColor(t.category);
+    const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
     const div = document.createElement('div');
@@ -884,7 +955,7 @@ function renderGantt() {
     const x   = daysBetween(minD, t.start) * ganttZoom;
     const w   = Math.max(daysBetween(t.start, t.end) * ganttZoom, ganttZoom);
     const midY = HH + i*RH + RH/2;
-    const color = ganttColor(t.category);
+    const color = phaseColor(t.wbs);
 
     // Invisible hit area for the full row
     const hit = document.createElementNS(NS, 'rect');
