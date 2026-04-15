@@ -13,12 +13,14 @@ python -m http.server
 
 ## Architecture
 
-**Single-file vanilla JS app** (`dashboard.html`, ~2000 lines). All HTML, CSS, and JavaScript are in one file. The only external dependency is SheetJS loaded from CDN for Excel parsing.
+**Single-file vanilla JS app** (`dashboard.html`, ~2200 lines). All HTML, CSS, and JavaScript are in one file. The only external dependency is SheetJS loaded from CDN for Excel parsing.
 
 ### Global State
 
 ```javascript
 const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks what the side panel is showing
+let spCurrentId   = null; // specId string, taskId number, or person name string
 ```
 
 - `S.info` — key/value pairs from the "Project Info" sheet
@@ -40,6 +42,19 @@ const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
 | Weight Budget | Optional | Subsystem, Group, Target Weight (lb), Estimated Weight (lb), Status, Notes |
 
 Missing optional sheets are silently skipped; their tabs are hidden. Missing required sheets render partial data.
+
+**Project Info recognized keys:**
+
+| Field | Purpose |
+|---|---|
+| `Project Title` | Header title |
+| `Project Subtitle` | Shown next to title (formerly `Vehicle Program`) |
+| `File Administrator` | Shown in subtitle (formerly `Project Manager`) |
+| `Program Start` | Informational |
+| `Program End` | Informational (formerly `Target FAA Type Certificate`) |
+| `Phase N Name` | Names each WBS phase (e.g. `Phase 1 Name`, `Phase 2 Name`, …up to 20) |
+
+Phase names from `Phase N Name` rows override the built-in `PHASE_NAMES_FALLBACK` array everywhere they appear (Gantt filter labels, Program Dashboard phase bars).
 
 ### Tabs
 
@@ -70,6 +85,8 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - Ctrl+scroll also triggers zoom; drag-pan is initialized once in `initGanttPan()`
 - `#gantt-left` (task list) and `#gantt-right` (SVG timeline) scroll vertically in sync via paired `scroll` listeners
 
+**Gantt Filters:** The toolbar contains two `<select>` dropdowns (Phase and Team). State is held in `ganttPhaseFilter` / `ganttTeamFilter` (default `'all'`). `setGanttPhaseFilter()` / `setGanttTeamFilter()` update state and call `renderGantt()`. The filter builds a `visibleTasks` subset; the SVG date axis always spans the full `S.tasks` date range so the timeline doesn't shift when filtering. Dependency arrows are only drawn between tasks that are both visible.
+
 ### Zoom (all tabs)
 
 Each tab has its own zoom state and `±` toolbar buttons:
@@ -85,13 +102,19 @@ Each tab has its own zoom state and `±` toolbar buttons:
 `#side-panel` slides in from the right (fixed, 420px). Three entry points each render different content into `#sp-body`:
 - `openSpecPanel(id)` — spec detail + linked tasks with risk warnings
 - `openTaskPanel(id)` — task detail + linked specs
-- `openOrgPersonPanel(name)` — person's profile + their team's tasks
+- `openOrgPanel(name)` — person's profile + their team's tasks
+
+**Toggle behavior:** `spCurrentType` and `spCurrentId` track what is currently open. Clicking the same item a second time calls `closeSidePanel()` instead of re-rendering (toggle). `closeSidePanel()` resets both to `null`.
 
 `showSidePanel()` / `closeSidePanel()` are shared helpers. When the org tab is active, `showSidePanel()` adds `padding-right: 440px` to `#org-container` so tree nodes aren't hidden behind the panel.
 
 ### Program Dashboard
 
-`renderProgDash()` computes everything from `S.tasks` and `S.specs` — no extra state needed. Team Workload rows use `toggleTeamRow(el)` (a global function) to expand/collapse a sibling `.team-dropdown` div. The dropdown is built into the innerHTML at render time.
+`renderProgDash()` computes everything from `S.tasks` and `S.specs` — no extra state needed. Phase labels call `getPhaseNames()` first, then fall back to `PHASE_NAMES_FALLBACK`. Team Workload rows use `toggleTeamRow(el)` (a global function) to expand/collapse a sibling `.team-dropdown` div. The dropdown is built into the innerHTML at render time.
+
+### Phase Names
+
+`getPhaseNames()` scans `S.info` for keys matching `Phase N Name` (N = 1–20) and returns a `{ [phaseNumber]: name }` map. The constant formerly named `PHASE_NAMES` is now `PHASE_NAMES_FALLBACK` — used only when no matching key exists in `S.info`. Both `renderGantt()` (filter dropdown labels) and `renderProgDash()` (phase bar labels) call `getPhaseNames()`.
 
 ### Weight Budget
 
@@ -111,7 +134,7 @@ Built with a recursive SVG layout algorithm:
 
 ### Sample Data
 
-`generateSampleExcel()` generates a complete **TW-2 Hybrid-Electric Tilt-Wing UAM** program workbook: 32 schedule tasks across 6 WBS phases, 27 specs across 6 categories, a 17-person org chart, and a 13-subsystem weight budget. Use this to test all tabs.
+`generateSampleExcel()` generates a complete **TW-2 Hybrid-Electric Tilt-Wing UAM** program workbook: 32 schedule tasks across 6 WBS phases, 27 specs across 6 categories, a 17-person org chart, and a 13-subsystem weight budget. The Project Info sheet uses the current field names (`Project Subtitle`, `File Administrator`, `Program End`, `Phase N Name` rows). Use this to test all tabs.
 
 ### Rendering Pattern
 
