@@ -204,6 +204,16 @@ body {
   transition: all 0.15s;
 }
 .zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
+#gantt-toolbar select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+#gantt-toolbar select:focus { outline: none; border-color: var(--accent); }
 /* Shared zoom label style */
 .zoom-label, #zoom-label {
   font-size: 0.76rem;
@@ -570,7 +580,7 @@ body {
       <div class="drop-title">Drop your Excel file here</div>
       <div class="drop-sub">
         Accepts any .xlsx file with <strong>Project Info</strong>, <strong>Schedule</strong>, and <strong>Specifications</strong> sheets<br>
-        <em style="font-size:0.82em">Optional: add an <strong>Org Chart</strong> sheet to enable the org chart view, or a <strong>Weight Budget</strong> sheet to enable mass tracking</em><br><br>
+        <em style="font-size:0.82em">Optional: <strong>Org Chart</strong> sheet (org view) · <strong>Weight Budget</strong> sheet (mass tracking) · <strong>Phase N Name</strong> rows in Project Info to name each phase</em><br><br>
         — or click below to generate a sample file first —
       </div>
       <button class="btn-primary" onclick="document.getElementById('file-input').click()">Browse for File</button>
@@ -594,6 +604,15 @@ body {
         <span id="zoom-label">100%</span>
         <button class="zoom-btn" onclick="adjustZoom(1)" title="Zoom in (Ctrl+scroll)">+</button>
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom</span>
+        <div style="width:1px;height:18px;background:var(--border);margin:0 10px;flex-shrink:0"></div>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Phase:</span>
+        <select id="gantt-phase-filter" onchange="setGanttPhaseFilter(this.value)">
+          <option value="all">All</option>
+        </select>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-left:10px">Team:</span>
+        <select id="gantt-team-filter" onchange="setGanttTeamFilter(this.value)">
+          <option value="all">All</option>
+        </select>
       </div>
       <div id="gantt-container">
         <div id="gantt-left">
@@ -677,6 +696,8 @@ body {
 <script>
 // ─── App State ────────────────────────────────────────────────────────────────
 const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks which item the side panel is showing
+let spCurrentId   = null; // specId string, taskId number, or person name string
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
@@ -917,10 +938,12 @@ function fmt(d) { return d ? d.toISOString().slice(0,10) : '—'; }
 
 // ─── Render Dashboard ─────────────────────────────────────────────────────────
 function renderDashboard() {
-  const title = S.info['Project Title'] || 'Vehicle Design Dashboard';
-  const sub = [S.info['Vehicle Program'], S.info['Project Manager']].filter(Boolean).join(' · ');
-  document.getElementById('project-title').textContent = title;
-  document.getElementById('project-subtitle').textContent = sub || 'Project Dashboard';
+  const title    = S.info['Project Title']      || 'Vehicle Design Dashboard';
+  const subtitle = S.info['Project Subtitle']   || '';
+  const admin    = S.info['File Administrator'] || '';
+  const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
+  document.getElementById('project-title').textContent    = title;
+  document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
   document.getElementById('dropzone').style.display = 'none';
   document.getElementById('dashboard').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
@@ -939,6 +962,10 @@ const ZOOM_STEPS = [1, 2, 3, 4, 6, 8, 12, 16]; // pixels per day
 let zoomIdx = 3;                                 // default: 4px/day = 100%
 let ganttZoom = ZOOM_STEPS[zoomIdx];
 let ganttMinDateRef = null;                      // set during renderGantt for adjustZoom scroll math
+let ganttPhaseFilter = 'all';
+let ganttTeamFilter  = 'all';
+function setGanttPhaseFilter(val) { ganttPhaseFilter = val; renderGantt(); }
+function setGanttTeamFilter(val)  { ganttTeamFilter  = val; renderGantt(); }
 const RH = 36;
 const HH = 60;
 
@@ -1037,19 +1064,59 @@ document.getElementById('gantt-left-body').addEventListener('scroll', () => {
 
 function renderGantt() {
   if (!S.tasks.length) return;
+
+  // ── Populate filter dropdowns ──────────────────────
+  const phaseNamesMap = getPhaseNames();
+  const allPhases = [...new Set(S.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b)=>a-b);
+  const allTeams  = [...new Set(S.tasks.map(t => t.team || 'Unassigned'))].sort();
+
+  const phaseSel  = document.getElementById('gantt-phase-filter');
+  const savedPhase = phaseSel ? phaseSel.value : 'all';
+  if (phaseSel) {
+    phaseSel.innerHTML = '<option value="all">All</option>';
+    allPhases.forEach(ph => {
+      const label = phaseNamesMap[ph] || PHASE_NAMES_FALLBACK[ph-1] || 'Phase ' + ph;
+      phaseSel.innerHTML += `<option value="${ph}">${ph}. ${label}</option>`;
+    });
+    phaseSel.value = allPhases.map(String).includes(savedPhase) ? savedPhase : 'all';
+  }
+
+  const teamSel   = document.getElementById('gantt-team-filter');
+  const savedTeam = teamSel ? teamSel.value : 'all';
+  if (teamSel) {
+    teamSel.innerHTML = '<option value="all">All</option>';
+    allTeams.forEach(tm => { teamSel.innerHTML += `<option value="${tm}">${tm}</option>`; });
+    teamSel.value = allTeams.includes(savedTeam) ? savedTeam : 'all';
+  }
+
+  // ── Build filtered task list ───────────────────────
+  const visibleTasks = S.tasks.filter(t => {
+    const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
+    if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
+    if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
+    return true;
+  });
+
+  const lb = document.getElementById('gantt-left-body');
+  if (!visibleTasks.length) {
+    lb.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem;text-align:center">No tasks match the current filters.</div>';
+    document.getElementById('gantt-svg-wrap').innerHTML = '';
+    return;
+  }
+
+  // Use full task set for date axis so the time range stays stable when filtering
   const dates = S.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
   const minD = new Date(Math.min(...dates)); minD.setDate(minD.getDate() - 7);
   const maxD = new Date(Math.max(...dates)); maxD.setDate(maxD.getDate() + 21);
   ganttMinDateRef = minD;
   const totalDays = daysBetween(minD, maxD);
   const W = totalDays * ganttZoom;
-  const H = HH + S.tasks.length * RH;
+  const H = HH + visibleTasks.length * RH;
   const NS = 'http://www.w3.org/2000/svg';
 
   // ── Left panel rows ────────────────────────────────
-  const lb = document.getElementById('gantt-left-body');
   lb.innerHTML = '';
-  S.tasks.forEach(t => {
+  visibleTasks.forEach(t => {
     const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
@@ -1084,19 +1151,19 @@ function renderGantt() {
 
   appendRect(svg, NS, 0, 0, W, HH, '#161b22');
 
-  S.tasks.forEach((_, i) => {
+  visibleTasks.forEach((_, i) => {
     if (i % 2 === 0) appendRect(svg, NS, 0, HH + i*RH, W, RH, 'rgba(255,255,255,0.015)');
   });
 
   renderHeader(svg, NS, minD, maxD, W);
 
-  for (let i = 0; i <= S.tasks.length; i++) {
+  for (let i = 0; i <= visibleTasks.length; i++) {
     appendLine(svg, NS, 0, W, HH + i*RH, HH + i*RH, 'rgba(48,54,61,0.5)', 1);
   }
 
   const barPos = {};
 
-  S.tasks.forEach((t, i) => {
+  visibleTasks.forEach((t, i) => {
     if (!t.start || !t.end) return;
     const x   = daysBetween(minD, t.start) * ganttZoom;
     const w   = Math.max(daysBetween(t.start, t.end) * ganttZoom, ganttZoom);
@@ -1139,8 +1206,8 @@ function renderGantt() {
     }
   });
 
-  // Dependency arrows
-  S.tasks.forEach(t => {
+  // Dependency arrows (only between tasks both visible in current filter)
+  visibleTasks.forEach(t => {
     t.deps.forEach(did => {
       const pred = barPos[did], succ = barPos[t.id];
       if (!pred || !succ) return;
@@ -1261,7 +1328,16 @@ document.addEventListener('mousemove', e => {
 });
 
 // ─── PROGRAM DASHBOARD ────────────────────────────────────────────────────────
-const PHASE_NAMES = ['Concept','Preliminary Design','Detail Design','Prototype & Ground Test','Flight Test','Certification'];
+// Fallback phase names used when the Excel Project Info sheet has no "Phase N Name" rows
+const PHASE_NAMES_FALLBACK = ['Concept','Preliminary Design','Detail Design','Prototype & Ground Test','Flight Test','Certification'];
+function getPhaseNames() {
+  const names = {};
+  for (let i = 1; i <= 20; i++) {
+    const v = S.info['Phase ' + i + ' Name'];
+    if (v) names[i] = String(v);
+  }
+  return names;
+}
 
 function toggleTeamRow(el) {
   const dd    = el.nextElementSibling;
@@ -1384,7 +1460,8 @@ function renderProgDash() {
         ${phaseNums.map(ph => {
           const pts  = phaseMap[ph];
           const avg  = Math.round(pts.reduce((s, t) => s + (t.pct || 0), 0) / pts.length);
-          const name = PHASE_NAMES[ph - 1] || ('Phase ' + ph);
+          const phaseNames = getPhaseNames();
+          const name = phaseNames[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
           const color = phaseColor(ph + '.0');
           return `<div class="prog-bar-row">
             <div class="prog-bar-label" title="${ph}. ${name}">${ph}. ${name}</div>
@@ -1553,6 +1630,7 @@ function renderSpecTable() {
 
 // ─── SIDE PANEL – SPEC ───────────────────────────────────────────────────────
 function openSpecPanel(specId) {
+  if (spCurrentType === 'spec' && spCurrentId === specId) { closeSidePanel(); return; }
   const s = S.specs.find(s => s.id === specId);
   if (!s) return;
   const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
@@ -1596,11 +1674,13 @@ function openSpecPanel(specId) {
   }
 
   document.getElementById('sp-body').innerHTML = html;
+  spCurrentType = 'spec'; spCurrentId = specId;
   showSidePanel();
 }
 
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
 function openTaskPanel(taskId) {
+  if (spCurrentType === 'task' && spCurrentId === taskId) { closeSidePanel(); return; }
   const t = S.tasks.find(t => t.id === taskId);
   if (!t) return;
   const gc = ganttColor(t.category);
@@ -1660,11 +1740,13 @@ function openTaskPanel(taskId) {
   }
 
   document.getElementById('sp-body').innerHTML = html;
+  spCurrentType = 'task'; spCurrentId = taskId;
   showSidePanel();
 }
 
 // ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
 function openOrgPanel(name) {
+  if (spCurrentType === 'org' && spCurrentId === name) { closeSidePanel(); return; }
   const person = S.org.find(p => p.name === name);
   if (!person) return;
   const col = teamColor(person.team);
@@ -1711,6 +1793,7 @@ function openOrgPanel(name) {
   }
 
   document.getElementById('sp-body').innerHTML = html;
+  spCurrentType = 'org'; spCurrentId = name;
   showSidePanel();
 }
 
@@ -1724,6 +1807,8 @@ function showSidePanel() {
 function closeSidePanel() {
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('org-container').style.paddingRight = '';
+  spCurrentType = null;
+  spCurrentId   = null;
 }
 
 // ─── ORG CHART ───────────────────────────────────────────────────────────────
@@ -1899,11 +1984,17 @@ function generateSampleExcel() {
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Field','Value'],
-    ['Project Title','TW-2 Hybrid-Electric Tilt-Wing UAM'],
-    ['Vehicle Program','TW-2'],
-    ['Project Manager','S. Torres'],
-    ['Program Start','2025-03-03'],
-    ['Target FAA Type Certificate','2027-12-19'],
+    ['Project Title',     'TW-2 Hybrid-Electric Tilt-Wing UAM'],
+    ['Project Subtitle',  'TW-2'],
+    ['File Administrator','S. Torres'],
+    ['Program Start',     '2025-03-03'],
+    ['Program End',       '2027-12-19'],
+    ['Phase 1 Name',      'Concept'],
+    ['Phase 2 Name',      'Preliminary Design'],
+    ['Phase 3 Name',      'Detail Design'],
+    ['Phase 4 Name',      'Prototype & Ground Test'],
+    ['Phase 5 Name',      'Flight Test'],
+    ['Phase 6 Name',      'Certification'],
   ]), 'Project Info');
 
   const sh = ['Task ID','WBS','Task Name','Category','Start Date','End Date','Duration','% Complete','Dependencies','Responsible Team','Milestone','Notes'];
