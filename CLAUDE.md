@@ -25,7 +25,7 @@ let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks what the side pa
 let spCurrentId   = null; // specId string, taskId number, or person name string
 let barDrag = { active: false, taskId: null, mode: null, ... }; // Gantt bar drag state
 let barEls  = {};    // taskId → { bgRect, progRect, outlineRect, midY } (or { diamond, midY })
-let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
+let rowDrag = { active: false, srcIdx: null, dropIdx: null, rowCount: 0, lb: null, ghost: null, indicator: null };
 ```
 
 - `S.info` — key/value pairs from the "Project Info" sheet
@@ -96,7 +96,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 **Interactive editing (Gantt):** All edits operate on `S.tasks` directly and call `renderGantt()` to commit.
 
 - **Bar drag** — `mousedown` on a bar hit area (`data-taskid`) routes to `startBarDrag()`. Zone is determined by cursor position within 8px of left/right edge (`resize-left`/`resize-right`) or center (`move`). During drag, SVG elements are updated directly via `barEls[id]` (no full re-render). `snapToWorkDay()` keeps start/end on configured work days. A floating `#gantt-drag-label` shows new dates + work day counts. Full re-render fires on `mouseup`. Milestone bars use a diamond element stored as `barEls[id].diamond`.
-- **Row reorder** — Hover a WBS cell to reveal the `⠿` drag handle. `startRowDrag()` sets up dedicated per-drag `window` mousemove/mouseup listeners and appends a `position:fixed` ghost + indicator to `document.body` (avoids scroll-offset and child-count bugs). On drop, `_endRowDrop()` splices `S.tasks` and calls `recalcWBS()` to renumber sequentially within phases. Phase headers (no dot, or ending `.0`) are not reorderable. Disabled when filters are active.
+- **Row reorder** — Hover a sub-task WBS cell to reveal the `⠿` affordance and a `grab` cursor. The entire `.g-wbs-wrap` div (class `g-wbs-draggable`) is the mousedown target — not the tiny `⠿` span, which has `pointer-events:none`. `startRowDrag()` sets `rowDrag.active = true`, stores `rowDrag.lb`, and appends a `position:fixed` ghost + indicator to `document.body`. The existing document-level listeners in `initGanttPan` call `doRowDragMove()` on mousemove and `endRowDrag()` on mouseup, which commit the splice and call `recalcWBS()` to renumber sequentially within phases. Phase headers (no dot, or ending `.0`) never get `g-wbs-draggable`. Disabled when either filter is active.
 - **Inline name edit** — Click `.g-name` → `startNameEdit()` replaces span with `<input>`; Enter/blur confirms (non-empty only), Escape cancels.
 - **Team dropdown** — Click `.g-team` → `startTeamEdit()` replaces span with `<select>` populated from unique sorted teams; change commits, Escape/blur-without-change restores.
 - **% complete edit** — Click `.g-pct` → `startPctEdit()` replaces span with `<input type="number">`; value is clamped 0–100 and rounded; Escape cancels.
