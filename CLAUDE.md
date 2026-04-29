@@ -13,14 +13,19 @@ python -m http.server
 
 ## Architecture
 
-**Single-file vanilla JS app** (`dashboard.html`, ~2200 lines). All HTML, CSS, and JavaScript are in one file. The only external dependency is SheetJS loaded from CDN for Excel parsing.
+**Single-file vanilla JS app** (`dashboard.html`, ~2700 lines). All HTML, CSS, and JavaScript are in one file. The only external dependency is SheetJS loaded from CDN for Excel parsing/export.
 
 ### Global State
 
 ```javascript
 const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+let S_tasksOriginal = [];          // deep-copy at parse time; used by resetGanttToImported()
+let ganttWorkDays   = [1,2,3,4];   // Mon–Thu; parsed from Project Info "Work Days" key
 let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks what the side panel is showing
 let spCurrentId   = null; // specId string, taskId number, or person name string
+let barDrag = { active: false, taskId: null, mode: null, ... }; // Gantt bar drag state
+let barEls  = {};    // taskId → { bgRect, progRect, outlineRect, midY } (or { diamond, midY })
+let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
 ```
 
 - `S.info` — key/value pairs from the "Project Info" sheet
@@ -29,7 +34,7 @@ let spCurrentId   = null; // specId string, taskId number, or person name string
 - `S.org[]` — `{ name, title, team, reportsTo, email }`
 - `S.weights[]` — `{ subsystem, group, target, estimated, status, notes }`
 
-`parseWorkbook(wb)` resets all five arrays, then populates them from the corresponding sheets. `renderDashboard()` is called after every load and re-renders all tabs.
+`parseWorkbook(wb)` resets all five arrays, then populates them from the corresponding sheets, deep-copies `S.tasks` into `S_tasksOriginal`, and applies the `Work Days` Project Info key. `renderDashboard()` is called after every load and re-renders all tabs.
 
 ### Excel Input Format
 
@@ -53,6 +58,7 @@ Missing optional sheets are silently skipped; their tabs are hidden. Missing req
 | `Program Start` | Informational |
 | `Program End` | Informational (formerly `Target FAA Type Certificate`) |
 | `Phase N Name` | Names each WBS phase (e.g. `Phase 1 Name`, `Phase 2 Name`, …up to 20) |
+| `Work Days` | Comma-separated work days (e.g. `"Mon,Tue,Wed,Thu"`); default Mon–Thu if absent |
 
 Phase names from `Phase N Name` rows override the built-in `PHASE_NAMES_FALLBACK` array everywhere they appear (Gantt filter labels, Program Dashboard phase bars).
 
@@ -87,6 +93,36 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 
 **Gantt Filters:** The toolbar contains two `<select>` dropdowns (Phase and Team). State is held in `ganttPhaseFilter` / `ganttTeamFilter` (default `'all'`). `setGanttPhaseFilter()` / `setGanttTeamFilter()` update state and call `renderGantt()`. The filter builds a `visibleTasks` subset; the SVG date axis always spans the full `S.tasks` date range so the timeline doesn't shift when filtering. Dependency arrows are only drawn between tasks that are both visible.
 
+**Interactive editing (Gantt):** All edits operate on `S.tasks` directly and call `renderGantt()` to commit.
+
+- **Bar drag** — `mousedown` on a bar hit area (`data-taskid`) routes to `startBarDrag()`. Zone is determined by cursor position within 8px of left/right edge (`resize-left`/`resize-right`) or center (`move`). During drag, SVG elements are updated directly via `barEls[id]` (no full re-render). `snapToWorkDay()` keeps start/end on configured work days. A floating `#gantt-drag-label` shows new dates + work day counts. Full re-render fires on `mouseup`. Milestone bars use a diamond element stored as `barEls[id].diamond`.
+- **Row reorder** — Hover a WBS cell to reveal the `⠿` drag handle. `startRowDrag()` sets up dedicated per-drag `window` mousemove/mouseup listeners and appends a `position:fixed` ghost + indicator to `document.body` (avoids scroll-offset and child-count bugs). On drop, `_endRowDrop()` splices `S.tasks` and calls `recalcWBS()` to renumber sequentially within phases. Phase headers (no dot, or ending `.0`) are not reorderable. Disabled when filters are active.
+- **Inline name edit** — Click `.g-name` → `startNameEdit()` replaces span with `<input>`; Enter/blur confirms (non-empty only), Escape cancels.
+- **Team dropdown** — Click `.g-team` → `startTeamEdit()` replaces span with `<select>` populated from unique sorted teams; change commits, Escape/blur-without-change restores.
+- **% complete edit** — Click `.g-pct` → `startPctEdit()` replaces span with `<input type="number">`; value is clamped 0–100 and rounded; Escape cancels.
+- **Add Task** — `addGanttTask()` appends a new task to the last phase with name `"New Task N"`, first-alpha team, 0%, and start = first program work day.
+- **Reset** — `resetGanttToImported()` deep-copies `S_tasksOriginal` back into `S.tasks` and re-renders.
+- **Save to Excel** — `saveToExcel()` rebuilds all 5 sheets from current `S.*` state using SheetJS and downloads `"[Project Title] - YYYY-MM-DD.xlsx"`. The column layout matches what `parseWorkbook()` expects, so the file can be re-imported.
+
+**Work-day utilities:**
+- `parseWorkDays(str)` — `"Mon,Tue,Wed,Thu"` → `[1,2,3,4]`
+- `isWorkDay(date, wds)` — boolean
+- `snapToWorkDay(date, wds, dir)` — steps to nearest work day in given direction
+- `countWorkDays(start, end)` — inclusive count of work days in span
+- `workDaysRemaining(endDate)` — work days from today to end, min 0
+- `wdDisplay(t)` — returns `{ text, cls }`: `"✓"` (done, green), `"0 wd"` (overdue, red), or `"N wd"`
+
+**WD column:** Left task list has a 5th column (WD) showing remaining work days. Grid is `44px 1fr 68px 40px 44px` (WBS | Name | Team | WD | %).
+
+**Non-work day shading:** When `ganttZoom >= 3`, full-height `<rect>` bands are drawn in the SVG for every non-work calendar day. Fill is `rgba(255,255,255,0.03)` in dark mode, `rgba(0,0,0,0.04)` in light mode.
+
+**Light/dark mode:** `toggleTheme()` toggles `.light-mode` on `<body>` and persists to `localStorage` under key `'vh-theme'`. Applied by an IIFE on page load. The `☀/🌙` button is always visible in the topbar. CSS overrides live under `body.light-mode { ... }` in the `<style>` block.
+
+**Topbar buttons (right group):**
+- `#generate-sample-btn` — hidden after first file load
+- `#save-excel-btn` — shown after first file load
+- `#theme-toggle` — always visible (☀ / 🌙)
+
 ### Zoom (all tabs)
 
 Each tab has its own zoom state and `±` toolbar buttons:
@@ -101,7 +137,7 @@ Each tab has its own zoom state and `±` toolbar buttons:
 
 `#side-panel` slides in from the right (fixed, 420px). Three entry points each render different content into `#sp-body`:
 - `openSpecPanel(id)` — spec detail + linked tasks with risk warnings
-- `openTaskPanel(id)` — task detail + linked specs
+- `openTaskPanel(id)` — task detail + linked specs; also shows work days total and remaining
 - `openOrgPanel(name)` — person's profile + their team's tasks
 
 **Toggle behavior:** `spCurrentType` and `spCurrentId` track what is currently open. Clicking the same item a second time calls `closeSidePanel()` instead of re-rendering (toggle). `closeSidePanel()` resets both to `null`.
@@ -134,7 +170,7 @@ Built with a recursive SVG layout algorithm:
 
 ### Sample Data
 
-`generateSampleExcel()` generates a complete **TW-2 Hybrid-Electric Tilt-Wing UAM** program workbook: 32 schedule tasks across 6 WBS phases, 27 specs across 6 categories, a 17-person org chart, and a 13-subsystem weight budget. The Project Info sheet uses the current field names (`Project Subtitle`, `File Administrator`, `Program End`, `Phase N Name` rows). Use this to test all tabs.
+`generateSampleExcel()` generates a complete **TW-2 Hybrid-Electric Tilt-Wing UAM** program workbook: 32 schedule tasks across 6 WBS phases, 27 specs across 6 categories, a 17-person org chart, and a 13-subsystem weight budget. The Project Info sheet uses the current field names (`Project Subtitle`, `File Administrator`, `Program End`, `Phase N Name` rows, `Work Days = Mon,Tue,Wed,Thu`). Use this to test all tabs. The button is hidden after any file is loaded.
 
 ### Rendering Pattern
 
