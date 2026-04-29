@@ -548,6 +548,101 @@ body {
 .wt-bar-tgt  { position: absolute; top: -4px; bottom: -4px; width: 2px; background: rgba(255,255,255,0.6); border-radius: 1px; }
 .wt-margin-pos { color: #3fb950; }
 .wt-margin-neg { color: #f85149; }
+
+/* ── LIGHT MODE ──────────────────────────────────────────── */
+body.light-mode {
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --border: #d0d7de;
+  --text: #1f2328;
+  --muted: #636c76;
+  --accent: #0969da;
+  --danger: #cf222e;
+  --warning: #9a6700;
+  --success: #1a7f37;
+}
+body.light-mode #tooltip { background: #ffffff; }
+body.light-mode #gantt-drag-label { background: #f6f8fa; }
+
+/* ── THEME TOGGLE ────────────────────────────────────────── */
+#theme-toggle {
+  width: 32px; height: 32px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+#theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── GANTT COLUMN GRID (WBS | Name | Team | WD | %) ─────── */
+#gantt-left-header { grid-template-columns: 44px 1fr 68px 40px 44px; }
+.gantt-row         { grid-template-columns: 44px 1fr 68px 40px 44px; }
+
+/* ── WD COLUMN ───────────────────────────────────────────── */
+.g-wd        { font-size: 0.72rem; font-weight: 600; text-align: right; color: var(--muted); }
+.g-wd.overdue{ color: var(--danger); }
+.g-wd.done   { color: var(--success); }
+
+/* ── DRAG LABEL ──────────────────────────────────────────── */
+#gantt-drag-label {
+  position: fixed;
+  display: none;
+  z-index: 700;
+  background: #1c2128;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--accent);
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+/* ── ROW DRAG HANDLE ─────────────────────────────────────── */
+.g-wbs-wrap { position: relative; display: flex; align-items: center; width: 100%; overflow: hidden; }
+.g-wbs-text { font-size: 0.7rem; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: opacity 0.12s; flex: 1; }
+.gantt-drag-handle {
+  display: none;
+  position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  cursor: grab; color: var(--accent); font-size: 0.85rem;
+  line-height: 1; padding: 0 1px; user-select: none;
+}
+.gantt-row:hover .gantt-drag-handle { display: block; }
+.gantt-row:hover .g-wbs-text { opacity: 0.35; }
+.gantt-row-ghost {
+  position: fixed; pointer-events: none; z-index: 800;
+  background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 4px; opacity: 0.9; height: 34px;
+  font-size: 0.78rem; display: flex; align-items: center;
+  padding: 0 10px; gap: 6px; color: var(--accent);
+  white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.gantt-drop-indicator {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: var(--accent); border-radius: 1px;
+  pointer-events: none; z-index: 801;
+}
+
+/* ── INLINE EDIT CELLS ───────────────────────────────────── */
+.gantt-cell-input {
+  background: var(--bg); border: 1px solid var(--accent);
+  border-radius: 3px; color: var(--text); font-size: 0.79rem;
+  font-family: inherit; padding: 1px 4px; width: 100%; outline: none;
+}
+.gantt-cell-select {
+  background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 3px; color: var(--text); font-size: 0.7rem;
+  font-family: inherit; padding: 1px 2px; width: 100%; outline: none;
+  cursor: pointer;
+}
+.g-pct-edit { width: 100%; text-align: right; }
 </style>
 </head>
 <body>
@@ -566,7 +661,9 @@ body {
       <button class="tab-btn" id="weight-tab-btn" data-tab="weight" onclick="switchTab(this,'weight')" style="display:none">Weight Budget</button>
       <button class="tab-btn" id="org-tab-btn"    data-tab="org"    onclick="switchTab(this,'org')"    style="display:none">Org Chart</button>
     </div>
-    <button class="btn-secondary" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
+    <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
+    <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Save current dashboard to Excel" style="display:none">💾 Save to Excel</button>
+    <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
   </div>
 </div>
 
@@ -613,12 +710,16 @@ body {
         <select id="gantt-team-filter" onchange="setGanttTeamFilter(this.value)">
           <option value="all">All</option>
         </select>
+        <span style="flex:1"></span>
+        <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
+        <button class="btn-secondary" onclick="resetGanttToImported()" title="Reset all edits back to imported data">↺ Reset</button>
       </div>
       <div id="gantt-container">
         <div id="gantt-left">
           <div id="gantt-left-header">
             <span>WBS</span><span>Task Name</span>
             <span style="text-align:right">Team</span>
+            <span style="text-align:right">WD</span>
             <span style="text-align:right">%</span>
           </div>
           <div id="gantt-left-body"></div>
@@ -690,15 +791,83 @@ body {
   <div id="sp-body"></div>
 </div>
 
+<!-- GANTT DRAG LABEL -->
+<div id="gantt-drag-label"></div>
+
 <!-- TOOLTIP -->
 <div id="tooltip"></div>
 
 <script>
 // ─── App State ────────────────────────────────────────────────────────────────
 const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+let S_tasksOriginal = [];          // deep-copy at parse time for reset
+let ganttWorkDays = [1,2,3,4];    // Mon–Thu default; overridden by Project Info "Work Days"
 let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks which item the side panel is showing
 let spCurrentId   = null; // specId string, taskId number, or person name string
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+
+// Bar drag state
+let barDrag = { active: false, taskId: null, mode: null, startClientX: 0,
+                origStart: null, origEnd: null, startScrollLeft: 0 };
+let barEls = {}; // taskId -> { bgRect, progRect, outlineRect, diamond, midY }
+
+// Row reorder state
+let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
+
+// ─── Work Day Utilities ───────────────────────────────────────────────────────
+function parseWorkDays(str) {
+  const map = { mon:1, tue:2, wed:3, thu:4, fri:5, sat:6, sun:0 };
+  return String(str).toLowerCase().split(',')
+    .map(s => map[s.trim().slice(0,3)]).filter(n => n !== undefined);
+}
+function isWorkDay(date, wds) { return (wds || ganttWorkDays).includes(date.getDay()); }
+function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
+function snapToWorkDay(date, wds, dir) {
+  // dir: 1 = forward, -1 = backward, 0 = nearest
+  const d = new Date(date); d.setHours(0,0,0,0);
+  if (isWorkDay(d, wds)) return d;
+  if (dir === undefined || dir === 0) {
+    const fwd = snapToWorkDay(date, wds, 1);
+    const bwd = snapToWorkDay(date, wds, -1);
+    return Math.abs(daysBetween(date, fwd)) <= Math.abs(daysBetween(date, bwd)) ? fwd : bwd;
+  }
+  let i = 0;
+  while (!isWorkDay(d, wds) && i < 14) { d.setDate(d.getDate() + (dir >= 0 ? 1 : -1)); i++; }
+  return d;
+}
+function countWorkDays(start, end) {
+  if (!start || !end) return 0;
+  let count = 0;
+  const d = new Date(start); d.setHours(0,0,0,0);
+  const e = new Date(end);   e.setHours(0,0,0,0);
+  while (d <= e) { if (isWorkDay(d, ganttWorkDays)) count++; d.setDate(d.getDate() + 1); }
+  return count;
+}
+function workDaysRemaining(endDate) {
+  if (!endDate) return 0;
+  const e = new Date(endDate); e.setHours(0,0,0,0);
+  if (e < TODAY) return 0;
+  return countWorkDays(TODAY, e);
+}
+function wdDisplay(t) {
+  if (t.pct === 100) return { text: '✓', cls: 'done' };
+  const rem = workDaysRemaining(t.end);
+  if (rem <= 0 && t.end && t.end < TODAY) return { text: '0 wd', cls: 'overdue' };
+  return { text: rem + ' wd', cls: '' };
+}
+
+// ─── Theme ────────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const light = document.body.classList.toggle('light-mode');
+  localStorage.setItem('vh-theme', light ? 'light' : 'dark');
+  document.getElementById('theme-toggle').textContent = light ? '🌙' : '☀';
+}
+(function applyTheme() {
+  if (localStorage.getItem('vh-theme') === 'light') {
+    document.body.classList.add('light-mode');
+    document.getElementById('theme-toggle').textContent = '🌙';
+  }
+})();
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
 const GANTT_COLORS = {
@@ -845,6 +1014,8 @@ function parseWorkbook(wb) {
   if (ws1) {
     XLSX.utils.sheet_to_json(ws1, { header:1 })
       .forEach(r => { if (r[0] && r[1] != null) S.info[String(r[0]).trim()] = r[1]; });
+    const wd = S.info['Work Days'];
+    if (wd) { const parsed = parseWorkDays(String(wd)); if (parsed.length) ganttWorkDays = parsed; }
   }
 
   const ws2 = wb.Sheets['Schedule'];
@@ -921,6 +1092,9 @@ function parseWorkbook(wb) {
       };
     });
   }
+
+  // Deep-copy tasks for reset
+  S_tasksOriginal = S.tasks.map(t => ({ ...t, deps: [...t.deps], depIds: t.depIds ? [...t.depIds] : [] }));
 }
 
 function parseDate(v) {
@@ -949,6 +1123,8 @@ function renderDashboard() {
   document.getElementById('tabs').style.display = 'flex';
   document.getElementById('org-tab-btn').style.display = S.org.length ? '' : 'none';
   document.getElementById('weight-tab-btn').style.display = S.weights.length ? '' : 'none';
+  document.getElementById('generate-sample-btn').style.display = 'none';
+  document.getElementById('save-excel-btn').style.display = '';
   dashboardLoaded = true;
   renderGantt();
   renderSpecs();
@@ -974,26 +1150,140 @@ function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
 // Drag-pan state for gantt-right
 let ganttDragging = false, ganttDragDidMove = false, ganttDragStartX, ganttDragScrollLeft;
 
+function getBarZone(svgX, t) {
+  const barX = daysBetween(ganttMinDateRef, t.start) * ganttZoom;
+  const barW = Math.max(daysBetween(t.start, t.end) * ganttZoom, ganttZoom);
+  if (t.milestone) {
+    const mx = barX + barW, sz = 7;
+    return (svgX >= mx - sz - 8 && svgX <= mx + sz + 8) ? 'milestone' : null;
+  }
+  if (svgX < barX - 4 || svgX > barX + barW + 4) return null;
+  const EDGE = Math.min(10, Math.max(4, barW * 0.2));
+  if (svgX <= barX + EDGE) return 'resize-left';
+  if (svgX >= barX + barW - EDGE) return 'resize-right';
+  return 'move';
+}
+
+function startBarDrag(e, taskId) {
+  const right = document.getElementById('gantt-right');
+  const t = S.tasks.find(t => t.id === taskId);
+  if (!t || !t.start || !t.end) { startPanDrag(e); return; }
+  const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
+  const zone = getBarZone(svgX, t);
+  if (!zone) { startPanDrag(e); return; }
+  barDrag.active = true; barDrag.taskId = taskId; barDrag.mode = zone;
+  barDrag.startClientX = e.clientX; barDrag.startScrollLeft = right.scrollLeft;
+  barDrag.origStart = new Date(t.start); barDrag.origEnd = new Date(t.end);
+  right.style.cursor = (zone === 'resize-left' || zone === 'resize-right') ? 'ew-resize' : 'grabbing';
+  hideTooltip(); e.preventDefault();
+}
+
+function startPanDrag(e) {
+  const right = document.getElementById('gantt-right');
+  ganttDragging = true; ganttDragDidMove = false;
+  ganttDragStartX = e.pageX; ganttDragScrollLeft = right.scrollLeft;
+  right.classList.add('dragging'); e.preventDefault();
+}
+
+function updateBarElementsDirect(taskId, newStart, newEnd) {
+  const els = barEls[taskId];
+  if (!els || !ganttMinDateRef) return;
+  const x = daysBetween(ganttMinDateRef, newStart) * ganttZoom;
+  const w = Math.max(daysBetween(newStart, newEnd) * ganttZoom, ganttZoom);
+  const t = S.tasks.find(t => t.id === taskId);
+  if (!t) return;
+  if (t.milestone) {
+    if (els.diamond) {
+      const mx = x + w, sz = 7, my = els.midY;
+      els.diamond.setAttribute('points', `${mx},${my-sz} ${mx+sz},${my} ${mx},${my+sz} ${mx-sz},${my}`);
+    }
+  } else {
+    if (els.bgRect)      { els.bgRect.setAttribute('x', x); els.bgRect.setAttribute('width', w); }
+    if (els.progRect)    { els.progRect.setAttribute('x', x); els.progRect.setAttribute('width', Math.max(0, w*(t.pct/100))); }
+    if (els.outlineRect) { els.outlineRect.setAttribute('x', x); els.outlineRect.setAttribute('width', w); }
+  }
+}
+
+function doBarDragMove(e) {
+  if (!barDrag.active) return;
+  const right = document.getElementById('gantt-right');
+  const scrollDelta = right.scrollLeft - barDrag.startScrollLeft;
+  const pixelDelta  = (e.clientX - barDrag.startClientX) + scrollDelta;
+  const rawDays     = pixelDelta / ganttZoom;
+
+  let newStart = new Date(barDrag.origStart);
+  let newEnd   = new Date(barDrag.origEnd);
+
+  if (barDrag.mode === 'move' || barDrag.mode === 'milestone') {
+    const dur = daysBetween(barDrag.origStart, barDrag.origEnd);
+    newStart = snapToWorkDay(addDays(barDrag.origStart, Math.round(rawDays)), ganttWorkDays, 1);
+    newEnd   = addDays(newStart, dur);
+    if (!isWorkDay(newEnd, ganttWorkDays)) newEnd = snapToWorkDay(newEnd, ganttWorkDays, 1);
+  } else if (barDrag.mode === 'resize-left') {
+    newStart = snapToWorkDay(addDays(barDrag.origStart, Math.round(rawDays)), ganttWorkDays, 1);
+    // Enforce min 1 work-day gap
+    if (daysBetween(newStart, newEnd) < 1) newStart = snapToWorkDay(addDays(newEnd, -1), ganttWorkDays, -1);
+  } else if (barDrag.mode === 'resize-right') {
+    newEnd = snapToWorkDay(addDays(barDrag.origEnd, Math.round(rawDays)), ganttWorkDays, 1);
+    if (daysBetween(newStart, newEnd) < 1) newEnd = snapToWorkDay(addDays(newStart, 1), ganttWorkDays, 1);
+  }
+
+  const t = S.tasks.find(t => t.id === barDrag.taskId);
+  if (t) { t.start = newStart; t.end = newEnd; }
+  updateBarElementsDirect(barDrag.taskId, newStart, newEnd);
+
+  const label = document.getElementById('gantt-drag-label');
+  const total = countWorkDays(newStart, newEnd);
+  const rem   = workDaysRemaining(newEnd);
+  label.textContent = `${fmt(newStart)} → ${fmt(newEnd)}  ·  ${total} wd total  ·  ${rem} wd left`;
+  label.style.display = 'block';
+  label.style.left = Math.min(e.clientX + 16, window.innerWidth - label.offsetWidth - 10) + 'px';
+  label.style.top  = (e.clientY - 34) + 'px';
+}
+
+function endBarDrag() {
+  if (!barDrag.active) return;
+  barDrag.active = false;
+  document.getElementById('gantt-drag-label').style.display = 'none';
+  document.getElementById('gantt-right').style.cursor = '';
+  renderGantt();
+}
+
 function initGanttPan() {
   const right = document.getElementById('gantt-right');
   right.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
-    ganttDragging = true; ganttDragDidMove = false;
-    ganttDragStartX = e.pageX;
-    ganttDragScrollLeft = right.scrollLeft;
-    right.classList.add('dragging');
-    e.preventDefault();
+    const tid = e.target.dataset && e.target.dataset.taskid ? +e.target.dataset.taskid : null;
+    if (tid !== null) { startBarDrag(e, tid); return; }
+    startPanDrag(e);
+  });
+  right.addEventListener('mousemove', e => {
+    if (barDrag.active || ganttDragging) return;
+    const tid = e.target.dataset && e.target.dataset.taskid ? +e.target.dataset.taskid : null;
+    if (tid !== null && ganttMinDateRef) {
+      const t = S.tasks.find(t => t.id === tid);
+      if (t) {
+        const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
+        const zone = getBarZone(svgX, t);
+        right.style.cursor = (zone === 'resize-left' || zone === 'resize-right') ? 'ew-resize' : (zone ? 'grab' : '');
+        return;
+      }
+    }
+    right.style.cursor = 'grab';
   });
   document.addEventListener('mousemove', e => {
-    if (!ganttDragging) return;
-    const dx = e.pageX - ganttDragStartX;
-    if (Math.abs(dx) > 4) ganttDragDidMove = true;
-    right.scrollLeft = ganttDragScrollLeft - dx;
+    if (ganttDragging) {
+      const dx = e.pageX - ganttDragStartX;
+      if (Math.abs(dx) > 4) ganttDragDidMove = true;
+      right.scrollLeft = ganttDragScrollLeft - dx;
+    }
+    if (barDrag.active) doBarDragMove(e);
+    if (rowDrag.active) doRowDragMove(e);
   });
-  document.addEventListener('mouseup', () => {
-    if (!ganttDragging) return;
-    ganttDragging = false;
-    document.getElementById('gantt-right').classList.remove('dragging');
+  document.addEventListener('mouseup', e => {
+    if (ganttDragging) { ganttDragging = false; right.classList.remove('dragging'); }
+    if (barDrag.active) endBarDrag();
+    if (rowDrag.active) endRowDrag(e);
   });
 }
 initGanttPan();
@@ -1116,24 +1406,53 @@ function renderGantt() {
 
   // ── Left panel rows ────────────────────────────────
   lb.innerHTML = '';
-  visibleTasks.forEach(t => {
+  const isFiltered = ganttPhaseFilter !== 'all' || ganttTeamFilter !== 'all';
+  visibleTasks.forEach((t, i) => {
     const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
+    const wd = wdDisplay(t);
     const div = document.createElement('div');
     div.className = 'gantt-row';
     div.innerHTML = `
-      <span class="g-wbs" style="color:${color}">${t.wbs}</span>
+      <div class="g-wbs-wrap" style="color:${color}">
+        ${!isFiltered ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
+        <span class="g-wbs-text">${t.wbs}</span>
+      </div>
       <span class="g-name" style="padding-left:${depth*10}px" title="${t.name}">${t.milestone ? '◆ ' : ''}${t.name}</span>
       <span class="g-team" title="${t.team}">${t.team}</span>
+      <span class="g-wd ${wd.cls}">${wd.text}</span>
       <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>`;
+
+    // WBS drag handle
+    if (!isFiltered) {
+      const handle = div.querySelector('.gantt-drag-handle');
+      if (handle) handle.addEventListener('mousedown', e => { e.stopPropagation(); startRowDrag(e, i, t, div); });
+    }
+
+    // Task name inline edit
+    const nameEl = div.querySelector('.g-name');
+    nameEl.style.cursor = 'text';
+    nameEl.addEventListener('click', e => { e.stopPropagation(); startNameEdit(nameEl, t); });
+
+    // Team inline edit
+    const teamEl = div.querySelector('.g-team');
+    teamEl.style.cursor = 'pointer';
+    teamEl.addEventListener('click', e => { e.stopPropagation(); startTeamEdit(teamEl, t); });
+
+    // Pct inline edit
+    const pctEl = div.querySelector('.g-pct');
+    pctEl.style.cursor = 'text';
+    pctEl.addEventListener('click', e => { e.stopPropagation(); startPctEdit(pctEl, t); });
+
     div.addEventListener('click', () => openTaskPanel(t.id));
-    div.addEventListener('mouseenter', e => showTooltip(t, e));
+    div.addEventListener('mouseenter', e => { if (!barDrag.active && !rowDrag.active) showTooltip(t, e); });
     div.addEventListener('mouseleave', hideTooltip);
     lb.appendChild(div);
   });
 
   // ── Build SVG ──────────────────────────────────────
+  barEls = {};
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', W); svg.setAttribute('height', H);
   svg.style.display = 'block';
@@ -1155,6 +1474,21 @@ function renderGantt() {
     if (i % 2 === 0) appendRect(svg, NS, 0, HH + i*RH, W, RH, 'rgba(255,255,255,0.015)');
   });
 
+  // Non-work-day shading (only when zoomed enough to see individual days)
+  if (ganttZoom >= 3) {
+    const isLightMode = document.body.classList.contains('light-mode');
+    const shadeFill = isLightMode ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.025)';
+    const dCur = new Date(minD);
+    while (dCur <= maxD) {
+      if (!isWorkDay(dCur, ganttWorkDays)) {
+        const sx = daysBetween(minD, dCur) * ganttZoom;
+        const r = appendRect(svg, NS, sx, 0, ganttZoom, H, shadeFill);
+        r.style.pointerEvents = 'none';
+      }
+      dCur.setDate(dCur.getDate() + 1);
+    }
+  }
+
   renderHeader(svg, NS, minD, maxD, W);
 
   for (let i = 0; i <= visibleTasks.length; i++) {
@@ -1170,15 +1504,15 @@ function renderGantt() {
     const midY = HH + i*RH + RH/2;
     const color = phaseColor(t.wbs);
 
-    // Invisible hit area for the full row
+    // Invisible hit area for the full row (carries task id for drag detection)
     const hit = document.createElementNS(NS, 'rect');
     hit.setAttribute('x', 0); hit.setAttribute('y', HH + i*RH);
     hit.setAttribute('width', W); hit.setAttribute('height', RH);
     hit.setAttribute('fill', 'transparent');
-    hit.style.cursor = 'pointer';
-    hit.addEventListener('mouseenter', e => showTooltip(t, e));
+    hit.dataset.taskid = t.id;
+    hit.addEventListener('mouseenter', e => { if (!barDrag.active && !rowDrag.active) showTooltip(t, e); });
     hit.addEventListener('mouseleave', hideTooltip);
-    hit.addEventListener('click', () => { if (!ganttDragDidMove) openTaskPanel(t.id); });
+    hit.addEventListener('click', () => { if (!ganttDragDidMove && !barDrag.active) openTaskPanel(t.id); });
     svg.appendChild(hit);
 
     if (t.milestone) {
@@ -1189,20 +1523,26 @@ function renderGantt() {
       d.style.pointerEvents = 'none';
       svg.appendChild(d);
       barPos[t.id] = { sx: mx - sz, ex: mx + sz, my: midY };
+      barEls[t.id] = { diamond: d, midY };
     } else {
       const by = HH + i*RH + RH*0.28, bh = RH*0.44;
-      appendRect(svg, NS, x, by, w, bh, color + '30', 4);
-      if (t.pct > 0) appendRect(svg, NS, x, by, w*(t.pct/100), bh, color, 4);
-      else {
-        const r = document.createElementNS(NS, 'rect');
-        r.setAttribute('x', x); r.setAttribute('y', by);
-        r.setAttribute('width', w); r.setAttribute('height', bh);
-        r.setAttribute('rx', 4); r.setAttribute('fill', 'none');
-        r.setAttribute('stroke', color); r.setAttribute('stroke-width', 1.5);
-        r.style.pointerEvents = 'none';
-        svg.appendChild(r);
+      const bgRect = appendRect(svg, NS, x, by, w, bh, color + '30', 4);
+      bgRect.style.pointerEvents = 'none';
+      let progRect = null, outlineRect = null;
+      if (t.pct > 0) {
+        progRect = appendRect(svg, NS, x, by, w*(t.pct/100), bh, color, 4);
+        progRect.style.pointerEvents = 'none';
+      } else {
+        outlineRect = document.createElementNS(NS, 'rect');
+        outlineRect.setAttribute('x', x); outlineRect.setAttribute('y', by);
+        outlineRect.setAttribute('width', w); outlineRect.setAttribute('height', bh);
+        outlineRect.setAttribute('rx', 4); outlineRect.setAttribute('fill', 'none');
+        outlineRect.setAttribute('stroke', color); outlineRect.setAttribute('stroke-width', 1.5);
+        outlineRect.style.pointerEvents = 'none';
+        svg.appendChild(outlineRect);
       }
       barPos[t.id] = { sx: x, ex: x + w, my: midY };
+      barEls[t.id] = { bgRect, progRect, outlineRect, midY };
     }
   });
 
@@ -1287,6 +1627,249 @@ function appendLine(svg, NS, x1, x2, y1, y2, stroke, sw, dash='') {
   l.setAttribute('stroke',stroke); l.setAttribute('stroke-width',sw);
   if (dash) l.setAttribute('stroke-dasharray',dash);
   svg.appendChild(l); return l;
+}
+
+// ─── GANTT INLINE EDITS ──────────────────────────────────────────────────────
+function startNameEdit(span, t) {
+  if (span.querySelector('input')) return;
+  const orig = t.name;
+  const input = document.createElement('input');
+  input.className = 'gantt-cell-input';
+  input.value = orig;
+  span.textContent = '';
+  span.appendChild(input);
+  input.focus(); input.select();
+  const commit = () => {
+    const v = input.value.trim();
+    if (v) { t.name = v; }
+    renderGantt();
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { t.name = orig; renderGantt(); }
+  });
+  input.addEventListener('blur', commit);
+}
+
+function startTeamEdit(span, t) {
+  if (span.querySelector('select')) return;
+  const orig = t.team;
+  const teams = [...new Set(S.tasks.map(x => x.team).filter(Boolean))].sort();
+  const sel = document.createElement('select');
+  sel.className = 'gantt-cell-select';
+  teams.forEach(tm => {
+    const o = document.createElement('option');
+    o.value = tm; o.textContent = tm;
+    if (tm === t.team) o.selected = true;
+    sel.appendChild(o);
+  });
+  span.textContent = '';
+  span.appendChild(sel);
+  sel.focus();
+  const commit = (save) => { if (save) t.team = sel.value; else t.team = orig; renderGantt(); };
+  sel.addEventListener('change', () => commit(true));
+  sel.addEventListener('keydown', e => { if (e.key === 'Escape') commit(false); });
+  sel.addEventListener('blur', () => { if (t.team === orig) commit(false); });
+}
+
+function startPctEdit(span, t) {
+  if (span.querySelector('input')) return;
+  const orig = t.pct;
+  const input = document.createElement('input');
+  input.type = 'number'; input.min = 0; input.max = 100;
+  input.className = 'gantt-cell-input g-pct-edit';
+  input.value = t.pct;
+  span.textContent = '';
+  span.appendChild(input);
+  input.focus(); input.select();
+  const commit = () => {
+    const v = input.value.trim();
+    if (v === '') { t.pct = orig; } else { t.pct = Math.min(100, Math.max(0, Math.round(+v))); }
+    renderGantt();
+  };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { t.pct = orig; renderGantt(); }
+  });
+  input.addEventListener('blur', commit);
+}
+
+// ─── ROW REORDER ─────────────────────────────────────────────────────────────
+function startRowDrag(e, visIdx, t, rowEl) {
+  if (ganttPhaseFilter !== 'all' || ganttTeamFilter !== 'all') return;
+  const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
+  if (isPhaseHeader) return;
+
+  rowDrag.active = true;
+  rowDrag.srcIdx = visIdx;
+  rowDrag.dropIdx = visIdx;
+
+  const ghost = document.createElement('div');
+  ghost.className = 'gantt-row-ghost';
+  ghost.textContent = t.wbs + '  ' + t.name;
+  ghost.style.width = document.getElementById('gantt-left').offsetWidth + 'px';
+  document.body.appendChild(ghost);
+  rowDrag.ghost = ghost;
+
+  const indicator = document.createElement('div');
+  indicator.className = 'gantt-drop-indicator';
+  document.getElementById('gantt-left-body').style.position = 'relative';
+  document.getElementById('gantt-left-body').appendChild(indicator);
+  rowDrag.indicator = indicator;
+
+  e.preventDefault();
+}
+
+function doRowDragMove(e) {
+  if (!rowDrag.active) return;
+  const ghost = rowDrag.ghost;
+  ghost.style.left = (e.clientX + 10) + 'px';
+  ghost.style.top  = (e.clientY - 17) + 'px';
+
+  const lb = document.getElementById('gantt-left-body');
+  const rect = lb.getBoundingClientRect();
+  const relY = e.clientY - rect.top + lb.scrollTop;
+  const dropIdx = Math.min(Math.max(0, Math.round(relY / RH)), lb.children.length);
+  rowDrag.dropIdx = dropIdx;
+
+  const indicator = rowDrag.indicator;
+  indicator.style.top = (dropIdx * RH) + 'px';
+  indicator.style.display = 'block';
+}
+
+function endRowDrag(e) {
+  if (!rowDrag.active) return;
+  rowDrag.active = false;
+  if (rowDrag.ghost)     { rowDrag.ghost.remove(); rowDrag.ghost = null; }
+  if (rowDrag.indicator) { rowDrag.indicator.remove(); rowDrag.indicator = null; }
+
+  const srcIdx  = rowDrag.srcIdx;
+  const dropIdx = rowDrag.dropIdx;
+  if (dropIdx !== srcIdx && dropIdx !== srcIdx + 1) {
+    // Get the actual S.tasks indices via object references
+    const visibleTasks = S.tasks.filter(t => {
+      const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
+      if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
+      if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
+      return true;
+    });
+    const dragged = visibleTasks[srcIdx];
+    if (dragged) {
+      const origIdx = S.tasks.indexOf(dragged);
+      S.tasks.splice(origIdx, 1);
+      // Find target in updated S.tasks
+      const adjustedDrop = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
+      const updatedVisible = S.tasks.filter(t => {
+        const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
+        if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
+        if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
+        return true;
+      });
+      const targetTask = updatedVisible[adjustedDrop];
+      const targetIdx = targetTask ? S.tasks.indexOf(targetTask) : S.tasks.length;
+      S.tasks.splice(targetIdx, 0, dragged);
+      recalcWBS(S.tasks);
+    }
+  }
+  renderGantt();
+}
+
+function recalcWBS(tasks) {
+  let currentPhase = 1;
+  const phaseCounts = {};
+  tasks.forEach(t => {
+    const hasSubDot = t.wbs.includes('.') && !t.wbs.endsWith('.0');
+    if (!hasSubDot) {
+      // Phase header — keep its phase number
+      currentPhase = parseInt(t.wbs) || currentPhase;
+      t.wbs = currentPhase + '.0';
+    } else {
+      if (!phaseCounts[currentPhase]) phaseCounts[currentPhase] = 0;
+      phaseCounts[currentPhase]++;
+      t.wbs = currentPhase + '.' + phaseCounts[currentPhase];
+    }
+  });
+}
+
+// ─── ADD TASK / RESET ─────────────────────────────────────────────────────────
+function addGanttTask() {
+  if (!S.tasks.length) return;
+  const lastTask = S.tasks[S.tasks.length - 1];
+  const lastPhase = parseInt(String(lastTask.wbs).split('.')[0]) || 1;
+  const phaseTasks = S.tasks.filter(t => parseInt(String(t.wbs).split('.')[0]) === lastPhase && t.wbs.includes('.') && !t.wbs.endsWith('.0'));
+  const nextNum = phaseTasks.length + 1;
+  const newWbs = lastPhase + '.' + nextNum;
+
+  const teams = [...new Set(S.tasks.map(t => t.team).filter(Boolean))].sort();
+  const team = teams[0] || '';
+
+  const dates = S.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
+  const progStart = new Date(Math.min(...dates));
+  const taskStart = snapToWorkDay(progStart, ganttWorkDays, 1);
+  const taskEnd   = snapToWorkDay(addDays(taskStart, 4), ganttWorkDays, 1);
+
+  const newId = Math.max(...S.tasks.map(t => t.id), 0) + 1;
+  const newTask = {
+    id: newId, wbs: newWbs,
+    name: 'New Task ' + newId,
+    category: lastTask.category || '',
+    start: taskStart, end: taskEnd,
+    pct: 0, deps: [], team, milestone: false, notes: '',
+  };
+  S.tasks.push(newTask);
+  renderGantt();
+}
+
+function resetGanttToImported() {
+  if (!S_tasksOriginal.length) return;
+  S.tasks = S_tasksOriginal.map(t => ({ ...t, deps: [...t.deps] }));
+  renderGantt();
+}
+
+// ─── SAVE TO EXCEL ────────────────────────────────────────────────────────────
+function saveToExcel() {
+  const wb = XLSX.utils.book_new();
+
+  // Project Info
+  const infoRows = [['Field','Value']];
+  Object.entries(S.info).forEach(([k,v]) => infoRows.push([k, v]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoRows), 'Project Info');
+
+  // Schedule
+  const schRows = [['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes']];
+  S.tasks.forEach(t => {
+    const fmtD = d => d ? d.toISOString().slice(0,10) : '';
+    schRows.push([
+      t.id, t.wbs, t.name, t.category,
+      fmtD(t.start), fmtD(t.end), t.pct,
+      t.deps.join(','), t.team,
+      t.milestone ? 'Y' : 'N', t.notes
+    ]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(schRows), 'Schedule');
+
+  // Specifications
+  const spRows = [['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs']];
+  S.specs.forEach(s => spRows.push([s.id, s.category, s.name, s.value, s.units, s.status, s.group, s.notes, s.depIds.join(',')]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(spRows), 'Specifications');
+
+  // Org Chart
+  if (S.org.length) {
+    const ogRows = [['Name','Title','Team','Reports To','Email']];
+    S.org.forEach(p => ogRows.push([p.name, p.title, p.team, p.reportsTo, p.email]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ogRows), 'Org Chart');
+  }
+
+  // Weight Budget
+  if (S.weights.length) {
+    const wRows = [['Subsystem','Group','Target Weight (lb)','Estimated Weight (lb)','Status','Notes']];
+    S.weights.forEach(w => wRows.push([w.subsystem, w.group, w.target, w.estimated, w.status, w.notes]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wRows), 'Weight Budget');
+  }
+
+  const title = (S.info['Project Title'] || 'Dashboard').replace(/[/\\?%*:|"<>]/g, '-');
+  const dateStr = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `${title} - ${dateStr}.xlsx`);
 }
 
 // ─── TOOLTIP ─────────────────────────────────────────────────────────────────
@@ -1694,6 +2277,8 @@ function openTaskPanel(taskId) {
       ? `<span class="badge badge-target">${t.pct}% In Progress</span>`
       : `<span class="badge badge-tbd">Not Started</span>`;
 
+  const totalWd = countWorkDays(t.start, t.end);
+  const remWd   = workDaysRemaining(t.end);
   let html = `<div class="sp-meta">
     <div class="sp-meta-id">
       <code style="color:${gc}">Task ${t.id}</code> · WBS ${t.wbs} · <span style="color:${gc}">${t.category}</span>
@@ -1703,6 +2288,7 @@ function openTaskPanel(taskId) {
     ${statusBadge}
     <div class="sp-meta-notes">
       <strong>Start:</strong> ${fmt(t.start)} &nbsp;·&nbsp; <strong>End:</strong> ${fmt(t.end)}<br>
+      <strong>Work Days:</strong> ${totalWd} total &nbsp;·&nbsp; ${t.pct === 100 ? '<span style="color:var(--success)">Complete ✓</span>' : remWd > 0 ? remWd + ' remaining' : '<span style="color:var(--danger)">Overdue</span>'}<br>
       ${t.notes ? `<strong>Notes:</strong> ${t.notes}` : ''}
     </div>
   </div>`;
@@ -1989,6 +2575,7 @@ function generateSampleExcel() {
     ['File Administrator','S. Torres'],
     ['Program Start',     '2025-03-03'],
     ['Program End',       '2027-12-19'],
+    ['Work Days',         'Mon,Tue,Wed,Thu'],
     ['Phase 1 Name',      'Concept'],
     ['Phase 2 Name',      'Preliminary Design'],
     ['Phase 3 Name',      'Detail Design'],
