@@ -606,16 +606,18 @@ body.light-mode #gantt-drag-label { background: #f6f8fa; }
 }
 
 /* ── ROW DRAG HANDLE ─────────────────────────────────────── */
-.g-wbs-wrap { position: relative; display: flex; align-items: center; width: 100%; overflow: hidden; }
+.g-wbs-wrap { position: relative; display: flex; align-items: center; width: 100%; }
 .g-wbs-text { font-size: 0.7rem; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: opacity 0.12s; flex: 1; }
 .gantt-drag-handle {
   display: none;
   position: absolute; left: 0; top: 50%; transform: translateY(-50%);
-  cursor: grab; color: var(--accent); font-size: 0.85rem;
+  color: var(--accent); font-size: 0.85rem;
   line-height: 1; padding: 0 1px; user-select: none;
+  pointer-events: none;
 }
 .gantt-row:hover .gantt-drag-handle { display: block; }
 .gantt-row:hover .g-wbs-text { opacity: 0.35; }
+.gantt-row:hover .g-wbs-wrap.g-wbs-draggable { cursor: grab; }
 .gantt-row-ghost {
   position: fixed; pointer-events: none; z-index: 800;
   background: var(--surface); border: 1px solid var(--accent);
@@ -1426,10 +1428,17 @@ function renderGantt() {
       <span class="g-wd ${wd.cls}">${wd.text}</span>
       <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>`;
 
-    // WBS drag handle
+    // WBS drag handle — whole cell is the hit target, ⠿ is visual only
     if (showHandle) {
-      const handle = div.querySelector('.gantt-drag-handle');
-      if (handle) handle.addEventListener('mousedown', e => { e.stopPropagation(); startRowDrag(e, i, t, div); });
+      const wbsWrap = div.querySelector('.g-wbs-wrap');
+      if (wbsWrap) {
+        wbsWrap.classList.add('g-wbs-draggable');
+        wbsWrap.addEventListener('mousedown', e => {
+          e.stopPropagation();
+          e.preventDefault();
+          startRowDrag(e, i, t, div);
+        });
+      }
     }
 
     // Task name inline edit
