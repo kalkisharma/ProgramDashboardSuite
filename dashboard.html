@@ -1412,11 +1412,13 @@ function renderGantt() {
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
     const wd = wdDisplay(t);
+    const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
+    const showHandle = !isFiltered && !isPhaseHeader;
     const div = document.createElement('div');
     div.className = 'gantt-row';
     div.innerHTML = `
       <div class="g-wbs-wrap" style="color:${color}">
-        ${!isFiltered ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
+        ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
         <span class="g-wbs-text">${t.wbs}</span>
       </div>
       <span class="g-name" style="padding-left:${depth*10}px" title="${t.name}">${t.milestone ? '◆ ' : ''}${t.name}</span>
@@ -1425,7 +1427,7 @@ function renderGantt() {
       <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>`;
 
     // WBS drag handle
-    if (!isFiltered) {
+    if (showHandle) {
       const handle = div.querySelector('.gantt-drag-handle');
       if (handle) handle.addEventListener('mousedown', e => { e.stopPropagation(); startRowDrag(e, i, t, div); });
     }
@@ -1696,18 +1698,14 @@ function startPctEdit(span, t) {
 
 // ─── ROW REORDER ─────────────────────────────────────────────────────────────
 function startRowDrag(e, visIdx, t, rowEl) {
-  if (ganttPhaseFilter !== 'all' || ganttTeamFilter !== 'all') return;
-  const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
-  if (isPhaseHeader) return;
-
   const lb = document.getElementById('gantt-left-body');
-  // Count only actual task rows (not any stale indicators)
   const taskRowCount = lb.querySelectorAll('.gantt-row').length;
 
   rowDrag.active   = true;
   rowDrag.srcIdx   = visIdx;
   rowDrag.dropIdx  = visIdx;
   rowDrag.rowCount = taskRowCount;
+  rowDrag.lb       = lb;
 
   const ghost = document.createElement('div');
   ghost.className = 'gantt-row-ghost';
@@ -1717,51 +1715,34 @@ function startRowDrag(e, visIdx, t, rowEl) {
   document.body.appendChild(ghost);
   rowDrag.ghost = ghost;
 
-  // Indicator overlays the left panel using fixed positioning to avoid scroll issues
   const indicator = document.createElement('div');
-  indicator.className = 'gantt-drop-indicator';
-  indicator.style.position = 'fixed';
-  indicator.style.zIndex   = '801';
-  indicator.style.height   = '2px';
-  indicator.style.background = 'var(--accent)';
+  indicator.style.cssText = 'position:fixed;z-index:801;height:2px;background:var(--accent);pointer-events:none;display:none';
   document.body.appendChild(indicator);
   rowDrag.indicator = indicator;
-
-  // Dedicated listeners — most reliable pattern for drag-and-drop
-  function onMove(ev) { _doRowMove(ev, lb); }
-  function onUp(ev)   {
-    window.removeEventListener('mousemove', onMove);
-    window.removeEventListener('mouseup',   onUp);
-    _endRowDrop();
-  }
-  rowDrag._onMove = onMove;
-  rowDrag._onUp   = onUp;
-  window.addEventListener('mousemove', onMove);
-  window.addEventListener('mouseup',   onUp);
 
   e.preventDefault();
 }
 
-function _doRowMove(e, lb) {
+function doRowDragMove(e) {
   if (!rowDrag.active) return;
+  const lb = rowDrag.lb;
 
   rowDrag.ghost.style.left = (e.clientX + 10) + 'px';
   rowDrag.ghost.style.top  = (e.clientY - 17) + 'px';
 
-  const lbRect = lb.getBoundingClientRect();
-  const relY   = e.clientY - lbRect.top + lb.scrollTop;
+  const lbRect  = lb.getBoundingClientRect();
+  const relY    = e.clientY - lbRect.top + lb.scrollTop;
   const dropIdx = Math.min(Math.max(0, Math.round(relY / RH)), rowDrag.rowCount);
   rowDrag.dropIdx = dropIdx;
 
-  // Position the fixed indicator aligned with the left panel
   const indicatorY = lbRect.top + dropIdx * RH - lb.scrollTop;
-  rowDrag.indicator.style.left  = lbRect.left + 'px';
-  rowDrag.indicator.style.width = lbRect.width + 'px';
-  rowDrag.indicator.style.top   = indicatorY + 'px';
+  rowDrag.indicator.style.left    = lbRect.left + 'px';
+  rowDrag.indicator.style.width   = lbRect.width + 'px';
+  rowDrag.indicator.style.top     = indicatorY + 'px';
   rowDrag.indicator.style.display = 'block';
 }
 
-function _endRowDrop() {
+function endRowDrag(e) {
   if (!rowDrag.active) return;
   rowDrag.active = false;
   if (rowDrag.ghost)     { rowDrag.ghost.remove();     rowDrag.ghost     = null; }
@@ -1770,7 +1751,6 @@ function _endRowDrop() {
   const srcIdx  = rowDrag.srcIdx;
   const dropIdx = rowDrag.dropIdx;
 
-  // No-op if dropped on same position or immediately after self
   if (dropIdx === srcIdx || dropIdx === srcIdx + 1) { renderGantt(); return; }
 
   const visibleTasks = S.tasks.filter(t => {
@@ -1783,12 +1763,10 @@ function _endRowDrop() {
   const dragged = visibleTasks[srcIdx];
   if (!dragged) { renderGantt(); return; }
 
-  // Remove dragged task from S.tasks
   const origIdx = S.tasks.indexOf(dragged);
   S.tasks.splice(origIdx, 1);
 
-  // Re-compute visible list after removal, find insertion point
-  const adjustedDrop = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
+  const adjustedDrop  = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
   const updatedVisible = S.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
     if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
@@ -1801,10 +1779,6 @@ function _endRowDrop() {
   recalcWBS(S.tasks);
   renderGantt();
 }
-
-// Keep the document-level handler stubs in initGanttPan working too
-function doRowDragMove(e) { /* handled by dedicated window listeners in startRowDrag */ }
-function endRowDrag(e)    { /* handled by dedicated window listeners in startRowDrag */ }
 
 function recalcWBS(tasks) {
   let currentPhase = 1;
