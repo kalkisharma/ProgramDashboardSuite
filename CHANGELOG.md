@@ -16,6 +16,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Weight Budget hover tooltip: `onmouseenter`/`onmousemove`/`onmouseleave` attributes removed from bar template; replaced with `addEventListener` after DOM insertion
 - Calendar widget converted from in-flow layout to `position: absolute` overlay — no longer displaces the Gantt chart when opened; floats over it with a drop shadow and rounded corners; click outside to dismiss
 - Calendar typography increased: day numbers `0.82rem`, day headers `0.72rem`, legend and badge `0.72rem`/`0.65rem`; width fixed at `308px`
+- Calendar day columns shaded by work-day status: non-work-day headers and cells are visually muted, matching the project's configured work days
+- Calendar hover tooltip: hovering a milestone or phase-start day shows a tooltip with the task name(s) or phase name — reuses the shared `#tooltip` element
+- Calendar row height normalized: every day cell always renders the marker slot so rows are uniform height regardless of whether a milestone or phase marker is present
 
 ### Fixed
 - Browse for File: file input value now reset after each load so the same file can be re-selected without reloading the page

@@ -236,8 +236,11 @@ body {
 .cal-d.cal-today { font-weight:700; color:var(--accent); }
 .cal-d.cal-empty { cursor:default; }
 .cal-d.cal-empty:hover { background:transparent; }
+.cal-dh.cal-dh-off { opacity: 0.45; }
+.cal-d.cal-off { background: rgba(128,128,128,0.07); }
 .cal-dot { display:inline-block; width:6px; height:6px; transform:rotate(45deg); border-radius:1px; }
 .cal-badge { display:inline-block; font-size:0.65rem; line-height:1.2; padding:0 3px; border-radius:2px; color:#fff; font-weight:700; min-width:14px; text-align:center; }
+.cal-marker { min-height:9px; display:flex; align-items:center; justify-content:center; }
 .cal-legend { display:flex; gap:14px; margin-top:10px; font-size:0.72rem; color:var(--muted); align-items:center; flex-wrap:wrap; }
 /* Shared zoom label style */
 .zoom-label, #zoom-label {
@@ -1467,14 +1470,17 @@ function renderGanttCalendar() {
     if (!d) return;
     const key = d.toISOString().slice(0, 10);
     if (!msMap[key]) msMap[key] = [];
-    msMap[key].push(phaseColor(t.wbs));
+    msMap[key].push({ color: phaseColor(t.wbs), name: t.name });
   });
 
   const phStartMap = {};
+  const phaseNames = getPhaseNames();
   S.tasks.filter(t => !t.wbs.includes('.') || t.wbs.endsWith('.0')).forEach(t => {
     if (!t.start) return;
     const key = t.start.toISOString().slice(0, 10);
-    phStartMap[key] = phaseColor(t.wbs.includes('.') ? t.wbs : t.wbs + '.0');
+    const phNum = parseInt(t.wbs);
+    const phName = phaseNames[phNum] || PHASE_NAMES_FALLBACK[phNum - 1] || ('Phase ' + phNum);
+    phStartMap[key] = { color: phaseColor(t.wbs.includes('.') ? t.wbs : t.wbs + '.0'), name: phName };
   });
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -1492,23 +1498,36 @@ function renderGanttCalendar() {
     </div>
   </div><div class="cal-grid">`;
 
-  DAYS.forEach(d => { html += `<div class="cal-dh">${d}</div>`; });
+  DAYS.forEach((d, i) => {
+    const off = !ganttWorkDays.includes(i);
+    html += `<div class="cal-dh${off ? ' cal-dh-off' : ''}">${d}</div>`;
+  });
   for (let i = 0; i < startDow; i++) html += `<div class="cal-d cal-empty"></div>`;
 
   for (let d = 1; d <= daysInMonth; d++) {
-    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const ds      = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dow     = new Date(year, month, d).getDay();
+    const isOff   = !ganttWorkDays.includes(dow);
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
-    const colors  = msMap[ds] || [];
-    const phCol   = phStartMap[ds];
-    const style   = phCol ? `border-top:2px solid ${phCol};padding-top:1px;` : '';
-    const cls     = 'cal-d' + (isToday ? ' cal-today' : '');
-    let inner = `<div>${d}</div>`;
-    if (colors.length === 1) {
-      inner += `<div><span class="cal-dot" style="background:${colors[0]}"></span></div>`;
-    } else if (colors.length > 1) {
-      inner += `<div><span class="cal-badge" style="background:${colors[0]}">${colors.length}</span></div>`;
+    const entries = msMap[ds] || [];
+    const phEntry = phStartMap[ds];
+
+    const tipParts = [];
+    if (phEntry) tipParts.push('Phase start: ' + phEntry.name);
+    entries.forEach(m => tipParts.push('◆ ' + m.name));
+    const tipAttr = tipParts.length ? ` data-cal-tip="${esc(tipParts.join('\n'))}"` : '';
+
+    let markerHtml = '';
+    if (entries.length === 1) {
+      markerHtml = `<span class="cal-dot" style="background:${entries[0].color}"></span>`;
+    } else if (entries.length > 1) {
+      markerHtml = `<span class="cal-badge" style="background:${entries[0].color}">${entries.length}</span>`;
     }
-    html += `<div class="${cls}" style="${style}" onclick="jumpToGanttDate('${ds}')">${inner}</div>`;
+
+    const phStyle = phEntry ? `border-top:2px solid ${phEntry.color};padding-top:1px;` : '';
+    const cls     = 'cal-d' + (isToday ? ' cal-today' : '') + (isOff ? ' cal-off' : '');
+    const inner   = `<div>${d}</div><div class="cal-marker">${markerHtml}</div>`;
+    html += `<div class="${cls}" style="${phStyle}"${tipAttr} onclick="jumpToGanttDate('${ds}')">${inner}</div>`;
   }
 
   const endDow = new Date(year, month, daysInMonth).getDay();
@@ -2154,6 +2173,18 @@ function saveToExcel() {
 
 // ─── TOOLTIP ─────────────────────────────────────────────────────────────────
 const tooltip = document.getElementById('tooltip');
+
+document.getElementById('gantt-calendar').addEventListener('mouseover', e => {
+  const cell = e.target.closest('[data-cal-tip]');
+  if (!cell) { tooltip.style.display = 'none'; return; }
+  tooltip.innerHTML = cell.dataset.calTip.split('\n')
+    .map((l, i) => `<div${i === 0 ? ' class="tt-title"' : ''}>${esc(l)}</div>`).join('');
+  tooltip.style.display = 'block';
+  positionTooltip(e);
+});
+document.getElementById('gantt-calendar').addEventListener('mouseleave', () => {
+  tooltip.style.display = 'none';
+});
 
 function showTooltip(t, e) {
   const color = ganttColor(t.category);
