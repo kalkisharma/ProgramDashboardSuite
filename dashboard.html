@@ -600,18 +600,18 @@ body.dim-mode #gantt-drag-label { background: #2d333b; }
 
 /* ── LIGHT MODE ──────────────────────────────────────────── */
 body.light-mode {
-  --bg: #edecea;
-  --surface: #e2e0dc;
-  --border: #cac7c2;
+  --bg: #d8d5cf;
+  --surface: #cec9c3;
+  --border: #b5b0aa;
   --text: #1f2328;
-  --muted: #5a6370;
+  --muted: #4e5760;
   --accent: #0969da;
   --danger: #cf222e;
   --warning: #9a6700;
   --success: #1a7f37;
 }
-body.light-mode #tooltip { background: #edecea; }
-body.light-mode #gantt-drag-label { background: #e2e0dc; }
+body.light-mode #tooltip { background: #d8d5cf; }
+body.light-mode #gantt-drag-label { background: #cec9c3; }
 
 /* Theme switch transition — scoped to toggle only, does not affect hover states */
 @media (prefers-reduced-motion: no-preference) {
@@ -1903,7 +1903,7 @@ function renderHeader(svg, NS, minD, maxD, W) {
   const headerBorder  = isLight ? '#d0d7de'         : '#30363d';
   const monthGridLine = isLight ? 'rgba(0,0,0,0.15)': 'rgba(48,54,61,0.6)';
   const weekGridLine  = isLight ? 'rgba(0,0,0,0.08)': 'rgba(48,54,61,0.4)';
-  const monthFill     = isLight ? '#636c76'          : '#8b949e';
+  const monthFill     = isLight ? '#4e5760'          : '#8b949e';
   const weekFill      = isLight ? '#8c959f'          : '#484f58';
 
   appendLine(svg, NS, 0, W, HH, HH, headerBorder, 1);
@@ -2853,7 +2853,7 @@ function renderOrgChart() {
   const cardBg      = isLightOrg ? '#f4f2ef'           : '#161b22';
   const cardBorder  = isLightOrg ? 'rgba(0,0,0,0.08)'  : 'rgba(88,166,255,0.25)';
   const nameFill    = isLightOrg ? '#1f2328'            : '#e6edf3';
-  const titleFill   = isLightOrg ? '#636c76'            : '#8b949e';
+  const titleFill   = isLightOrg ? '#4e5760'            : '#8b949e';
 
   // Drop shadow filter (light mode only)
   const defs = document.createElementNS(NS, 'defs');

@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.4] — 2026-05-04
+
+### Changed
+- Light mode background darkened to L\*84 warm stone gray: `--bg #d8d5cf`, `--surface #cec9c3`, `--border #b5b0aa` — previous value (#edecea, L\*92) was still perceived as near-white; this commit commits to a specific ergonomic target rather than nudging
+- Light mode `--muted` darkened: `#5a6370` → `#4e5760` — maintains ≥5.2:1 contrast ratio against the new darker background
+- Gantt header month labels and org chart node title text updated to the new muted value in light mode
+
+---
+
 ## [1.4.3] — 2026-05-04
 
 ### Added
