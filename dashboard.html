@@ -1,9 +1,10 @@
+<!-- Program Dashboard Suite v1.1 — 2026-05-03 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Vehicle Design Dashboard</title>
-<script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+<title>Program Dashboard</title>
+<script src="./xlsx.full.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -146,7 +147,6 @@ body {
 }
 #gantt-left-header {
   display: grid;
-  grid-template-columns: 52px 1fr 76px 52px;
   padding: 0 10px;
   height: 60px;
   align-items: flex-end;
@@ -166,7 +166,6 @@ body {
 
 .gantt-row {
   display: grid;
-  grid-template-columns: 52px 1fr 76px 52px;
   padding: 0 10px;
   height: 36px;
   align-items: center;
@@ -616,7 +615,7 @@ body.light-mode #gantt-drag-label { background: #f6f8fa; }
   pointer-events: none;
 }
 .gantt-row:hover .gantt-drag-handle { display: block; }
-.gantt-row:hover .g-wbs-text { opacity: 0.35; }
+.gantt-row:hover .g-wbs-wrap.g-wbs-draggable .g-wbs-text { opacity: 0.35; }
 .gantt-row:hover .g-wbs-wrap.g-wbs-draggable { cursor: grab; }
 .gantt-row-ghost {
   position: fixed; pointer-events: none; z-index: 800;
@@ -665,6 +664,7 @@ body.light-mode #gantt-drag-label { background: #f6f8fa; }
     </div>
     <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
     <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Save current dashboard to Excel" style="display:none">💾 Save to Excel</button>
+    <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" title="User guide">?</button>
     <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
   </div>
 </div>
@@ -721,7 +721,7 @@ body.light-mode #gantt-drag-label { background: #f6f8fa; }
           <div id="gantt-left-header">
             <span>WBS</span><span>Task Name</span>
             <span style="text-align:right">Team</span>
-            <span style="text-align:right">WD</span>
+            <span style="text-align:right" title="Work days remaining until task end date">WD Left</span>
             <span style="text-align:right">%</span>
           </div>
           <div id="gantt-left-body"></div>
@@ -799,6 +799,49 @@ body.light-mode #gantt-drag-label { background: #f6f8fa; }
 <!-- TOOLTIP -->
 <div id="tooltip"></div>
 
+<!-- HELP MODAL -->
+<div id="help-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:900;align-items:center;justify-content:center">
+  <div id="help-modal" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 16px 48px rgba(0,0,0,0.5)">
+    <button onclick="toggleHelp()" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:2px 6px;border-radius:4px" title="Close">✕</button>
+    <h2 style="font-size:1rem;font-weight:700;margin-bottom:18px">Program Dashboard — User Guide</h2>
+
+    <div style="font-size:0.83rem;line-height:1.65;color:var(--text)">
+
+    <p style="margin-bottom:14px"><strong>Getting started:</strong> Drop your <code style="background:var(--bg);padding:1px 5px;border-radius:3px">.xlsx</code> file anywhere on this page. The dashboard auto-populates from the data in your file. You can drop a new file at any time to reload.</p>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Tabs</p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:0.82rem">
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Gantt Chart</td><td style="padding:6px 8px;color:var(--muted)">Full program schedule with WBS, dependency arrows, today line, and work-day tracking. Best for: <strong>engineers and PMs</strong>. Drag bars to adjust dates, click tasks for details.</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Specifications</td><td style="padding:6px 8px;color:var(--muted)">All vehicle/system performance specs with status (Achieved / Target / TBD). Best for: <strong>engineers</strong>. Click any row for dependencies and risk flags.</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Program Dashboard</td><td style="padding:6px 8px;color:var(--muted)">KPI summary: overall completion, milestones, phase progress, spec status, team workload. Best for: <strong>leadership and PMs</strong>.</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Weight Budget</td><td style="padding:6px 8px;color:var(--muted)">Mass budget bar chart by subsystem. Shown only if your Excel includes a <em>Weight Budget</em> sheet. Best for: <strong>engineers</strong>.</td></tr>
+      <tr><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Org Chart</td><td style="padding:6px 8px;color:var(--muted)">Reporting hierarchy. Shown only if your Excel includes an <em>Org Chart</em> sheet. Click any person card for their team tasks. Best for: <strong>PMs and leadership</strong>.</td></tr>
+    </table>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Required Excel sheets</p>
+    <p style="margin-bottom:6px;color:var(--muted)">Sheet names are case-sensitive. Required sheets:</p>
+    <ul style="margin:0 0 14px 18px;color:var(--muted)">
+      <li style="margin-bottom:4px"><strong style="color:var(--text)">Project Info</strong> — Field / Value pairs (Project Title, Project Subtitle, Program Start, Program End, Work Days, Phase N Name…)</li>
+      <li style="margin-bottom:4px"><strong style="color:var(--text)">Schedule</strong> — Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone (Y/N), Notes</li>
+      <li><strong style="color:var(--text)">Specifications</strong> — Spec ID, Category, Specification Name, Value, Units, Status (Achieved/Target/TBD), Responsible Group, Notes, Dependent Task IDs</li>
+    </ul>
+    <p style="margin-bottom:14px;color:var(--muted)">Optional: <strong style="color:var(--text)">Org Chart</strong> (Name, Title, Team, Reports To, Email) · <strong style="color:var(--text)">Weight Budget</strong> (Subsystem, Group, Target Weight (lb), Estimated Weight (lb), Status, Notes)</p>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">If something looks wrong</p>
+    <ul style="margin:0 0 14px 18px;color:var(--muted)">
+      <li style="margin-bottom:4px">A tab is blank → check that the sheet name in your Excel matches exactly (including capitalisation).</li>
+      <li style="margin-bottom:4px">Gantt bars are missing → check that Start Date and End Date columns contain valid dates, not text.</li>
+      <li style="margin-bottom:4px">Weight Budget or Org Chart tab is not showing → those tabs only appear when the matching Excel sheet has data.</li>
+      <li>Work days look wrong → add a <em>Work Days</em> row to Project Info (e.g. <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Mon,Tue,Wed,Thu</code>). Default is Mon–Thu.</li>
+    </ul>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Saving your edits</p>
+    <p style="color:var(--muted)">Use <strong style="color:var(--text)">💾 Save to Excel</strong> in the top-right to export your current dashboard back to a dated .xlsx file. The exported file can be re-imported into this tool.</p>
+
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── App State ────────────────────────────────────────────────────────────────
 const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
@@ -807,6 +850,16 @@ let ganttWorkDays = [1,2,3,4];    // Mon–Thu default; overridden by Project In
 let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks which item the side panel is showing
 let spCurrentId   = null; // specId string, taskId number, or person name string
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+// NOTE: TODAY is computed once at page load; reload the page if using past midnight.
+
+// Escape user-supplied strings before inserting into innerHTML (XSS prevention)
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Gantt scroll-to-today guard: only auto-scroll once per file load
+let ganttScrolledToday = false;
 
 // Bar drag state
 let barDrag = { active: false, taskId: null, mode: null, startClientX: 0,
@@ -864,6 +917,15 @@ function toggleTheme() {
   localStorage.setItem('vh-theme', light ? 'light' : 'dark');
   document.getElementById('theme-toggle').textContent = light ? '🌙' : '☀';
 }
+
+function toggleHelp() {
+  const overlay = document.getElementById('help-overlay');
+  const open = overlay.style.display === 'flex';
+  overlay.style.display = open ? 'none' : 'flex';
+}
+document.getElementById('help-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('help-overlay')) toggleHelp();
+});
 (function applyTheme() {
   if (localStorage.getItem('vh-theme') === 'light') {
     document.body.classList.add('light-mode');
@@ -1002,6 +1064,12 @@ function loadFile(file) {
     try {
       const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
       parseWorkbook(wb);
+      const missing = [];
+      if (!S.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone, Notes)");
+      if (!S.specs.length)  missing.push("'Specifications' (columns: Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs)");
+      if (missing.length) {
+        alert('Warning: the following required sheets were not found or are empty:\n\n' + missing.join('\n\n') + '\n\nCheck that the sheet names match exactly (case-sensitive).');
+      }
       renderDashboard();
     } catch(e) { alert('Could not parse file:\n' + e.message); }
   };
@@ -1096,7 +1164,7 @@ function parseWorkbook(wb) {
   }
 
   // Deep-copy tasks for reset
-  S_tasksOriginal = S.tasks.map(t => ({ ...t, deps: [...t.deps], depIds: t.depIds ? [...t.depIds] : [] }));
+  S_tasksOriginal = S.tasks.map(t => ({ ...t, deps: [...t.deps] }));
 }
 
 function parseDate(v) {
@@ -1120,6 +1188,7 @@ function renderDashboard() {
   const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
   document.getElementById('project-title').textContent    = title;
   document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
+  document.title = title + ' — Program Dashboard';
   document.getElementById('dropzone').style.display = 'none';
   document.getElementById('dashboard').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
@@ -1128,6 +1197,7 @@ function renderDashboard() {
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
   dashboardLoaded = true;
+  ganttScrolledToday = false;
   renderGantt();
   renderSpecs();
   renderProgDash();
@@ -1463,6 +1533,13 @@ function renderGantt() {
   });
 
   // ── Build SVG ──────────────────────────────────────
+  const isLight = document.body.classList.contains('light-mode');
+  const svgHeaderBg  = isLight ? '#f6f8fa'                  : '#161b22';
+  const svgRowStripe = isLight ? 'rgba(0,0,0,0.025)'        : 'rgba(255,255,255,0.015)';
+  const arrowFill    = isLight ? 'rgba(99,108,118,0.5)'     : 'rgba(139,148,158,0.5)';
+  const depStroke    = isLight ? 'rgba(99,108,118,0.35)'    : 'rgba(139,148,158,0.35)';
+  const rowLineClr   = isLight ? 'rgba(208,215,222,0.6)'    : 'rgba(48,54,61,0.5)';
+
   barEls = {};
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', W); svg.setAttribute('height', H);
@@ -1476,13 +1553,13 @@ function renderGantt() {
   mk.setAttribute('refY', '3.5'); mk.setAttribute('orient', 'auto');
   const poly = document.createElementNS(NS, 'polygon');
   poly.setAttribute('points', '0 0, 7 3.5, 0 7');
-  poly.setAttribute('fill', 'rgba(139,148,158,0.5)');
+  poly.setAttribute('fill', arrowFill);
   mk.appendChild(poly); defs.appendChild(mk); svg.appendChild(defs);
 
-  appendRect(svg, NS, 0, 0, W, HH, '#161b22');
+  appendRect(svg, NS, 0, 0, W, HH, svgHeaderBg);
 
   visibleTasks.forEach((_, i) => {
-    if (i % 2 === 0) appendRect(svg, NS, 0, HH + i*RH, W, RH, 'rgba(255,255,255,0.015)');
+    if (i % 2 === 0) appendRect(svg, NS, 0, HH + i*RH, W, RH, svgRowStripe);
   });
 
   // Non-work-day shading (only when zoomed enough to see individual days)
@@ -1503,7 +1580,7 @@ function renderGantt() {
   renderHeader(svg, NS, minD, maxD, W);
 
   for (let i = 0; i <= visibleTasks.length; i++) {
-    appendLine(svg, NS, 0, W, HH + i*RH, HH + i*RH, 'rgba(48,54,61,0.5)', 1);
+    appendLine(svg, NS, 0, W, HH + i*RH, HH + i*RH, rowLineClr, 1);
   }
 
   const barPos = {};
@@ -1567,7 +1644,7 @@ function renderGantt() {
       const pathD = `M ${x1} ${y1} L ${ox} ${y1} L ${ox} ${y2} L ${x2} ${y2}`;
       const p = document.createElementNS(NS, 'path');
       p.setAttribute('d', pathD); p.setAttribute('fill', 'none');
-      p.setAttribute('stroke', 'rgba(139,148,158,0.35)'); p.setAttribute('stroke-width', 1.5);
+      p.setAttribute('stroke', depStroke); p.setAttribute('stroke-width', 1.5);
       p.setAttribute('marker-end', 'url(#arr)');
       p.style.pointerEvents = 'none';
       svg.appendChild(p);
@@ -1589,22 +1666,29 @@ function renderGantt() {
   document.getElementById('gantt-svg-wrap').innerHTML = '';
   document.getElementById('gantt-svg-wrap').appendChild(svg);
 
-  // Scroll to today on first load
   const right = document.getElementById('gantt-right');
-  if (tx > right.clientWidth / 2) {
+  if (!ganttScrolledToday && tx > right.clientWidth / 2) {
     right.scrollLeft = tx - right.clientWidth / 2;
+    ganttScrolledToday = true;
   }
 }
 
 function renderHeader(svg, NS, minD, maxD, W) {
-  appendLine(svg, NS, 0, W, HH, HH, '#30363d', 1);
+  const isLight = document.body.classList.contains('light-mode');
+  const headerBorder  = isLight ? '#d0d7de'         : '#30363d';
+  const monthGridLine = isLight ? 'rgba(0,0,0,0.15)': 'rgba(48,54,61,0.6)';
+  const weekGridLine  = isLight ? 'rgba(0,0,0,0.08)': 'rgba(48,54,61,0.4)';
+  const monthFill     = isLight ? '#636c76'          : '#8b949e';
+  const weekFill      = isLight ? '#8c959f'          : '#484f58';
+
+  appendLine(svg, NS, 0, W, HH, HH, headerBorder, 1);
   const cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
   while (cur <= maxD) {
     const x = daysBetween(minD, cur) * ganttZoom;
-    appendLine(svg, NS, x, x, 0, HH + 9999, 'rgba(48,54,61,0.6)', 1);
+    appendLine(svg, NS, x, x, 0, HH + 9999, monthGridLine, 1);
     const ml = document.createElementNS(NS, 'text');
     ml.setAttribute('x', x+5); ml.setAttribute('y', 30);
-    ml.setAttribute('fill', '#8b949e'); ml.setAttribute('font-size', '11');
+    ml.setAttribute('fill', monthFill); ml.setAttribute('font-size', '11');
     ml.setAttribute('font-weight', '700');
     ml.textContent = cur.toLocaleString('default', { month: 'short' }) + ' ' + cur.getFullYear();
     svg.appendChild(ml);
@@ -1612,10 +1696,10 @@ function renderHeader(svg, NS, minD, maxD, W) {
     const wk = new Date(cur); wk.setDate(wk.getDate() + (7 - wk.getDay()));
     while (wk < nxt && wk <= maxD) {
       const wx = daysBetween(minD, wk) * ganttZoom;
-      appendLine(svg, NS, wx, wx, 42, HH, 'rgba(48,54,61,0.4)', 1);
+      appendLine(svg, NS, wx, wx, 42, HH, weekGridLine, 1);
       const dl = document.createElementNS(NS, 'text');
       dl.setAttribute('x', wx+2); dl.setAttribute('y', 54);
-      dl.setAttribute('fill', '#484f58'); dl.setAttribute('font-size', '9');
+      dl.setAttribute('fill', weekFill); dl.setAttribute('font-size', '9');
       dl.textContent = wk.getDate();
       svg.appendChild(dl);
       wk.setDate(wk.getDate()+7);
@@ -1838,6 +1922,7 @@ function addGanttTask() {
 function resetGanttToImported() {
   if (!S_tasksOriginal.length) return;
   S.tasks = S_tasksOriginal.map(t => ({ ...t, deps: [...t.deps] }));
+  ganttScrolledToday = false;
   renderGantt();
 }
 
@@ -1894,17 +1979,17 @@ function showTooltip(t, e) {
   const color = ganttColor(t.category);
   const depNames = t.deps.map(id => {
     const dep = S.tasks.find(d => d.id === id);
-    return dep ? `Task ${id}: ${dep.name}` : `Task ${id}`;
+    return dep ? `Task ${id}: ${esc(dep.name)}` : `Task ${id}`;
   });
   tooltip.innerHTML = `
-    <div class="tt-title">${t.milestone ? '◆ ' : ''}${t.name}</div>
-    <div class="tt-row"><strong style="color:${color}">${t.category}</strong></div>
-    <div class="tt-row"><strong>Team:</strong>${t.team || '—'}</div>
+    <div class="tt-title">${t.milestone ? '◆ ' : ''}${esc(t.name)}</div>
+    <div class="tt-row"><strong style="color:${color}">${esc(t.category)}</strong></div>
+    <div class="tt-row"><strong>Team:</strong>${esc(t.team) || '—'}</div>
     <div class="tt-row"><strong>Start:</strong>${fmt(t.start)}</div>
     <div class="tt-row"><strong>End:</strong>${fmt(t.end)}</div>
     <div class="tt-row"><strong>Progress:</strong>${t.pct}% complete</div>
     ${t.deps.length ? `<div class="tt-row"><strong>Depends on:</strong>${depNames.join(', ')}</div>` : ''}
-    ${t.notes ? `<div class="tt-row" style="margin-top:4px;font-style:italic">${t.notes}</div>` : ''}
+    ${t.notes ? `<div class="tt-row" style="margin-top:4px;font-style:italic">${esc(t.notes)}</div>` : ''}
     <div class="tt-row" style="margin-top:6px;font-size:0.72rem;color:var(--muted)">Click for full details</div>`;
   tooltip.style.display = 'block';
   positionTooltip(e);
@@ -1959,7 +2044,7 @@ function renderProgDash() {
   const milestoneDone = milestones.filter(t => t.pct >= 100).length;
   const nextMs = milestones
     .filter(t => t.pct < 100)
-    .sort((a, b) => a.start - b.start)[0];
+    .sort((a, b) => (a.end||a.start) - (b.end||b.start))[0];
   const daysToNext = nextMs ? daysBetween(TODAY, nextMs.start) : null;
 
   // Final milestone — last milestone chronologically by end/start date
@@ -2001,7 +2086,7 @@ function renderProgDash() {
     const dLabel = daysToNext > 0 ? daysToNext + ' days away' : daysToNext === 0 ? 'Today' : Math.abs(daysToNext) + ' days ago';
     nextMsCard = `<div class="kpi-card">
       <div class="kpi-label">Next Milestone</div>
-      <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.2">${nextMs.name}</div>
+      <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.2">${esc(nextMs.name)}</div>
       <div class="kpi-sub">${dLabel}</div>
     </div>`;
   }
@@ -2017,13 +2102,13 @@ function renderProgDash() {
       const dateStr = t.end ? t.end.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '';
       return `<div class="team-task-item">
         <span class="tts ${cls}">${label}</span>
-        <span style="flex:1">${t.wbs} &nbsp;${t.name}${msIcon}</span>
+        <span style="flex:1">${esc(t.wbs)} &nbsp;${esc(t.name)}${msIcon}</span>
         <span style="color:var(--muted);font-size:0.72rem;flex-shrink:0">${dateStr}</span>
       </div>`;
     }).join('');
     return `
       <div class="team-row" onclick="toggleTeamRow(this)">
-        <div class="prog-bar-label" title="${team}">${team}</div>
+        <div class="prog-bar-label" title="${esc(team)}">${esc(team)}</div>
         <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${barW}%;background:var(--accent)"></div></div>
         <div class="prog-bar-pct">${count}</div>
         <div class="team-row-arrow">▶</div>
@@ -2046,7 +2131,7 @@ function renderProgDash() {
       ${nextMsCard}
       <div class="kpi-card">
         <div class="kpi-label">Final Milestone</div>
-        <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.3">${finalMs ? finalMs.name : 'None'}</div>
+        <div class="kpi-value" style="font-size:1rem;font-weight:700;line-height:1.3">${finalMs ? esc(finalMs.name) : 'None'}</div>
         <div class="kpi-sub">${finalMsDateStr}</div>
         <div class="kpi-sub" style="margin-top:2px">${daysToFinalStr}</div>
       </div>
@@ -2198,7 +2283,7 @@ function renderSpecTable() {
 
   Object.entries(groups).forEach(([c, specs]) => {
     const col = SPEC_COLORS[c] || { bg:'rgba(88,166,255,.1)', text:'#58a6ff' };
-    html += `<tr class="cat-header"><td colspan="8" style="background:${col.bg};color:${col.text}">${c}</td></tr>`;
+    html += `<tr class="cat-header"><td colspan="8" style="background:${col.bg};color:${col.text}">${esc(c)}</td></tr>`;
     specs.forEach(s => {
       const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
       const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
@@ -2208,22 +2293,26 @@ function renderSpecTable() {
       const depText = s.depIds.length
         ? `<span style="color:${hasRisk?'var(--danger)':'var(--muted)'};font-weight:${hasRisk?700:400}">${s.depIds.length}${hasRisk?' ⚠':''}</span>`
         : `<span style="color:#484f58">—</span>`;
-      const safeId = s.id.replace(/"/g, '&quot;');
-      html += `<tr class="spec-row" onclick="openSpecPanel('${safeId}')">
-        <td><code style="color:${col.text};font-size:0.78rem">${s.id}</code></td>
-        <td><strong>${s.name}</strong></td>
-        <td>${s.value}</td>
-        <td style="color:var(--muted)">${s.units}</td>
-        <td><span class="badge ${sc}">${s.status}</span></td>
-        <td style="color:var(--muted);font-size:0.8rem">${s.group}</td>
-        <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${s.notes}">${s.notes||'—'}</td>
+      html += `<tr class="spec-row" data-spec-id="${esc(s.id)}">
+        <td><code style="color:${col.text};font-size:0.78rem">${esc(s.id)}</code></td>
+        <td><strong>${esc(s.name)}</strong></td>
+        <td>${esc(s.value)}</td>
+        <td style="color:var(--muted)">${esc(s.units)}</td>
+        <td><span class="badge ${sc}">${esc(s.status)}</span></td>
+        <td style="color:var(--muted);font-size:0.8rem">${esc(s.group)}</td>
+        <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${esc(s.notes)}">${esc(s.notes)||'—'}</td>
         <td style="text-align:center">${depText}</td>
       </tr>`;
     });
   });
 
   html += '</tbody></table>';
-  document.getElementById('specs-table-wrap').innerHTML = html;
+  const wrap = document.getElementById('specs-table-wrap');
+  wrap.innerHTML = html;
+  wrap.querySelectorAll('tr[data-spec-id]').forEach(row => {
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => openSpecPanel(row.dataset.specId));
+  });
 }
 
 // ─── SIDE PANEL – SPEC ───────────────────────────────────────────────────────
@@ -2236,10 +2325,10 @@ function openSpecPanel(specId) {
 
   const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
   let html = `<div class="sp-meta">
-    <div class="sp-meta-id"><code style="color:${col.text}">${s.id}</code> · ${s.category} · ${s.group}</div>
-    <div class="sp-meta-val">${s.value} <span style="font-size:0.85rem;font-weight:400;color:var(--muted)">${s.units}</span></div>
-    <span class="badge ${sc}">${s.status}</span>
-    ${s.notes ? `<div class="sp-meta-notes">${s.notes}</div>` : ''}
+    <div class="sp-meta-id"><code style="color:${col.text}">${esc(s.id)}</code> · ${esc(s.category)} · ${esc(s.group)}</div>
+    <div class="sp-meta-val">${esc(s.value)} <span style="font-size:0.85rem;font-weight:400;color:var(--muted)">${esc(s.units)}</span></div>
+    <span class="badge ${sc}">${esc(s.status)}</span>
+    ${s.notes ? `<div class="sp-meta-notes">${esc(s.notes)}</div>` : ''}
   </div>`;
 
   if (!s.depIds.length) {
@@ -2262,16 +2351,20 @@ function openSpecPanel(specId) {
       const cardCls = done ? 'done' : started && t.pct > 0 ? 'warn' : started ? 'risk' : 'future';
       const gc      = ganttColor(t.category);
       const showRisk = started && !done && s.status === 'TBD';
-      html += `<div class="task-card clickable ${cardCls}" onclick="openTaskPanel(${t.id})">
-        <div class="tc-id">Task ${t.id} · ${t.wbs} · <span style="color:${gc}">${t.category}</span></div>
-        <div class="tc-name">${t.milestone ? '◆ ' : ''}${t.name}</div>
-        <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${t.team} · ${t.pct}% complete</div>
+      html += `<div class="task-card clickable ${cardCls}" data-task-id="${t.id}">
+        <div class="tc-id">Task ${t.id} · ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span></div>
+        <div class="tc-name">${t.milestone ? '◆ ' : ''}${esc(t.name)}</div>
+        <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${esc(t.team)} · ${t.pct}% complete</div>
         ${showRisk ? '<div class="tc-risk">⚠ Task active — spec not yet locked</div>' : ''}
       </div>`;
     });
   }
 
-  document.getElementById('sp-body').innerHTML = html;
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  spBody.querySelectorAll('[data-task-id]').forEach(el => {
+    el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
+  });
   spCurrentType = 'spec'; spCurrentId = specId;
   showSidePanel();
 }
@@ -2296,15 +2389,15 @@ function openTaskPanel(taskId) {
   const remWd   = workDaysRemaining(t.end);
   let html = `<div class="sp-meta">
     <div class="sp-meta-id">
-      <code style="color:${gc}">Task ${t.id}</code> · WBS ${t.wbs} · <span style="color:${gc}">${t.category}</span>
+      <code style="color:${gc}">Task ${t.id}</code> · WBS ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span>
       ${t.milestone ? ' · <strong>◆ MILESTONE</strong>' : ''}
     </div>
-    <div class="sp-meta-val" style="font-size:1rem">${t.team}</div>
+    <div class="sp-meta-val" style="font-size:1rem">${esc(t.team)}</div>
     ${statusBadge}
     <div class="sp-meta-notes">
       <strong>Start:</strong> ${fmt(t.start)} &nbsp;·&nbsp; <strong>End:</strong> ${fmt(t.end)}<br>
       <strong>Work Days:</strong> ${totalWd} total &nbsp;·&nbsp; ${t.pct === 100 ? '<span style="color:var(--success)">Complete ✓</span>' : remWd > 0 ? remWd + ' remaining' : '<span style="color:var(--danger)">Overdue</span>'}<br>
-      ${t.notes ? `<strong>Notes:</strong> ${t.notes}` : ''}
+      ${t.notes ? `<strong>Notes:</strong> ${esc(t.notes)}` : ''}
     </div>
   </div>`;
 
@@ -2315,9 +2408,9 @@ function openTaskPanel(taskId) {
       const dep = S.tasks.find(d => d.id === id);
       if (!dep) { html += `<div class="task-card future"><div class="tc-id">Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`; return; }
       const dc = ganttColor(dep.category);
-      html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" onclick="openTaskPanel(${dep.id})">
-        <div class="tc-id">Task ${dep.id} · ${dep.wbs} · <span style="color:${dc}">${dep.category}</span></div>
-        <div class="tc-name">${dep.name}</div>
+      html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" data-task-id="${dep.id}">
+        <div class="tc-id">Task ${dep.id} · ${esc(dep.wbs)} · <span style="color:${dc}">${esc(dep.category)}</span></div>
+        <div class="tc-name">${esc(dep.name)}</div>
         <div class="tc-meta">${fmt(dep.start)} → ${fmt(dep.end)} · ${dep.pct}% complete</div>
       </div>`;
     });
@@ -2331,16 +2424,23 @@ function openTaskPanel(taskId) {
       const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
       const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
       const hasRisk = s.status === 'TBD' && started && !done;
-      html += `<div class="task-card clickable ${hasRisk?'risk':'future'}" onclick="openSpecPanel('${s.id}')">
-        <div class="tc-id"><code style="color:${col.text}">${s.id}</code> · ${s.category}</div>
-        <div class="tc-name">${s.name}</div>
-        <div class="tc-meta">${s.value} ${s.units} &nbsp; <span class="badge ${sc}">${s.status}</span></div>
+      html += `<div class="task-card clickable ${hasRisk?'risk':'future'}" data-spec-id="${esc(s.id)}">
+        <div class="tc-id"><code style="color:${col.text}">${esc(s.id)}</code> · ${esc(s.category)}</div>
+        <div class="tc-name">${esc(s.name)}</div>
+        <div class="tc-meta">${esc(s.value)} ${esc(s.units)} &nbsp; <span class="badge ${sc}">${esc(s.status)}</span></div>
         ${hasRisk ? '<div class="tc-risk">⚠ Spec not locked while task is active</div>' : ''}
       </div>`;
     });
   }
 
-  document.getElementById('sp-body').innerHTML = html;
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  spBody.querySelectorAll('[data-task-id]').forEach(el => {
+    el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
+  });
+  spBody.querySelectorAll('[data-spec-id]').forEach(el => {
+    el.addEventListener('click', () => openSpecPanel(el.dataset.specId));
+  });
   spCurrentType = 'task'; spCurrentId = taskId;
   showSidePanel();
 }
@@ -2354,10 +2454,10 @@ function openOrgPanel(name) {
   document.getElementById('sp-title').textContent = person.name;
 
   let html = `<div class="sp-meta">
-    <div class="sp-meta-id" style="color:${col};font-weight:700">${person.team || 'No Team'}</div>
-    <div class="sp-meta-val" style="font-size:1rem">${person.title || '—'}</div>
-    ${person.email ? `<div class="sp-meta-notes">${person.email}</div>` : ''}
-    ${person.reportsTo ? `<div class="sp-meta-notes"><strong>Reports to:</strong> ${person.reportsTo}</div>` : ''}
+    <div class="sp-meta-id" style="color:${col};font-weight:700">${esc(person.team) || 'No Team'}</div>
+    <div class="sp-meta-val" style="font-size:1rem">${esc(person.title) || '—'}</div>
+    ${person.email ? `<div class="sp-meta-notes">${esc(person.email)}</div>` : ''}
+    ${person.reportsTo ? `<div class="sp-meta-notes"><strong>Reports to:</strong> ${esc(person.reportsTo)}</div>` : ''}
   </div>`;
 
   // Direct reports
@@ -2366,10 +2466,10 @@ function openOrgPanel(name) {
     html += `<div class="sp-section-label">Direct Reports (${reports.length})</div>`;
     reports.forEach(r => {
       const rc = teamColor(r.team);
-      html += `<div class="task-card clickable future" onclick="openOrgPanel('${r.name.replace(/'/g,"\\'")}')">
-        <div class="tc-id" style="color:${rc}">${r.team}</div>
-        <div class="tc-name">${r.name}</div>
-        <div class="tc-meta">${r.title}</div>
+      html += `<div class="task-card clickable future" data-org-name="${esc(r.name)}">
+        <div class="tc-id" style="color:${rc}">${esc(r.team)}</div>
+        <div class="tc-name">${esc(r.name)}</div>
+        <div class="tc-meta">${esc(r.title)}</div>
       </div>`;
     });
   }
@@ -2383,31 +2483,40 @@ function openOrgPanel(name) {
       const done2 = t.pct === 100;
       const started2 = t.start && t.start <= TODAY;
       const cardCls = done2 ? 'done' : started2 && t.pct > 0 ? 'warn' : started2 ? 'risk' : 'future';
-      html += `<div class="task-card clickable ${cardCls}" onclick="openTaskPanel(${t.id})">
-        <div class="tc-id">Task ${t.id} · ${t.wbs} · <span style="color:${gc}">${t.category}</span></div>
-        <div class="tc-name">${t.milestone ? '◆ ' : ''}${t.name}</div>
+      html += `<div class="task-card clickable ${cardCls}" data-task-id="${t.id}">
+        <div class="tc-id">Task ${t.id} · ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span></div>
+        <div class="tc-name">${t.milestone ? '◆ ' : ''}${esc(t.name)}</div>
         <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${t.pct}% complete</div>
       </div>`;
     });
   } else {
-    html += `<div class="no-deps">No tasks assigned to the ${person.team} team.</div>`;
+    html += `<div class="no-deps">No tasks assigned to the ${esc(person.team)} team.</div>`;
   }
 
-  document.getElementById('sp-body').innerHTML = html;
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  spBody.querySelectorAll('[data-org-name]').forEach(el => {
+    el.addEventListener('click', () => openOrgPanel(el.dataset.orgName));
+  });
+  spBody.querySelectorAll('[data-task-id]').forEach(el => {
+    el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
+  });
   spCurrentType = 'org'; spCurrentId = name;
   showSidePanel();
 }
 
 function showSidePanel() {
   document.getElementById('side-panel').classList.add('open');
-  // On the org chart tab, push the container right so nodes aren't hidden behind the panel
-  const onOrg = document.getElementById('org-panel').classList.contains('active');
-  document.getElementById('org-container').style.paddingRight = onOrg ? '440px' : '';
+  const onOrg   = document.getElementById('org-panel').classList.contains('active');
+  const onGantt = document.getElementById('gantt-panel').classList.contains('active');
+  document.getElementById('org-container').style.paddingRight  = onOrg   ? '440px' : '';
+  document.getElementById('gantt-right').style.marginRight     = onGantt ? '440px' : '';
 }
 
 function closeSidePanel() {
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('org-container').style.paddingRight = '';
+  document.getElementById('gantt-right').style.marginRight    = '';
   spCurrentType = null;
   spCurrentId   = null;
 }
@@ -2474,6 +2583,13 @@ function renderOrgChart() {
   svg.setAttribute('height', svgH);
   svg.style.display = 'block';
 
+  const isLightOrg = document.body.classList.contains('light-mode');
+  const cardBg      = isLightOrg ? '#ffffff'          : '#161b22';
+  const cardBgHover = isLightOrg ? '#f6f8fa'          : '#1c2128';
+  const cardBorder  = isLightOrg ? 'rgba(0,0,0,0.12)' : 'rgba(88,166,255,0.25)';
+  const nameFill    = isLightOrg ? '#1f2328'           : '#e6edf3';
+  const titleFill   = isLightOrg ? '#636c76'           : '#8b949e';
+
   // Draw edges
   allNodes.forEach(node => {
     node.children.forEach(child => {
@@ -2483,7 +2599,7 @@ function renderOrgChart() {
       const path = document.createElementNS(NS, 'path');
       path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
       path.setAttribute('fill', 'none');
-      path.setAttribute('stroke', 'rgba(88,166,255,0.25)');
+      path.setAttribute('stroke', cardBorder);
       path.setAttribute('stroke-width', '1.5');
       svg.appendChild(path);
     });
@@ -2502,19 +2618,19 @@ function renderOrgChart() {
     const rect = document.createElementNS(NS, 'rect');
     rect.setAttribute('x', nx); rect.setAttribute('y', ny);
     rect.setAttribute('width', NW); rect.setAttribute('height', NH);
-    rect.setAttribute('rx', 8); rect.setAttribute('fill', '#161b22');
+    rect.setAttribute('rx', 8); rect.setAttribute('fill', cardBg);
     rect.setAttribute('stroke', col); rect.setAttribute('stroke-width', '1.5');
     card.appendChild(rect);
 
     // Hover effect
-    card.addEventListener('mouseenter', () => rect.setAttribute('fill', '#1c2128'));
-    card.addEventListener('mouseleave', () => rect.setAttribute('fill', '#161b22'));
+    card.addEventListener('mouseenter', () => rect.setAttribute('fill', cardBgHover));
+    card.addEventListener('mouseleave', () => rect.setAttribute('fill', cardBg));
 
     // Name
     const nameEl = document.createElementNS(NS, 'text');
     nameEl.setAttribute('x', nx + NW/2); nameEl.setAttribute('y', ny + 24);
     nameEl.setAttribute('text-anchor', 'middle');
-    nameEl.setAttribute('fill', '#e6edf3'); nameEl.setAttribute('font-size', '12');
+    nameEl.setAttribute('fill', nameFill); nameEl.setAttribute('font-size', '12');
     nameEl.setAttribute('font-weight', '700');
     nameEl.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
     nameEl.textContent = node.name.length > 22 ? node.name.slice(0,21)+'…' : node.name;
@@ -2524,7 +2640,7 @@ function renderOrgChart() {
     const titleEl = document.createElementNS(NS, 'text');
     titleEl.setAttribute('x', nx + NW/2); titleEl.setAttribute('y', ny + 40);
     titleEl.setAttribute('text-anchor', 'middle');
-    titleEl.setAttribute('fill', '#8b949e'); titleEl.setAttribute('font-size', '10');
+    titleEl.setAttribute('fill', titleFill); titleEl.setAttribute('font-size', '10');
     titleEl.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
     titleEl.textContent = node.title.length > 26 ? node.title.slice(0,25)+'…' : node.title;
     card.appendChild(titleEl);
@@ -2599,46 +2715,46 @@ function generateSampleExcel() {
     ['Phase 6 Name',      'Certification'],
   ]), 'Project Info');
 
-  const sh = ['Task ID','WBS','Task Name','Category','Start Date','End Date','Duration','% Complete','Dependencies','Responsible Team','Milestone','Notes'];
+  const sh = ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([sh,
     // Phase 1: Concept
-    [1, '1.0','Program Kickoff',                       'Concept',      '2025-03-03','2025-03-07', 5,  100,'',          'All Teams',   'Y','Program initiation milestone'],
-    [2, '1.1','Mission Requirements & Regs Review',    'Concept',      '2025-03-10','2025-04-11',33,  100,'1',         'Systems',     'N','FAA Part 23/27 applicability; AC 21.17-4'],
-    [3, '1.2','Tilt-Wing Aero Concept Selection',      'Aerodynamics', '2025-03-17','2025-05-09',54,  100,'1',         'Aerodynamics','N','Down-select rotor count and tilt axis configuration'],
-    [4, '1.3','Hybrid Propulsion Architecture Trade',  'Propulsion',   '2025-03-24','2025-05-16',54,  100,'1',         'Propulsion',  'N','Series vs parallel hybrid; turbine selection'],
-    [5, '1.4','Concept Design Review (CDR-0)',         'Concept',      '2025-05-19','2025-05-23', 5,  100,'2,3,4',     'All Teams',   'Y','Gate review: concept freeze'],
+    [1, '1.0','Program Kickoff',                       'Concept',      '2025-03-03','2025-03-07',100,'',          'All Teams',   'Y','Program initiation milestone'],
+    [2, '1.1','Mission Requirements & Regs Review',    'Concept',      '2025-03-10','2025-04-11',100,'1',         'Systems',     'N','FAA Part 23/27 applicability; AC 21.17-4'],
+    [3, '1.2','Tilt-Wing Aero Concept Selection',      'Aerodynamics', '2025-03-17','2025-05-09',100,'1',         'Aerodynamics','N','Down-select rotor count and tilt axis configuration'],
+    [4, '1.3','Hybrid Propulsion Architecture Trade',  'Propulsion',   '2025-03-24','2025-05-16',100,'1',         'Propulsion',  'N','Series vs parallel hybrid; turbine selection'],
+    [5, '1.4','Concept Design Review (CDR-0)',         'Concept',      '2025-05-19','2025-05-23',100,'2,3,4',     'All Teams',   'Y','Gate review: concept freeze'],
     // Phase 2: Preliminary Design
-    [6, '2.0','Rotor & Wing Aerodynamic Analysis',     'Aerodynamics', '2025-05-26','2025-08-22',89,  100,'5',         'Aerodynamics','N','CFD and blade element analysis for hover and cruise'],
-    [7, '2.1','Hybrid Powertrain Preliminary Design',  'Propulsion',   '2025-05-26','2025-08-01',68,  100,'5',         'Propulsion',  'N','Turbine-generator sizing; battery pack architecture'],
-    [8, '2.2','Airframe Structures Preliminary Design','Structures',   '2025-06-02','2025-08-29',89,  100,'5',         'Structures',  'N','Wing box; fuselage frames; primary load cases'],
-    [9, '2.3','Tilt Mechanism Detailed Kinematics',    'Structures',   '2025-06-09','2025-09-05',89,  100,'5',         'Structures',  'N','Actuator selection; transition trajectory analysis'],
-    [10,'2.4','Flight Control System Architecture',    'Avionics',     '2025-06-02','2025-08-15',75,  100,'5',         'Avionics',    'N','Control law framework; actuator redundancy strategy'],
-    [11,'2.5','Electrical & HV Bus Architecture',      'Systems',      '2025-06-16','2025-08-22',68,  100,'5',         'Systems',     'N','800V HV bus; LV secondary; emergency power routing'],
-    [12,'2.6','Preliminary Design Review (PDR)',       'Concept',      '2025-09-08','2025-09-12', 5,  100,'6,7,8,9,10,11','All Teams','Y','Gate review: preliminary design freeze'],
+    [6, '2.0','Rotor & Wing Aerodynamic Analysis',     'Aerodynamics', '2025-05-26','2025-08-22',100,'5',         'Aerodynamics','N','CFD and blade element analysis for hover and cruise'],
+    [7, '2.1','Hybrid Powertrain Preliminary Design',  'Propulsion',   '2025-05-26','2025-08-01',100,'5',         'Propulsion',  'N','Turbine-generator sizing; battery pack architecture'],
+    [8, '2.2','Airframe Structures Preliminary Design','Structures',   '2025-06-02','2025-08-29',100,'5',         'Structures',  'N','Wing box; fuselage frames; primary load cases'],
+    [9, '2.3','Tilt Mechanism Detailed Kinematics',    'Structures',   '2025-06-09','2025-09-05',100,'5',         'Structures',  'N','Actuator selection; transition trajectory analysis'],
+    [10,'2.4','Flight Control System Architecture',    'Avionics',     '2025-06-02','2025-08-15',100,'5',         'Avionics',    'N','Control law framework; actuator redundancy strategy'],
+    [11,'2.5','Electrical & HV Bus Architecture',      'Systems',      '2025-06-16','2025-08-22',100,'5',         'Systems',     'N','800V HV bus; LV secondary; emergency power routing'],
+    [12,'2.6','Preliminary Design Review (PDR)',       'Concept',      '2025-09-08','2025-09-12',100,'6,7,8,9,10,11','All Teams','Y','Gate review: preliminary design freeze'],
     // Phase 3: Detail Design
-    [13,'3.0','Rotor Blade Detail Design & Analysis',  'Aerodynamics', '2025-09-15','2025-12-05',82,  100,'12',        'Aerodynamics','N','Composite blade layup; aeroelastic analysis'],
-    [14,'3.1','Hybrid Engine & Gearbox Integration',   'Propulsion',   '2025-09-15','2025-12-19',96,  100,'12',        'Propulsion',  'N','Driveshaft routing; engine mount stress analysis'],
-    [15,'3.2','Airframe Detail Design & FEA',          'Structures',   '2025-09-22','2026-01-09',110, 100,'12',        'Structures',  'N','Full FEM; fatigue analysis; tilt hinge detail'],
-    [16,'3.3','Avionics Hardware & SW Development',    'Avionics',     '2025-10-06','2026-01-30',117,  95,'12',        'Avionics',    'N','FCC hardware; flight software; DO-178C DAL-A'],
-    [17,'3.4','Critical Design Review (CDR)',          'Concept',      '2026-01-12','2026-01-16', 5,  100,'13,14,15,16','All Teams',  'Y','Gate review: design freeze before prototype build'],
+    [13,'3.0','Rotor Blade Detail Design & Analysis',  'Aerodynamics', '2025-09-15','2025-12-05',100,'12',        'Aerodynamics','N','Composite blade layup; aeroelastic analysis'],
+    [14,'3.1','Hybrid Engine & Gearbox Integration',   'Propulsion',   '2025-09-15','2025-12-19',100,'12',        'Propulsion',  'N','Driveshaft routing; engine mount stress analysis'],
+    [15,'3.2','Airframe Detail Design & FEA',          'Structures',   '2025-09-22','2026-01-09',100,'12',        'Structures',  'N','Full FEM; fatigue analysis; tilt hinge detail'],
+    [16,'3.3','Avionics Hardware & SW Development',    'Avionics',     '2025-10-06','2026-01-30', 95,'12',        'Avionics',    'N','FCC hardware; flight software; DO-178C DAL-A'],
+    [17,'3.4','Critical Design Review (CDR)',          'Concept',      '2026-01-12','2026-01-16',100,'13,14,15,16','All Teams',  'Y','Gate review: design freeze before prototype build'],
     // Phase 4: Prototype & Ground Test
-    [18,'4.0','Prototype Aircraft Manufacturing',      'Structures',   '2026-01-19','2026-05-29',131,  55,'17',        'Manufacturing','N','Fabricate and assemble 2 prototype airframes'],
-    [19,'4.1','Hybrid Powertrain Ground Run Testing',  'Propulsion',   '2026-04-20','2026-06-26',68,   15,'17,14',     'Propulsion',  'N','Engine-generator bench test; power management validation'],
-    [20,'4.2','Structural Static & Fatigue Testing',   'Structures',   '2026-04-06','2026-06-19',75,   10,'17,15',     'Structures',  'N','Ultimate load demonstration; tilt hinge fatigue test'],
-    [21,'4.3','Tilt Mechanism Endurance Testing',      'Structures',   '2026-05-04','2026-07-10',68,    0,'20',        'Structures',  'N','10,000 tilt cycles at limit loads; actuator endurance'],
-    [22,'4.4','Avionics Integration & HIL Testing',    'Avionics',     '2026-05-11','2026-07-17',68,    0,'16',        'Avionics',    'N','Hardware-in-the-loop simulation; fly-by-wire validation'],
-    [23,'4.5','Ground Test Complete',                  'Concept',      '2026-07-20','2026-07-24', 5,    0,'19,20,21,22','All Teams',  'Y','All ground test objectives met; cleared for flight'],
+    [18,'4.0','Prototype Aircraft Manufacturing',      'Structures',   '2026-01-19','2026-05-29', 55,'17',        'Manufacturing','N','Fabricate and assemble 2 prototype airframes'],
+    [19,'4.1','Hybrid Powertrain Ground Run Testing',  'Propulsion',   '2026-04-20','2026-06-26', 15,'17,14',     'Propulsion',  'N','Engine-generator bench test; power management validation'],
+    [20,'4.2','Structural Static & Fatigue Testing',   'Structures',   '2026-04-06','2026-06-19', 10,'17,15',     'Structures',  'N','Ultimate load demonstration; tilt hinge fatigue test'],
+    [21,'4.3','Tilt Mechanism Endurance Testing',      'Structures',   '2026-05-04','2026-07-10',  0,'20',        'Structures',  'N','10,000 tilt cycles at limit loads; actuator endurance'],
+    [22,'4.4','Avionics Integration & HIL Testing',    'Avionics',     '2026-05-11','2026-07-17',  0,'16',        'Avionics',    'N','Hardware-in-the-loop simulation; fly-by-wire validation'],
+    [23,'4.5','Ground Test Complete',                  'Concept',      '2026-07-20','2026-07-24',  0,'19,20,21,22','All Teams',  'Y','All ground test objectives met; cleared for flight'],
     // Phase 5: Flight Test
-    [24,'5.0','First Flight – Hover Mode',             'Flight Test',  '2026-07-27','2026-07-31', 5,    0,'18,23',     'Flight Test', 'Y','Initial untethered hover; FCL Phase 1 objectives'],
-    [25,'5.1','Hover & Low-Speed Envelope Expansion',  'Flight Test',  '2026-08-03','2026-10-02',61,    0,'24',        'Flight Test', 'N','Expand to VNE hover; OGE hover; sideward flight'],
-    [26,'5.2','Tilt Transition Flight Testing',        'Flight Test',  '2026-09-28','2026-12-11',75,    0,'25',        'Flight Test', 'N','Hover-to-cruise transition; corridor mapping'],
-    [27,'5.3','Cruise Performance & Range Testing',    'Flight Test',  '2026-11-30','2027-02-26',89,    0,'26',        'Flight Test', 'N','Max range; endurance; climb performance validation'],
-    [28,'5.4','Flight Test Program Complete',          'Flight Test',  '2027-02-23','2027-02-27', 5,    0,'25,26,27',  'All Teams',   'Y','All FCL objectives closed; data package complete'],
+    [24,'5.0','First Flight – Hover Mode',             'Flight Test',  '2026-07-27','2026-07-31',  0,'18,23',     'Flight Test', 'Y','Initial untethered hover; FCL Phase 1 objectives'],
+    [25,'5.1','Hover & Low-Speed Envelope Expansion',  'Flight Test',  '2026-08-03','2026-10-02',  0,'24',        'Flight Test', 'N','Expand to VNE hover; OGE hover; sideward flight'],
+    [26,'5.2','Tilt Transition Flight Testing',        'Flight Test',  '2026-09-28','2026-12-11',  0,'25',        'Flight Test', 'N','Hover-to-cruise transition; corridor mapping'],
+    [27,'5.3','Cruise Performance & Range Testing',    'Flight Test',  '2026-11-30','2027-02-26',  0,'26',        'Flight Test', 'N','Max range; endurance; climb performance validation'],
+    [28,'5.4','Flight Test Program Complete',          'Flight Test',  '2027-02-23','2027-02-27',  0,'25,26,27',  'All Teams',   'Y','All FCL objectives closed; data package complete'],
     // Phase 6: Certification
-    [29,'6.0','FAA Type Certificate Application',      'Certification','2027-02-16','2027-03-28',41,    0,'28',        'Certification','N','Submit TC application; compliance checklist finalized'],
-    [30,'6.1','Compliance Demonstration & Showing',    'Certification','2027-03-03','2027-10-31',243,   0,'29',        'Certification','N','Ground and flight showing per FAA issue papers'],
-    [31,'6.2','FAA Type Inspection Authorization',     'Certification','2027-08-04','2027-09-12',40,    0,'30',        'Certification','N','TIA issued; FAA conducts independent flight evaluation'],
-    [32,'6.3','Type Certificate Awarded',              'Certification','2027-12-15','2027-12-19', 5,    0,'30,31',     'All Teams',   'Y','FAA Type Certificate for TW-2 – program complete'],
+    [29,'6.0','FAA Type Certificate Application',      'Certification','2027-02-16','2027-03-28',  0,'28',        'Certification','N','Submit TC application; compliance checklist finalized'],
+    [30,'6.1','Compliance Demonstration & Showing',    'Certification','2027-03-03','2027-10-31',  0,'29',        'Certification','N','Ground and flight showing per FAA issue papers'],
+    [31,'6.2','FAA Type Inspection Authorization',     'Certification','2027-08-04','2027-09-12',  0,'30',        'Certification','N','TIA issued; FAA conducts independent flight evaluation'],
+    [32,'6.3','Type Certificate Awarded',              'Certification','2027-12-15','2027-12-19',  0,'30,31',     'All Teams',   'Y','FAA Type Certificate for TW-2 – program complete'],
   ]), 'Schedule');
 
   const sp = ['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs'];
