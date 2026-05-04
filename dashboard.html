@@ -912,6 +912,10 @@ let barEls = {}; // taskId -> { bgRect, progRect, outlineRect, diamond, midY }
 // Row reorder state
 let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
 
+// Org chart drag-pan state (module-level so guarded listeners share one copy)
+let orgPanListenersAttached = false;
+let oDragging = false, oDragX = 0, oDragY = 0, oDragSL = 0, oDragST = 0;
+
 // ─── Work Day Utilities ───────────────────────────────────────────────────────
 function parseWorkDays(str) {
   const map = { mon:1, tue:2, wed:3, thu:4, fri:5, sat:6, sun:0 };
@@ -1670,10 +1674,10 @@ function renderGantt() {
     div.innerHTML = `
       <div class="g-wbs-wrap" style="color:${color}">
         ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
-        <span class="g-wbs-text">${t.wbs}</span>
+        <span class="g-wbs-text">${esc(t.wbs)}</span>
       </div>
-      <span class="g-name" style="padding-left:${depth*10}px" title="${t.name}">${t.milestone ? '◆ ' : ''}${t.name}</span>
-      <span class="g-team" title="${t.team}">${t.team}</span>
+      <span class="g-name" style="padding-left:${depth*10}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
+      <span class="g-team" title="${esc(t.team)}">${esc(t.team)}</span>
       <span class="g-wd ${wd.cls}">${wd.text}</span>
       <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>`;
 
@@ -2926,26 +2930,28 @@ function renderOrgChart() {
   document.getElementById('org-svg-wrap').innerHTML = '';
   document.getElementById('org-svg-wrap').appendChild(svg);
 
-  // Drag-pan for org container
-  let oDragging = false, oDragX, oDragY, oDragSL, oDragST;
-  container.addEventListener('mousedown', e => {
-    if (e.button !== 0) return;
-    oDragging = true;
-    oDragX = e.pageX; oDragY = e.pageY;
-    oDragSL = container.scrollLeft; oDragST = container.scrollTop;
-    container.classList.add('dragging');
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => {
-    if (!oDragging) return;
-    container.scrollLeft = oDragSL - (e.pageX - oDragX);
-    container.scrollTop  = oDragST - (e.pageY - oDragY);
-  });
-  document.addEventListener('mouseup', () => {
-    if (!oDragging) return;
-    oDragging = false;
-    container.classList.remove('dragging');
-  });
+  // Drag-pan for org container — guarded so listeners are attached once only
+  if (!orgPanListenersAttached) {
+    orgPanListenersAttached = true;
+    container.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      oDragging = true;
+      oDragX = e.pageX; oDragY = e.pageY;
+      oDragSL = container.scrollLeft; oDragST = container.scrollTop;
+      container.classList.add('dragging');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+      if (!oDragging) return;
+      container.scrollLeft = oDragSL - (e.pageX - oDragX);
+      container.scrollTop  = oDragST - (e.pageY - oDragY);
+    });
+    document.addEventListener('mouseup', () => {
+      if (!oDragging) return;
+      oDragging = false;
+      container.classList.remove('dragging');
+    });
+  }
 }
 
 // ─── GENERATE SAMPLE EXCEL ────────────────────────────────────────────────────

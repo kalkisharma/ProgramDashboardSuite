@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.1] — 2026-05-03
+
+### Security
+- Apply `esc()` to task WBS, name (×2: `title` attribute + text), and team (×2: `title` attribute + text) in Gantt row `innerHTML` — same pattern as the v1.2.1 XSS sweep; these five injection points were missed in that pass
+
+### Fixed
+- Org chart drag-pan: `mousemove`/`mouseup` document listeners were re-added on every `renderOrgChart()` call, causing ghost-drag stutter after loading multiple files; listeners are now guarded with a module-level flag and attached once only
+
+---
+
 ## [1.4] — 2026-05-03
 
 ### Added
