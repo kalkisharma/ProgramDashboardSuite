@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2] — 2026-05-03
+
+### Changed
+- Light mode background softened: `--bg` changed from pure white `#ffffff` to `#f0f2f5`; `--surface` from `#f6f8fa` to `#e8eaed` — reduces glare for long reading sessions
+- Gantt timeline split into a sticky header SVG (month/week labels, Today marker) and a scrollable body SVG — header remains visible while scrolling through long task lists
+- Theme toggle now immediately re-renders the Gantt SVG so header colors update without requiring a page reload
+- Non-work-day column shading removed — visual noise reduction; work-day snap and WD column counts are unaffected
+- Vertical week sub-lines extended into the task body area at zoom ≥ 5 (previously header-only); month boundary lines remain the primary full-height grid
+
+---
+
 ## [1.1] — 2026-05-03
 
 ### Security

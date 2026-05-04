@@ -13,7 +13,7 @@ python -m http.server
 
 ## Architecture
 
-**Single-file vanilla JS app** (`dashboard.html`, ~2700 lines). All HTML, CSS, and JavaScript are in one file. The only external dependency is SheetJS loaded from CDN for Excel parsing/export.
+**Single-file vanilla JS app** (`dashboard.html`, ~2850 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
 
 ### Global State
 
@@ -89,7 +89,8 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `RH = 36` px/row, `HH = 60` px header height
 - `adjustZoom(dir)` steps through `ZOOM_STEPS` and scales `scrollLeft` proportionally to keep the view anchored
 - Ctrl+scroll also triggers zoom; drag-pan is initialized once in `initGanttPan()`
-- `#gantt-left` (task list) and `#gantt-right` (SVG timeline) scroll vertically in sync via paired `scroll` listeners
+- `#gantt-left` (task list) and `#gantt-right` (SVG body) scroll vertically in sync via paired `scroll` listeners
+- The Gantt timeline is split into two SVGs: a sticky `#gantt-header-svg-wrap` (60px, contains month/week labels and Today marker) inside `#gantt-header-wrap`, and a scrollable `#gantt-svg-wrap` (body rows, bars, arrows) inside `#gantt-right`. Both live inside `#gantt-right-col`. The header SVG follows horizontal scroll via `translateX` set on each scroll event.
 
 **Gantt Filters:** The toolbar contains two `<select>` dropdowns (Phase and Team). State is held in `ganttPhaseFilter` / `ganttTeamFilter` (default `'all'`). `setGanttPhaseFilter()` / `setGanttTeamFilter()` update state and call `renderGantt()`. The filter builds a `visibleTasks` subset; the SVG date axis always spans the full `S.tasks` date range so the timeline doesn't shift when filtering. Dependency arrows are only drawn between tasks that are both visible.
 
@@ -114,9 +115,9 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 
 **WD column:** Left task list has a 5th column (WD) showing remaining work days. Grid is `44px 1fr 68px 40px 44px` (WBS | Name | Team | WD | %).
 
-**Non-work day shading:** When `ganttZoom >= 3`, full-height `<rect>` bands are drawn in the SVG for every non-work calendar day. Fill is `rgba(255,255,255,0.03)` in dark mode, `rgba(0,0,0,0.04)` in light mode.
+**Body grid lines:** `renderBodyGrid(svg, NS, minD, maxD, W, bodyH)` draws month boundary vertical lines (full body height) and, when `ganttZoom >= 5`, week sub-lines at reduced opacity. Non-work-day column shading has been removed.
 
-**Light/dark mode:** `toggleTheme()` toggles `.light-mode` on `<body>` and persists to `localStorage` under key `'vh-theme'`. Applied by an IIFE on page load. The `☀/🌙` button is always visible in the topbar. CSS overrides live under `body.light-mode { ... }` in the `<style>` block.
+**Light/dark mode:** `toggleTheme()` toggles `.light-mode` on `<body>`, persists to `localStorage` under key `'vh-theme'`, and calls `renderGantt()` if tasks are loaded (so SVG colors update immediately). Applied by an IIFE on page load. The `☀/🌙` button is always visible in the topbar. CSS overrides live under `body.light-mode { ... }` in the `<style>` block. Light mode uses `--bg: #f0f2f5` and `--surface: #e8eaed` (soft off-white, not pure white).
 
 **Topbar buttons (right group):**
 - `#generate-sample-btn` — hidden after first file load

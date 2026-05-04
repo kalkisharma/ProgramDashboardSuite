@@ -223,6 +223,10 @@ body {
 }
 
 /* Right scrollable area */
+#gantt-right-col { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#gantt-header-wrap { height: 60px; overflow: hidden; flex-shrink: 0; background: var(--surface); border-bottom: 1px solid var(--border); cursor: grab; }
+#gantt-header-wrap.dragging { cursor: grabbing; }
+#gantt-header-svg-wrap { height: 60px; }
 #gantt-right { flex: 1; overflow: auto; cursor: grab; }
 #gantt-right.dragging { cursor: grabbing; user-select: none; }
 #gantt-right::-webkit-scrollbar { height: 6px; width: 4px; }
@@ -550,8 +554,8 @@ body {
 
 /* ── LIGHT MODE ──────────────────────────────────────────── */
 body.light-mode {
-  --bg: #ffffff;
-  --surface: #f6f8fa;
+  --bg: #f0f2f5;
+  --surface: #e8eaed;
   --border: #d0d7de;
   --text: #1f2328;
   --muted: #636c76;
@@ -560,8 +564,8 @@ body.light-mode {
   --warning: #9a6700;
   --success: #1a7f37;
 }
-body.light-mode #tooltip { background: #ffffff; }
-body.light-mode #gantt-drag-label { background: #f6f8fa; }
+body.light-mode #tooltip { background: #f0f2f5; }
+body.light-mode #gantt-drag-label { background: #e8eaed; }
 
 /* ── THEME TOGGLE ────────────────────────────────────────── */
 #theme-toggle {
@@ -726,8 +730,13 @@ body.light-mode #gantt-drag-label { background: #f6f8fa; }
           </div>
           <div id="gantt-left-body"></div>
         </div>
-        <div id="gantt-right">
-          <div id="gantt-svg-wrap"></div>
+        <div id="gantt-right-col">
+          <div id="gantt-header-wrap">
+            <div id="gantt-header-svg-wrap"></div>
+          </div>
+          <div id="gantt-right">
+            <div id="gantt-svg-wrap"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -916,6 +925,7 @@ function toggleTheme() {
   const light = document.body.classList.toggle('light-mode');
   localStorage.setItem('vh-theme', light ? 'light' : 'dark');
   document.getElementById('theme-toggle').textContent = light ? '🌙' : '☀';
+  if (S.tasks.length) renderGantt();
 }
 
 function toggleHelp() {
@@ -1353,9 +1363,19 @@ function initGanttPan() {
     if (rowDrag.active) doRowDragMove(e);
   });
   document.addEventListener('mouseup', e => {
-    if (ganttDragging) { ganttDragging = false; right.classList.remove('dragging'); }
+    if (ganttDragging) {
+      ganttDragging = false;
+      right.classList.remove('dragging');
+      document.getElementById('gantt-header-wrap').classList.remove('dragging');
+    }
     if (barDrag.active) endBarDrag();
     if (rowDrag.active) endRowDrag(e);
+  });
+
+  document.getElementById('gantt-header-wrap').addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    document.getElementById('gantt-header-wrap').classList.add('dragging');
+    startPanDrag(e);
   });
 }
 initGanttPan();
@@ -1418,7 +1438,10 @@ document.getElementById('org-container').addEventListener('wheel', e => {
 
 // Scroll sync (set up once)
 document.getElementById('gantt-right').addEventListener('scroll', () => {
-  document.getElementById('gantt-left-body').scrollTop = document.getElementById('gantt-right').scrollTop;
+  const right = document.getElementById('gantt-right');
+  document.getElementById('gantt-left-body').scrollTop = right.scrollTop;
+  const hw = document.getElementById('gantt-header-svg-wrap');
+  if (hw) hw.style.transform = `translateX(-${right.scrollLeft}px)`;
 }, { passive: true });
 document.getElementById('gantt-left-body').addEventListener('scroll', () => {
   document.getElementById('gantt-right').scrollTop = document.getElementById('gantt-left-body').scrollTop;
@@ -1463,6 +1486,7 @@ function renderGantt() {
   if (!visibleTasks.length) {
     lb.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem;text-align:center">No tasks match the current filters.</div>';
     document.getElementById('gantt-svg-wrap').innerHTML = '';
+    document.getElementById('gantt-header-svg-wrap').innerHTML = '';
     return;
   }
 
@@ -1473,7 +1497,7 @@ function renderGantt() {
   ganttMinDateRef = minD;
   const totalDays = daysBetween(minD, maxD);
   const W = totalDays * ganttZoom;
-  const H = HH + visibleTasks.length * RH;
+  const bodyH = visibleTasks.length * RH;
   const NS = 'http://www.w3.org/2000/svg';
 
   // ── Left panel rows ────────────────────────────────
@@ -1534,15 +1558,38 @@ function renderGantt() {
 
   // ── Build SVG ──────────────────────────────────────
   const isLight = document.body.classList.contains('light-mode');
-  const svgHeaderBg  = isLight ? '#f6f8fa'                  : '#161b22';
+  const svgHeaderBg  = isLight ? '#e8eaed'                  : '#161b22';
   const svgRowStripe = isLight ? 'rgba(0,0,0,0.025)'        : 'rgba(255,255,255,0.015)';
   const arrowFill    = isLight ? 'rgba(99,108,118,0.5)'     : 'rgba(139,148,158,0.5)';
   const depStroke    = isLight ? 'rgba(99,108,118,0.35)'    : 'rgba(139,148,158,0.35)';
   const rowLineClr   = isLight ? 'rgba(208,215,222,0.6)'    : 'rgba(48,54,61,0.5)';
 
+  // ── Header SVG (sticky) ────────────────────────────
+  const hsvg = document.createElementNS(NS, 'svg');
+  hsvg.setAttribute('width', W); hsvg.setAttribute('height', HH);
+  hsvg.style.display = 'block';
+  appendRect(hsvg, NS, 0, 0, W, HH, svgHeaderBg);
+  renderHeader(hsvg, NS, minD, maxD, W);
+  // Today line + label in header
+  const tx = daysBetween(minD, TODAY) * ganttZoom;
+  if (tx > 0 && tx < W) {
+    appendLine(hsvg, NS, tx, tx, 0, HH, '#f85149', 1.5, '4,3');
+    const htl = document.createElementNS(NS, 'text');
+    htl.setAttribute('x', tx+4); htl.setAttribute('y', 13);
+    htl.setAttribute('fill', '#f85149'); htl.setAttribute('font-size', '10');
+    htl.setAttribute('font-weight', '700'); htl.textContent = 'Today';
+    htl.style.pointerEvents = 'none';
+    hsvg.appendChild(htl);
+  }
+  const headerWrap = document.getElementById('gantt-header-svg-wrap');
+  headerWrap.innerHTML = '';
+  headerWrap.appendChild(hsvg);
+  headerWrap.style.transform = `translateX(-${document.getElementById('gantt-right').scrollLeft}px)`;
+
+  // ── Body SVG ────────────────────────────────────────
   barEls = {};
   const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('width', W); svg.setAttribute('height', H);
+  svg.setAttribute('width', W); svg.setAttribute('height', bodyH);
   svg.style.display = 'block';
 
   // Arrowhead marker
@@ -1556,31 +1603,14 @@ function renderGantt() {
   poly.setAttribute('fill', arrowFill);
   mk.appendChild(poly); defs.appendChild(mk); svg.appendChild(defs);
 
-  appendRect(svg, NS, 0, 0, W, HH, svgHeaderBg);
-
   visibleTasks.forEach((_, i) => {
-    if (i % 2 === 0) appendRect(svg, NS, 0, HH + i*RH, W, RH, svgRowStripe);
+    if (i % 2 === 0) appendRect(svg, NS, 0, i*RH, W, RH, svgRowStripe);
   });
 
-  // Non-work-day shading (only when zoomed enough to see individual days)
-  if (ganttZoom >= 3) {
-    const isLightMode = document.body.classList.contains('light-mode');
-    const shadeFill = isLightMode ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.025)';
-    const dCur = new Date(minD);
-    while (dCur <= maxD) {
-      if (!isWorkDay(dCur, ganttWorkDays)) {
-        const sx = daysBetween(minD, dCur) * ganttZoom;
-        const r = appendRect(svg, NS, sx, 0, ganttZoom, H, shadeFill);
-        r.style.pointerEvents = 'none';
-      }
-      dCur.setDate(dCur.getDate() + 1);
-    }
-  }
-
-  renderHeader(svg, NS, minD, maxD, W);
+  renderBodyGrid(svg, NS, minD, maxD, W, bodyH);
 
   for (let i = 0; i <= visibleTasks.length; i++) {
-    appendLine(svg, NS, 0, W, HH + i*RH, HH + i*RH, rowLineClr, 1);
+    appendLine(svg, NS, 0, W, i*RH, i*RH, rowLineClr, 1);
   }
 
   const barPos = {};
@@ -1589,12 +1619,12 @@ function renderGantt() {
     if (!t.start || !t.end) return;
     const x   = daysBetween(minD, t.start) * ganttZoom;
     const w   = Math.max(daysBetween(t.start, t.end) * ganttZoom, ganttZoom);
-    const midY = HH + i*RH + RH/2;
+    const midY = i*RH + RH/2;
     const color = phaseColor(t.wbs);
 
     // Invisible hit area for the full row (carries task id for drag detection)
     const hit = document.createElementNS(NS, 'rect');
-    hit.setAttribute('x', 0); hit.setAttribute('y', HH + i*RH);
+    hit.setAttribute('x', 0); hit.setAttribute('y', i*RH);
     hit.setAttribute('width', W); hit.setAttribute('height', RH);
     hit.setAttribute('fill', 'transparent');
     hit.dataset.taskid = t.id;
@@ -1613,7 +1643,7 @@ function renderGantt() {
       barPos[t.id] = { sx: mx - sz, ex: mx + sz, my: midY };
       barEls[t.id] = { diamond: d, midY };
     } else {
-      const by = HH + i*RH + RH*0.28, bh = RH*0.44;
+      const by = i*RH + RH*0.28, bh = RH*0.44;
       const bgRect = appendRect(svg, NS, x, by, w, bh, color + '30', 4);
       bgRect.style.pointerEvents = 'none';
       let progRect = null, outlineRect = null;
@@ -1651,16 +1681,9 @@ function renderGantt() {
     });
   });
 
-  // Today line
-  const tx = daysBetween(minD, TODAY) * ganttZoom;
+  // Today line in body (label is in header SVG above)
   if (tx > 0 && tx < W) {
-    appendLine(svg, NS, tx, tx, 0, H, '#f85149', 1.5, '4,3');
-    const tl = document.createElementNS(NS, 'text');
-    tl.setAttribute('x', tx+4); tl.setAttribute('y', 13);
-    tl.setAttribute('fill', '#f85149'); tl.setAttribute('font-size', '10');
-    tl.setAttribute('font-weight', '700'); tl.textContent = 'Today';
-    tl.style.pointerEvents = 'none';
-    svg.appendChild(tl);
+    appendLine(svg, NS, tx, tx, 0, bodyH, '#f85149', 1.5, '4,3');
   }
 
   document.getElementById('gantt-svg-wrap').innerHTML = '';
@@ -1703,6 +1726,27 @@ function renderHeader(svg, NS, minD, maxD, W) {
       dl.textContent = wk.getDate();
       svg.appendChild(dl);
       wk.setDate(wk.getDate()+7);
+    }
+    cur.setMonth(cur.getMonth()+1);
+  }
+}
+
+function renderBodyGrid(svg, NS, minD, maxD, W, bodyH) {
+  const isLight = document.body.classList.contains('light-mode');
+  const monthLine = isLight ? 'rgba(0,0,0,0.12)' : 'rgba(48,54,61,0.5)';
+  const weekLine  = isLight ? 'rgba(0,0,0,0.05)'  : 'rgba(48,54,61,0.22)';
+  const cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+  while (cur <= maxD) {
+    const x = daysBetween(minD, cur) * ganttZoom;
+    appendLine(svg, NS, x, x, 0, bodyH, monthLine, 1);
+    if (ganttZoom >= 5) {
+      const nxt = new Date(cur); nxt.setMonth(nxt.getMonth()+1);
+      const wk = new Date(cur); wk.setDate(wk.getDate() + (7 - wk.getDay()));
+      while (wk < nxt && wk <= maxD) {
+        const wx = daysBetween(minD, wk) * ganttZoom;
+        appendLine(svg, NS, wx, wx, 0, bodyH, weekLine, 1);
+        wk.setDate(wk.getDate()+7);
+      }
     }
     cur.setMonth(cur.getMonth()+1);
   }
@@ -2510,13 +2554,13 @@ function showSidePanel() {
   const onOrg   = document.getElementById('org-panel').classList.contains('active');
   const onGantt = document.getElementById('gantt-panel').classList.contains('active');
   document.getElementById('org-container').style.paddingRight  = onOrg   ? '440px' : '';
-  document.getElementById('gantt-right').style.marginRight     = onGantt ? '440px' : '';
+  document.getElementById('gantt-right-col').style.marginRight  = onGantt ? '440px' : '';
 }
 
 function closeSidePanel() {
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('org-container').style.paddingRight = '';
-  document.getElementById('gantt-right').style.marginRight    = '';
+  document.getElementById('gantt-right-col').style.marginRight = '';
   spCurrentType = null;
   spCurrentId   = null;
 }
