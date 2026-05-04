@@ -31,7 +31,7 @@ let rowDrag = { active: false, srcIdx: null, dropIdx: null, rowCount: 0, lb: nul
 - `S.info` — key/value pairs from the "Project Info" sheet
 - `S.tasks[]` — `{ id, wbs, name, category, start, end, pct, deps, team, milestone, notes }`
 - `S.specs[]` — `{ id, category, name, value, units, status, group, notes, depIds[] }`
-- `S.org[]` — `{ name, title, team, reportsTo, email }`
+- `S.org[]` — `{ name, title, team, reportsTo: string[], email }` — `reportsTo` is always an array; `[0]` is the primary manager (determines tree position); `slice(1)` are secondary managers (dashed lines)
 - `S.weights[]` — `{ subsystem, group, target, estimated, status, notes }`
 
 `parseWorkbook(wb)` resets all five arrays, then populates them from the corresponding sheets, deep-copies `S.tasks` into `S_tasksOriginal`, and applies the `Work Days` Project Info key. `renderDashboard()` is called after every load and re-renders all tabs.

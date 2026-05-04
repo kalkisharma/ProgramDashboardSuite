@@ -549,6 +549,7 @@ body {
 .wt-bar-wrap { position: relative; height: 16px; background: var(--border); border-radius: 4px; }
 .wt-bar-est  { height: 100%; border-radius: 4px; position: absolute; left: 0; top: 0; }
 .wt-bar-tgt  { position: absolute; top: -4px; bottom: -4px; width: 2px; background: rgba(255,255,255,0.6); border-radius: 1px; }
+body.light-mode .wt-bar-tgt { background: rgba(0,0,0,0.45); }
 .wt-margin-pos { color: #3fb950; }
 .wt-margin-neg { color: #f85149; }
 
@@ -782,7 +783,8 @@ body.light-mode #gantt-drag-label { background: #e8eaed; }
         <div style="font-size:2rem">👥</div>
         <div>No org chart data found.</div>
         <div>Add an <code>Org Chart</code> sheet to your Excel file with columns:<br>
-          <code>Name</code>, <code>Title</code>, <code>Team</code>, <code>Reports To</code>, <code>Email</code>
+          <code>Name</code>, <code>Title</code>, <code>Team</code>, <code>Reports To</code>, <code>Email</code><br>
+          <span style="font-size:0.82em;color:var(--muted)"><em>Reports To</em> accepts a single name or comma-separated names for matrix reporting.</span>
         </div>
       </div>
       <div id="org-container">
@@ -1150,7 +1152,7 @@ function parseWorkbook(wb) {
         name:      String(g('Name') || ''),
         title:     String(g('Title') || ''),
         team:      String(g('Team') || ''),
-        reportsTo: String(g('Reports To') || ''),
+        reportsTo: String(g('Reports To') || '').split(',').map(s => s.trim()).filter(Boolean),
         email:     String(g('Email') || ''),
       };
     });
@@ -2000,7 +2002,7 @@ function saveToExcel() {
   // Org Chart
   if (S.org.length) {
     const ogRows = [['Name','Title','Team','Reports To','Email']];
-    S.org.forEach(p => ogRows.push([p.name, p.title, p.team, p.reportsTo, p.email]));
+    S.org.forEach(p => ogRows.push([p.name, p.title, p.team, p.reportsTo.join(', '), p.email]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ogRows), 'Org Chart');
   }
 
@@ -2501,11 +2503,11 @@ function openOrgPanel(name) {
     <div class="sp-meta-id" style="color:${col};font-weight:700">${esc(person.team) || 'No Team'}</div>
     <div class="sp-meta-val" style="font-size:1rem">${esc(person.title) || '—'}</div>
     ${person.email ? `<div class="sp-meta-notes">${esc(person.email)}</div>` : ''}
-    ${person.reportsTo ? `<div class="sp-meta-notes"><strong>Reports to:</strong> ${esc(person.reportsTo)}</div>` : ''}
+    ${person.reportsTo.length ? `<div class="sp-meta-notes"><strong>Reports to:</strong> ${person.reportsTo.map(r => esc(r)).join(', ')}</div>` : ''}
   </div>`;
 
   // Direct reports
-  const reports = S.org.filter(p => p.reportsTo === name);
+  const reports = S.org.filter(p => p.reportsTo.includes(name));
   if (reports.length) {
     html += `<div class="sp-section-label">Direct Reports (${reports.length})</div>`;
     reports.forEach(r => {
@@ -2605,7 +2607,8 @@ function renderOrgChart() {
   S.org.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
   const roots = [];
   S.org.forEach(p => {
-    if (p.reportsTo && nodeMap[p.reportsTo]) nodeMap[p.reportsTo].children.push(nodeMap[p.name]);
+    const primary = p.reportsTo[0];
+    if (primary && nodeMap[primary]) nodeMap[primary].children.push(nodeMap[p.name]);
     else roots.push(nodeMap[p.name]);
   });
 
@@ -2628,13 +2631,28 @@ function renderOrgChart() {
   svg.style.display = 'block';
 
   const isLightOrg = document.body.classList.contains('light-mode');
-  const cardBg      = isLightOrg ? '#ffffff'          : '#161b22';
-  const cardBgHover = isLightOrg ? '#f6f8fa'          : '#1c2128';
-  const cardBorder  = isLightOrg ? 'rgba(0,0,0,0.12)' : 'rgba(88,166,255,0.25)';
-  const nameFill    = isLightOrg ? '#1f2328'           : '#e6edf3';
-  const titleFill   = isLightOrg ? '#636c76'           : '#8b949e';
+  const cardBg      = isLightOrg ? '#ffffff'           : '#161b22';
+  const cardBorder  = isLightOrg ? 'rgba(0,0,0,0.08)'  : 'rgba(88,166,255,0.25)';
+  const nameFill    = isLightOrg ? '#1f2328'            : '#e6edf3';
+  const titleFill   = isLightOrg ? '#636c76'            : '#8b949e';
 
-  // Draw edges
+  // Drop shadow filter (light mode only)
+  const defs = document.createElementNS(NS, 'defs');
+  if (isLightOrg) {
+    const filter = document.createElementNS(NS, 'filter');
+    filter.setAttribute('id', 'card-shadow');
+    filter.setAttribute('x', '-10%'); filter.setAttribute('y', '-10%');
+    filter.setAttribute('width', '120%'); filter.setAttribute('height', '130%');
+    const shadow = document.createElementNS(NS, 'feDropShadow');
+    shadow.setAttribute('dx', '0'); shadow.setAttribute('dy', '1');
+    shadow.setAttribute('stdDeviation', '2.5');
+    shadow.setAttribute('flood-color', 'rgba(0,0,0,0.10)');
+    filter.appendChild(shadow);
+    defs.appendChild(filter);
+  }
+  svg.appendChild(defs);
+
+  // Draw primary edges
   allNodes.forEach(node => {
     node.children.forEach(child => {
       const x1 = node.x + NW/2, y1 = node.y + NH;
@@ -2646,6 +2664,24 @@ function renderOrgChart() {
       path.setAttribute('stroke', cardBorder);
       path.setAttribute('stroke-width', '1.5');
       svg.appendChild(path);
+    });
+  });
+
+  // Draw secondary (dotted-line) reporting edges
+  allNodes.forEach(node => {
+    node.reportsTo.slice(1).forEach(secName => {
+      const parent = nodeMap[secName];
+      if (!parent) return;
+      const x1 = parent.x + NW/2, y1 = parent.y + NH;
+      const x2 = node.x + NW/2,   y2 = node.y;
+      const midY = (y1 + y2) / 2;
+      const sec = document.createElementNS(NS, 'path');
+      sec.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+      sec.setAttribute('fill', 'none');
+      sec.setAttribute('stroke', isLightOrg ? 'rgba(0,0,0,0.22)' : 'rgba(139,148,158,0.45)');
+      sec.setAttribute('stroke-width', '1.5');
+      sec.setAttribute('stroke-dasharray', '5,3');
+      svg.appendChild(sec);
     });
   });
 
@@ -2664,9 +2700,11 @@ function renderOrgChart() {
     rect.setAttribute('width', NW); rect.setAttribute('height', NH);
     rect.setAttribute('rx', 8); rect.setAttribute('fill', cardBg);
     rect.setAttribute('stroke', col); rect.setAttribute('stroke-width', '1.5');
+    if (isLightOrg) rect.setAttribute('filter', 'url(#card-shadow)');
     card.appendChild(rect);
 
-    // Hover effect
+    // Hover effect — team-color tint in light mode, dark lift in dark mode
+    const cardBgHover = isLightOrg ? col + '14' : '#1c2128';
     card.addEventListener('mouseenter', () => rect.setAttribute('fill', cardBgHover));
     card.addEventListener('mouseleave', () => rect.setAttribute('fill', cardBg));
 
@@ -2850,7 +2888,7 @@ function generateSampleExcel() {
     ['B. Osei',      'Rotor Aerodynamicist',        'Aerodynamics','L. Chen',     'bosei@tw2.aero'],
     ['T. Walsh',     'Propulsion Lead',             'Propulsion',  'R. Nakamura', 'twalsh@tw2.aero'],
     ['F. Diaz',      'Turbine Systems Engineer',    'Propulsion',  'T. Walsh',    'fdiaz@tw2.aero'],
-    ['N. Patel',     'Battery Systems Engineer',    'Propulsion',  'T. Walsh',    'npatel@tw2.aero'],
+    ['N. Patel',     'Battery Systems Engineer',    'Propulsion',  'T. Walsh, A. Singh', 'npatel@tw2.aero'],
     ['K. Johansson', 'Structures Lead',             'Structures',  'R. Nakamura', 'kjohansson@tw2.aero'],
     ['P. Nguyen',    'Composite Structures Engineer','Structures',  'K. Johansson','pnguyen@tw2.aero'],
     ['H. Okonkwo',   'Avionics Lead',               'Avionics',    'R. Nakamura', 'hokonkwo@tw2.aero'],

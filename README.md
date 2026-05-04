@@ -45,7 +45,7 @@ Sheet names are **case-sensitive**. The tool silently skips unrecognized sheets 
 | `Project Info` | Yes | Field, Value |
 | `Schedule` | Yes | Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone (Y/N), Notes |
 | `Specifications` | Yes | Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs |
-| `Org Chart` | Optional | Name, Title, Team, Reports To, Email |
+| `Org Chart` | Optional | Name, Title, Team, Reports To, Email — `Reports To` accepts a single name or a comma-separated list for matrix reporting (e.g. `Primary Manager, Secondary Manager`); first name determines tree position, additional names render as dashed lines |
 | `Weight Budget` | Optional | Subsystem, Group, Target Weight (lb), Estimated Weight (lb), Status, Notes |
 
 ### Project Info recognized fields

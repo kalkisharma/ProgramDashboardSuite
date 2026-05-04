@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3] — 2026-05-03
+
+### Added
+- Org chart matrix reporting: `Reports To` column now accepts comma-separated names (`Primary, Secondary`). The first name determines tree position; additional names render as dashed lines. Existing single-manager files are unaffected.
+
+### Fixed
+- Org chart node cards in light mode now have a drop shadow for visual depth; hover state changed from flat grey to a team-color tint (correct interaction feedback direction)
+- Weight budget target line (│) now renders as a dark line in light mode — was white-on-light and nearly invisible
+
+---
+
 ## [1.2.1] — 2026-05-03
 
 ### Security
