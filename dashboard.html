@@ -1491,7 +1491,7 @@ function initGanttPan() {
       if (Math.abs(dx) > 4) ganttDragDidMove = true;
       right.scrollLeft = ganttDragScrollLeft - dx;
     }
-    if (barDrag.active) doBarDragMove(e);
+    if (barDrag.active || barDrag.pending) doBarDragMove(e);
     if (rowDrag.active) doRowDragMove(e);
   });
   document.addEventListener('mouseup', e => {
