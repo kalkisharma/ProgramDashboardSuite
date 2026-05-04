@@ -175,8 +175,10 @@ body {
   cursor: pointer;
 }
 .gantt-row:hover { background: rgba(88,166,255,0.07); }
+.gantt-row.kb-focus { background: rgba(88,166,255,0.12); outline: 1px solid rgba(88,166,255,0.3); outline-offset: -1px; }
 .g-wbs { font-size: 0.7rem; font-family: monospace; }
 .g-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+.g-name:focus-visible, .g-team:focus-visible, .g-pct:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
 .g-team { color: var(--muted); font-size: 0.72rem; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-pct { text-align: right; font-size: 0.75rem; font-weight: 700; }
 
@@ -1346,6 +1348,7 @@ let ganttPhaseFilter = 'all';
 let ganttTeamFilter  = 'all';
 let specSortState    = { col: null, dir: 'asc' };
 let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
+let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
 function setGanttPhaseFilter(val) { ganttPhaseFilter = val; renderGantt(); }
 function setGanttTeamFilter(val)  { ganttTeamFilter  = val; renderGantt(); }
 const RH = 36;
@@ -1508,6 +1511,41 @@ function initGanttPan() {
   });
 }
 initGanttPan();
+
+function updateGanttKeyFocus(delta) {
+  const lb = document.getElementById('gantt-left-body');
+  if (!lb) return;
+  const rows = lb.querySelectorAll('.gantt-row');
+  if (!rows.length) return;
+  lb.querySelectorAll('.gantt-row.kb-focus').forEach(r => r.classList.remove('kb-focus'));
+  ganttKeyFocusIdx = Math.max(0, Math.min(rows.length - 1, ganttKeyFocusIdx + delta));
+  rows[ganttKeyFocusIdx].classList.add('kb-focus');
+  rows[ganttKeyFocusIdx].scrollIntoView({ block: 'nearest' });
+}
+
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('gantt-panel').classList.contains('active')) return;
+  if (e.target.matches('input, select, textarea')) return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (ganttKeyFocusIdx < 0) ganttKeyFocusIdx = -1;
+    updateGanttKeyFocus(1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    updateGanttKeyFocus(-1);
+  } else if (e.key === 'Enter' && ganttKeyFocusIdx >= 0) {
+    const lb = document.getElementById('gantt-left-body');
+    const rows = lb ? lb.querySelectorAll('.gantt-row') : [];
+    if (rows[ganttKeyFocusIdx]) {
+      const tid = +rows[ganttKeyFocusIdx].dataset.taskid;
+      if (tid) openTaskPanel(tid);
+    }
+  } else if (e.key === '+' || e.key === '=') {
+    e.preventDefault(); adjustZoom(1);
+  } else if (e.key === '-') {
+    e.preventDefault(); adjustZoom(-1);
+  }
+});
 
 function adjustZoom(dir) {
   const right = document.getElementById('gantt-right');
@@ -1754,6 +1792,7 @@ function renderGantt() {
     const showHandle = !isFiltered && !isPhaseHeader;
     const div = document.createElement('div');
     div.className = 'gantt-row';
+    div.dataset.taskid = t.id;
     div.innerHTML = `
       <div class="g-wbs-wrap" style="color:${color}">
         ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
@@ -1780,23 +1819,35 @@ function renderGantt() {
     // Task name inline edit
     const nameEl = div.querySelector('.g-name');
     nameEl.style.cursor = 'text';
-    nameEl.addEventListener('click', e => { e.stopPropagation(); startNameEdit(nameEl, t); });
+    nameEl.setAttribute('tabindex', '0');
+    nameEl.addEventListener('click',   e => { e.stopPropagation(); startNameEdit(nameEl, t); });
+    nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startNameEdit(nameEl, t); } });
 
     // Team inline edit
     const teamEl = div.querySelector('.g-team');
     teamEl.style.cursor = 'pointer';
-    teamEl.addEventListener('click', e => { e.stopPropagation(); startTeamEdit(teamEl, t); });
+    teamEl.setAttribute('tabindex', '0');
+    teamEl.addEventListener('click',   e => { e.stopPropagation(); startTeamEdit(teamEl, t); });
+    teamEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTeamEdit(teamEl, t); } });
 
     // Pct inline edit
     const pctEl = div.querySelector('.g-pct');
     pctEl.style.cursor = 'text';
-    pctEl.addEventListener('click', e => { e.stopPropagation(); startPctEdit(pctEl, t); });
+    pctEl.setAttribute('tabindex', '0');
+    pctEl.addEventListener('click',   e => { e.stopPropagation(); startPctEdit(pctEl, t); });
+    pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startPctEdit(pctEl, t); } });
 
     div.addEventListener('click', () => openTaskPanel(t.id));
     div.addEventListener('mouseenter', e => { if (!barDrag.active && !rowDrag.active) showTooltip(t, e); });
     div.addEventListener('mouseleave', hideTooltip);
     lb.appendChild(div);
   });
+
+  // Apply keyboard-focus highlight to the tracked row (if any)
+  if (ganttKeyFocusIdx >= 0) {
+    const rows = lb.querySelectorAll('.gantt-row');
+    if (rows[ganttKeyFocusIdx]) rows[ganttKeyFocusIdx].classList.add('kb-focus');
+  }
 
   // ── Build SVG ──────────────────────────────────────
   const isLight = document.body.classList.contains('light-mode');
@@ -1809,7 +1860,12 @@ function renderGantt() {
   // ── Header SVG (sticky) ────────────────────────────
   const hsvg = document.createElementNS(NS, 'svg');
   hsvg.setAttribute('width', W); hsvg.setAttribute('height', HH);
+  hsvg.setAttribute('role', 'img');
+  hsvg.setAttribute('aria-label', 'Gantt timeline header — month and week labels');
   hsvg.style.display = 'block';
+  const hTitle = document.createElementNS(NS, 'title');
+  hTitle.textContent = 'Gantt timeline header';
+  hsvg.appendChild(hTitle);
   appendRect(hsvg, NS, 0, 0, W, HH, svgHeaderBg);
   renderHeader(hsvg, NS, minD, maxD, W);
   // Today line + label in header
@@ -1832,6 +1888,8 @@ function renderGantt() {
   barEls = {};
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', W); svg.setAttribute('height', bodyH);
+  svg.setAttribute('role', 'application');
+  svg.setAttribute('aria-label', 'Gantt chart — drag bars to adjust dates and duration');
   svg.style.display = 'block';
 
   // Arrowhead marker
@@ -1887,6 +1945,7 @@ function renderGantt() {
     } else {
       const by = i*RH + RH*0.28, bh = RH*0.44;
       const bgRect = appendRect(svg, NS, x, by, w, bh, color + '30', 4);
+      if (isLight) { bgRect.setAttribute('stroke', color); bgRect.setAttribute('stroke-width', '1.5'); }
       bgRect.style.pointerEvents = 'none';
       let progRect = null, outlineRect = null;
       if (t.pct > 0) {

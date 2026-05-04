@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.6.0] — 2026-05-03
+
+### Added
+- Keyboard navigation for Gantt task list: ↑/↓ arrows move focus between task rows (highlighted with a subtle blue outline); Enter opens the side panel for the focused task; `+`/`-` adjust zoom — all guarded to the Gantt tab and suppressed when an input/select has focus
+- Keyboard access for Gantt inline edits: task name, team, and % complete cells now have `tabindex="0"` and respond to Enter key — consistent with click behavior; `:focus-visible` outline applied via CSS for keyboard-only users
+
+### Fixed
+- Light mode Gantt bar visibility: bars now carry a 1.5px phase-color stroke border in light mode — ensures all 12 phase colors are delineated against the `#edecea` background regardless of fill brightness (cyan, lime, amber, and teal fills were below the 3:1 WCAG non-text contrast threshold)
+
+### Changed
+- Gantt header SVG: `role="img"` + `aria-label` + `<title>` element — announces as a labeled image to screen readers rather than an unmarked SVG
+- Gantt body SVG: `role="application"` + `aria-label` — signals interactive content to assistive technology
+
+---
+
 ## [1.5.0] — 2026-05-04
 
 ### Added
