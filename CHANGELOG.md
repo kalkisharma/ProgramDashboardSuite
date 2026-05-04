@@ -6,6 +6,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.7.0] — 2026-05-04
+
+### Added
+- Work Days UI: new popup button in Gantt toolbar lets users configure work days directly in the app (7 labeled checkboxes, Mon–Sun); setting persists to `localStorage`; Excel `Work Days` Project Info key takes priority when present and syncs the button label on load
+- Keyboard shortcuts table in Help modal: two-column layout listing all keyboard interactions (arrow nav, Enter/Space, zoom, inline edit, Esc)
+- `aria-live="polite"` on `#app-toast` — screen readers now announce Reset undo, row renumbered, and task added messages
+- Spec table keyboard access: all spec rows now have `tabindex="0"` and respond to both `Enter` and `Space` to open the side panel
+- "Clear Filters" recovery link in Gantt no-results message and "Clear filter" link in Specs empty state
+- Zoom indices now persist to `localStorage` (`vh-zoom-gantt`, `vh-zoom-specs`, `vh-zoom-org`) and restore on page reload; writes are debounced 500 ms to avoid thrashing; indices are validated against array bounds on restore
+- Weight unit now read from `Project Info` `Weight Unit` key (default `lb`); shown in all Weight Budget KPI cards, column headers, and tooltips; Weight Budget column headers exported dynamically to match
+
+### Changed
+- Work day default changed from Mon–Thu to Mon–Fri; sample Excel `Work Days` row updated to `Mon,Tue,Wed,Thu,Fri`
+- Toast undo window extended from 15 s to 30 s for the Reset action
+- Toast `showToast()` now guards against a non-undoable toast replacing an active undo toast (`toastHasUndo` flag)
+- `toLocaleDateString('en-US', …)` replaced with `toLocaleDateString(undefined, …)` in two Program Dashboard date strings — uses the browser's locale instead of hardcoding US
+- Help modal: updated Work Days troubleshooting text to reference the toolbar button and Mon–Fri default
+- Calendar day cells: `onclick` attribute replaced with `data-date` + `addEventListener` — no inline JS in generated HTML
+- Drop-box border-radius reduced from 16 px to 10 px
+- Toast slide travel increased from 6 px to 12 px for clearer entrance animation
+- Help modal: `role="dialog"`, `aria-modal="true"`, `aria-labelledby="help-modal-title"` added; close button gets `aria-label="Close"`; help button `aria-label` updated to "Help and keyboard shortcuts"
+- Focus trap added to help modal: Tab cycles within the modal; focus returns to the opener button on close; Esc closes the modal
+- Tab widget: `.tabs` div gets `role="tablist"`; each tab button gets `role="tab"`, `aria-selected`, and `aria-controls`; `switchTab()` keeps `aria-selected` in sync
+- All five tab panels get `role="tabpanel"` and `aria-labelledby`
+- Eight icon-only toolbar buttons now have `aria-label` (zoom in/out ×3 tabs, calendar toggle, side panel close, help button, theme toggle)
+- Calendar toggle button: `aria-expanded` toggled by `toggleGanttCalendar()`
+- Theme toggle button: `aria-label` updated on every theme cycle to reflect the current theme
+- All CSS transitions (`.tab-btn`, `.btn-secondary`, `.zoom-btn`, `#dropzone`, `.drop-box`, `#side-panel`, `.prog-bar-fill`, `.team-row-arrow`, `#theme-toggle`) moved inside `@media (prefers-reduced-motion: no-preference)` blocks — the existing toast and theme-change transitions were already guarded
+
+---
+
 ## [1.6.0] — 2026-05-03
 
 ### Added

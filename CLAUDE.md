@@ -20,7 +20,7 @@ python -m http.server
 ```javascript
 const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
 let S_tasksOriginal = [];          // deep-copy at parse time; used by resetGanttToImported()
-let ganttWorkDays   = [1,2,3,4];   // Mon–Thu; parsed from Project Info "Work Days" key
+let ganttWorkDays   = [1,2,3,4,5]; // Mon–Fri default; overridden by Work Days UI or Project Info "Work Days" key
 let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks what the side panel is showing
 let spCurrentId   = null; // specId string, taskId number, or person name string
 let barDrag = { active: false, taskId: null, mode: null, ... }; // Gantt bar drag state
@@ -59,7 +59,7 @@ Missing optional sheets are silently skipped; their tabs are hidden. Missing req
 | `Program Start` | Informational |
 | `Program End` | Informational (formerly `Target FAA Type Certificate`) |
 | `Phase N Name` | Names each WBS phase (e.g. `Phase 1 Name`, `Phase 2 Name`, …up to 20) |
-| `Work Days` | Comma-separated work days (e.g. `"Mon,Tue,Wed,Thu"`); default Mon–Thu if absent |
+| `Work Days` | Comma-separated work days (e.g. `"Mon,Tue,Wed,Thu,Fri"`); default Mon–Fri if absent; also settable via Work Days button in Gantt toolbar (persisted to `localStorage` as `vh-workdays`) |
 
 Phase names from `Phase N Name` rows override the built-in `PHASE_NAMES_FALLBACK` array everywhere they appear (Gantt filter labels, Program Dashboard phase bars).
 
@@ -174,7 +174,7 @@ Built with a recursive SVG layout algorithm:
 
 ### Sample Data
 
-`generateSampleExcel()` generates a complete **TW-2 Hybrid-Electric Tilt-Wing UAM** program workbook: 32 schedule tasks across 6 WBS phases, 27 specs across 6 categories, a 17-person org chart, and a 13-subsystem weight budget. The Project Info sheet uses the current field names (`Project Subtitle`, `File Administrator`, `Program End`, `Phase N Name` rows, `Work Days = Mon,Tue,Wed,Thu`). Use this to test all tabs. The button is hidden after any file is loaded.
+`generateSampleExcel()` generates a complete **TW-2 Hybrid-Electric Tilt-Wing UAM** program workbook: 32 schedule tasks across 6 WBS phases, 27 specs across 6 categories, a 17-person org chart, and a 13-subsystem weight budget. The Project Info sheet uses the current field names (`Project Subtitle`, `File Administrator`, `Program End`, `Phase N Name` rows, `Work Days = Mon,Tue,Wed,Thu,Fri`, `Weight Unit = lb`). Use this to test all tabs. The button is hidden after any file is loaded.
 
 ### Rendering Pattern
 

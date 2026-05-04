@@ -53,7 +53,9 @@ body {
   color: var(--muted);
   cursor: pointer;
   font-size: 0.875rem;
-  transition: all 0.15s;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tab-btn { transition: all 0.15s; }
 }
 .tab-btn.active { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 700; }
 .tab-btn:hover:not(.active) { border-color: var(--accent); color: var(--accent); }
@@ -66,8 +68,10 @@ body {
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.82rem;
-  transition: all 0.15s;
   white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn-secondary { transition: all 0.15s; }
 }
 .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -82,16 +86,20 @@ body {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  transition: background 0.2s;
+}
+@media (prefers-reduced-motion: no-preference) {
+  #dropzone { transition: background 0.2s; }
 }
 #dropzone.drag-over { background: rgba(88,166,255,0.06); }
 
 .drop-box {
   border: 2px dashed var(--border);
-  border-radius: 16px;
+  border-radius: 10px;
   padding: 56px 80px;
   text-align: center;
-  transition: border-color 0.2s;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .drop-box { transition: border-color 0.2s; }
 }
 #dropzone.drag-over .drop-box { border-color: var(--accent); }
 .drop-icon { font-size: 3rem; margin-bottom: 14px; }
@@ -203,7 +211,9 @@ body {
   font-size: 1rem;
   line-height: 1;
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .zoom-btn { transition: all 0.15s; }
 }
 .zoom-btn:hover { border-color: var(--accent); color: var(--accent); }
 #gantt-toolbar select {
@@ -386,10 +396,12 @@ button.cal-d { background:none; border:none; font:inherit; color:inherit; width:
   background: var(--surface);
   border-left: 1px solid var(--border);
   z-index: 200;
-  transition: right 0.28s cubic-bezier(.4,0,.2,1);
   display: flex;
   flex-direction: column;
   box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+}
+@media (prefers-reduced-motion: no-preference) {
+  #side-panel { transition: right 0.28s cubic-bezier(.4,0,.2,1); }
 }
 #side-panel.open { right: 0; }
 
@@ -514,7 +526,10 @@ button.cal-d { background:none; border:none; font:inherit; color:inherit; width:
 .prog-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 0.82rem; }
 .prog-bar-label { width: 180px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
 .prog-bar-track { flex: 1; height: 10px; background: var(--border); border-radius: 5px; overflow: hidden; }
-.prog-bar-fill  { height: 100%; border-radius: 5px; transition: width 0.3s; }
+.prog-bar-fill  { height: 100%; border-radius: 5px; }
+@media (prefers-reduced-motion: no-preference) {
+  .prog-bar-fill { transition: width 0.3s; }
+}
 .prog-bar-pct   { width: 40px; text-align: right; color: var(--muted); font-size: 0.78rem; }
 .spec-pill-row  { display: flex; gap: 16px; flex-wrap: wrap; }
 .spec-pill {
@@ -540,7 +555,10 @@ button.cal-d { background:none; border:none; font:inherit; color:inherit; width:
   user-select: none;
 }
 .team-row:hover { background: rgba(88,166,255,0.07); }
-.team-row-arrow { color: var(--muted); font-size: 0.68rem; transition: transform 0.18s; flex-shrink: 0; }
+.team-row-arrow { color: var(--muted); font-size: 0.68rem; flex-shrink: 0; }
+@media (prefers-reduced-motion: no-preference) {
+  .team-row-arrow { transition: transform 0.18s; }
+}
 .team-dropdown {
   display: none; margin: 0 6px 10px 6px;
   background: var(--bg); border: 1px solid var(--border);
@@ -638,7 +656,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
   border-radius: 8px; padding: 10px 16px;
   display: flex; align-items: center; gap: 12px;
   font-size: 0.83rem; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  opacity: 0; transform: translateY(6px); pointer-events: none;
+  opacity: 0; transform: translateY(12px); pointer-events: none;
 }
 #app-toast.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
 @media (prefers-reduced-motion: no-preference) {
@@ -660,8 +678,10 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
   cursor: pointer;
   font-size: 1rem;
   display: flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
   flex-shrink: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  #theme-toggle { transition: all 0.15s; }
 }
 #theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -742,17 +762,17 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
     <div id="project-subtitle">Drop an Excel file to load your project</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div class="tabs" id="tabs" style="display:none">
-      <button class="tab-btn active" data-tab="gantt" onclick="switchTab(this,'gantt')">Gantt Chart</button>
-      <button class="tab-btn"        data-tab="specs"   onclick="switchTab(this,'specs')">Vehicle Specifications</button>
-      <button class="tab-btn"        data-tab="prog"    onclick="switchTab(this,'prog')">Program Dashboard</button>
-      <button class="tab-btn" id="weight-tab-btn" data-tab="weight" onclick="switchTab(this,'weight')" style="display:none">Weight Budget</button>
-      <button class="tab-btn" id="org-tab-btn"    data-tab="org"    onclick="switchTab(this,'org')"    style="display:none">Org Chart</button>
+    <div class="tabs" id="tabs" role="tablist" style="display:none">
+      <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="gantt-panel"  data-tab="gantt"   onclick="switchTab(this,'gantt')">Gantt Chart</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="specs-panel"  data-tab="specs"   onclick="switchTab(this,'specs')">Vehicle Specifications</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="prog-panel"   data-tab="prog"    onclick="switchTab(this,'prog')">Program Dashboard</button>
+      <button class="tab-btn" id="weight-tab-btn" role="tab" aria-selected="false" aria-controls="weight-panel" data-tab="weight" onclick="switchTab(this,'weight')" style="display:none">Weight Budget</button>
+      <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    onclick="switchTab(this,'org')"    style="display:none">Org Chart</button>
     </div>
     <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
     <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Export current dashboard to Excel" style="display:none">Export to Excel</button>
-    <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" title="User guide">?</button>
-    <button id="theme-toggle" onclick="toggleTheme()" title="Theme: Dark">🌙</button>
+    <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
+    <button id="theme-toggle" onclick="toggleTheme()" aria-label="Switch theme" title="Theme: Dark">🌙</button>
   </div>
 </div>
 
@@ -784,11 +804,11 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
   <div id="dashboard">
 
     <!-- GANTT TAB -->
-    <div class="tab-panel active" id="gantt-panel">
+    <div class="tab-panel active" id="gantt-panel" role="tabpanel" aria-labelledby="tab-btn-gantt">
       <div id="gantt-toolbar">
-        <button class="zoom-btn" onclick="adjustZoom(-1)" title="Zoom out (Ctrl+scroll)">−</button>
+        <button class="zoom-btn" onclick="adjustZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
         <span id="zoom-label">100%</span>
-        <button class="zoom-btn" onclick="adjustZoom(1)" title="Zoom in (Ctrl+scroll)">+</button>
+        <button class="zoom-btn" onclick="adjustZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom</span>
         <div style="width:1px;height:18px;background:var(--border);margin:0 10px;flex-shrink:0"></div>
         <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Phase:</span>
@@ -800,11 +820,13 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
           <option value="all">All</option>
         </select>
         <span style="flex:1"></span>
-        <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar">📅</button>
+        <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar" aria-label="Toggle mini calendar" aria-expanded="false">📅</button>
+        <button class="btn-secondary" id="workdays-btn" onclick="toggleWorkdaysPicker()" title="Configure work days" aria-label="Configure work days" aria-expanded="false" style="font-size:0.75rem;padding:5px 10px">Mon–Fri ▾</button>
         <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
         <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
         <button class="btn-secondary" onclick="resetGanttToImported()" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
         <div id="gantt-calendar"></div>
+        <div id="workdays-picker" style="display:none;position:absolute;top:100%;right:0;z-index:210;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap"></div>
       </div>
       <div id="gantt-container">
         <div id="gantt-left">
@@ -828,7 +850,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
     </div>
 
     <!-- SPECS TAB -->
-    <div class="tab-panel" id="specs-panel">
+    <div class="tab-panel" id="specs-panel" role="tabpanel" aria-labelledby="tab-btn-specs">
       <div id="specs-toolbar">
         <span style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase">Filter:</span>
         <select id="specs-filter" onchange="renderSpecTable()">
@@ -836,9 +858,9 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
         </select>
         <span id="specs-count" style="font-size:0.8rem;color:var(--muted);margin-left:4px"></span>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-          <button class="zoom-btn" onclick="adjustSpecsZoom(-1)" title="Zoom out (Ctrl+scroll)">−</button>
+          <button class="zoom-btn" onclick="adjustSpecsZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
           <span id="specs-zoom-label" class="zoom-label">100%</span>
-          <button class="zoom-btn" onclick="adjustSpecsZoom(1)" title="Zoom in (Ctrl+scroll)">+</button>
+          <button class="zoom-btn" onclick="adjustSpecsZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         </div>
       </div>
       <div id="specs-body">
@@ -847,21 +869,21 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
     </div>
 
     <!-- PROGRAM DASHBOARD TAB -->
-    <div class="tab-panel" id="prog-panel">
+    <div class="tab-panel" id="prog-panel" role="tabpanel" aria-labelledby="tab-btn-prog">
       <div id="prog-body"></div>
     </div>
 
     <!-- WEIGHT BUDGET TAB -->
-    <div class="tab-panel" id="weight-panel">
+    <div class="tab-panel" id="weight-panel" role="tabpanel" aria-labelledby="tab-btn-weight">
       <div id="weight-body"></div>
     </div>
 
     <!-- ORG CHART TAB -->
-    <div class="tab-panel" id="org-panel">
+    <div class="tab-panel" id="org-panel" role="tabpanel" aria-labelledby="tab-btn-org">
       <div id="org-toolbar" style="display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
-        <button class="zoom-btn" onclick="adjustOrgZoom(-1)" title="Zoom out (Ctrl+scroll)">−</button>
+        <button class="zoom-btn" onclick="adjustOrgZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
         <span id="org-zoom-label" class="zoom-label">100%</span>
-        <button class="zoom-btn" onclick="adjustOrgZoom(1)" title="Zoom in (Ctrl+scroll)">+</button>
+        <button class="zoom-btn" onclick="adjustOrgZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom · drag to pan</span>
       </div>
       <div id="org-empty" style="display:none">
@@ -884,7 +906,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
 <div id="side-panel">
   <div id="sp-header">
     <div id="sp-title">Details</div>
-    <button id="sp-close" onclick="closeSidePanel()">✕</button>
+    <button id="sp-close" onclick="closeSidePanel()" aria-label="Close" title="Close">✕</button>
   </div>
   <div id="sp-body"></div>
 </div>
@@ -897,9 +919,9 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
 
 <!-- HELP MODAL -->
 <div id="help-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:900;align-items:center;justify-content:center">
-  <div id="help-modal" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 16px 48px rgba(0,0,0,0.5)">
-    <button onclick="toggleHelp()" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:2px 6px;border-radius:4px" title="Close">✕</button>
-    <h2 style="font-size:1rem;font-weight:700;margin-bottom:18px">Program Dashboard — User Guide</h2>
+  <div id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 16px 48px rgba(0,0,0,0.5)">
+    <button onclick="toggleHelp()" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:2px 6px;border-radius:4px" aria-label="Close" title="Close">✕</button>
+    <h2 id="help-modal-title" style="font-size:1rem;font-weight:700;margin-bottom:18px">Program Dashboard — User Guide</h2>
 
     <div style="font-size:0.83rem;line-height:1.65;color:var(--text)">
 
@@ -928,11 +950,22 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
       <li style="margin-bottom:4px">A tab is blank → check that the sheet name in your Excel matches exactly (including capitalisation).</li>
       <li style="margin-bottom:4px">Gantt bars are missing → check that Start Date and End Date columns contain valid dates, not text.</li>
       <li style="margin-bottom:4px">Weight Budget or Org Chart tab is not showing → those tabs only appear when the matching Excel sheet has data.</li>
-      <li>Work days look wrong → add a <em>Work Days</em> row to Project Info (e.g. <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Mon,Tue,Wed,Thu</code>). Default is Mon–Thu.</li>
+      <li>Work days look wrong → use the <strong>Work Days</strong> button in the Gantt toolbar, or add a <em>Work Days</em> row to Project Info (e.g. <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Mon,Tue,Wed,Thu,Fri</code>). Default is Mon–Fri.</li>
     </ul>
 
     <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Saving your edits</p>
     <p style="color:var(--muted)">Use <strong style="color:var(--text)">Export to Excel</strong> in the top-right to export your current dashboard back to a dated .xlsx file. The exported file can be re-imported into this tool.</p>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:16px;margin-bottom:8px">Keyboard shortcuts</p>
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">↑ / ↓</kbd></td><td style="padding:5px 8px;color:var(--muted)">Move focus between Gantt task rows</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd></td><td style="padding:5px 8px;color:var(--muted)">Open side panel for focused Gantt row</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">+</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">−</kbd></td><td style="padding:5px 8px;color:var(--muted)">Zoom in / out on the Gantt chart</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+scroll</kbd></td><td style="padding:5px 8px;color:var(--muted)">Zoom Gantt, Specs, or Org chart (cursor over panel)</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> on cell</td><td style="padding:5px 8px;color:var(--muted)">Edit Gantt task name, team, or % inline</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Space</kbd> on row</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for a Specifications row</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Esc</kbd></td><td style="padding:5px 8px;color:var(--muted)">Cancel an inline edit without saving</td></tr>
+    </table>
 
     </div>
   </div>
@@ -942,7 +975,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
 // ─── App State ────────────────────────────────────────────────────────────────
 const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
 let S_tasksOriginal = [];          // deep-copy at parse time for reset
-let ganttWorkDays = [1,2,3,4];    // Mon–Thu default; overridden by Project Info "Work Days"
+let ganttWorkDays = [1,2,3,4,5];  // Mon–Fri default; overridden by Project Info or Work Days UI
 let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks which item the side panel is showing
 let spCurrentId   = null; // specId string, taskId number, or person name string
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
@@ -1026,38 +1059,84 @@ function toggleTheme() {
   const btn = document.getElementById('theme-toggle');
   btn.textContent = theme === 'dark' ? '🌙' : theme === 'dim' ? '🌓' : '☀';
   btn.title = 'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1);
+  btn.setAttribute('aria-label', 'Switch theme (currently ' + theme.charAt(0).toUpperCase() + theme.slice(1) + ')');
   if (S.tasks.length) renderGantt();
   if (S.org.length) renderOrgChart();
 }
 
 let toastTimer = null;
+let toastHasUndo = false;
 function showToast(msg, undoFn, duration) {
   duration = duration || 5000;
+  // Don't replace an active undo toast with a non-undoable one
+  if (toastHasUndo && !undoFn) return;
   const toast   = document.getElementById('app-toast');
   const msgEl   = document.getElementById('app-toast-msg');
   const undoBtn = document.getElementById('app-toast-undo');
   clearTimeout(toastTimer);
+  toastHasUndo = !!undoFn;
   msgEl.textContent = msg;
   undoBtn.style.display = undoFn ? '' : 'none';
-  undoBtn.onclick = undoFn ? () => { undoFn(); toast.classList.remove('visible'); } : null;
+  undoBtn.onclick = undoFn ? () => { undoFn(); toast.classList.remove('visible'); toastHasUndo = false; } : null;
   toast.classList.add('visible');
-  toastTimer = setTimeout(() => toast.classList.remove('visible'), duration);
+  toastTimer = setTimeout(() => { toast.classList.remove('visible'); toastHasUndo = false; }, duration);
 }
 
+let _helpOpener = null;
+let _helpFocusTrapActive = false;
 function toggleHelp() {
   const overlay = document.getElementById('help-overlay');
+  const modal   = document.getElementById('help-modal');
   const open = overlay.style.display === 'flex';
-  overlay.style.display = open ? 'none' : 'flex';
+  if (open) {
+    overlay.style.display = 'none';
+    modal.removeEventListener('keydown', _trapHelpFocus);
+    _helpFocusTrapActive = false;
+    if (_helpOpener) { _helpOpener.focus(); _helpOpener = null; }
+  } else {
+    _helpOpener = document.activeElement;
+    overlay.style.display = 'flex';
+    const first = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (first) first.focus();
+    if (!_helpFocusTrapActive) {
+      modal.addEventListener('keydown', _trapHelpFocus);
+      _helpFocusTrapActive = true;
+    }
+  }
 }
+function _trapHelpFocus(e) {
+  if (e.key !== 'Tab') return;
+  const modal = document.getElementById('help-modal');
+  const focusable = Array.from(modal.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'));
+  if (!focusable.length) return;
+  const first = focusable[0], last = focusable[focusable.length - 1];
+  if (e.shiftKey) {
+    if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+  } else {
+    if (document.activeElement === last)  { e.preventDefault(); first.focus(); }
+  }
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('help-overlay').style.display === 'flex') toggleHelp();
+});
 document.getElementById('help-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('help-overlay')) toggleHelp();
 });
 (function applyTheme() {
   const theme = localStorage.getItem('vh-theme') || 'dark';
   const btn = document.getElementById('theme-toggle');
-  if (theme === 'dim')   { document.body.classList.add('dim-mode');   btn.textContent = '🌓'; btn.title = 'Theme: Dim';   }
-  else if (theme === 'light') { document.body.classList.add('light-mode'); btn.textContent = '☀';  btn.title = 'Theme: Light'; }
-  else                        {                                             btn.textContent = '🌙'; btn.title = 'Theme: Dark';  }
+  if (theme === 'dim')   { document.body.classList.add('dim-mode');   btn.textContent = '🌓'; btn.title = 'Theme: Dim';   btn.setAttribute('aria-label', 'Switch theme (currently Dim)'); }
+  else if (theme === 'light') { document.body.classList.add('light-mode'); btn.textContent = '☀';  btn.title = 'Theme: Light'; btn.setAttribute('aria-label', 'Switch theme (currently Light)'); }
+  else                        {                                             btn.textContent = '🌙'; btn.title = 'Theme: Dark';  btn.setAttribute('aria-label', 'Switch theme (currently Dark)'); }
+
+  // Restore saved work days before any file load (Excel key overrides on import)
+  const savedWd = localStorage.getItem('vh-workdays');
+  if (savedWd) {
+    try {
+      const parsed = JSON.parse(savedWd);
+      if (Array.isArray(parsed) && parsed.length > 0) ganttWorkDays = parsed;
+    } catch(e) {}
+  }
 })();
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
@@ -1151,9 +1230,10 @@ function teamColor(t) { return TEAM_COLORS[t] || '#58a6ff'; }
 
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 function switchTab(btn, id) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
+  btn.setAttribute('aria-selected', 'true');
   document.getElementById(id + '-panel').classList.add('active');
   closeSidePanel();
 }
@@ -1219,7 +1299,14 @@ function parseWorkbook(wb) {
     XLSX.utils.sheet_to_json(ws1, { header:1 })
       .forEach(r => { if (r[0] && r[1] != null) S.info[String(r[0]).trim()] = r[1]; });
     const wd = S.info['Work Days'];
-    if (wd) { const parsed = parseWorkDays(String(wd)); if (parsed.length) ganttWorkDays = parsed; }
+    if (wd) {
+      const parsed = parseWorkDays(String(wd));
+      if (parsed.length) {
+        ganttWorkDays = parsed;
+        const wdBtn = document.getElementById('workdays-btn');
+        if (wdBtn) wdBtn.textContent = workdaysSummary(parsed) + ' ▾';
+      }
+    }
   }
 
   const ws2 = wb.Sheets['Schedule'];
@@ -1284,13 +1371,16 @@ function parseWorkbook(wb) {
   if (ws5) {
     const rows = XLSX.utils.sheet_to_json(ws5, { header: 1 });
     const h = rows[0] || [];
+    // Find weight columns flexibly: exact match first, then any header starting with "Target Weight" / "Estimated Weight"
+    const tgtCol = h.find(c => c === 'Target Weight (lb)') || h.find(c => String(c).startsWith('Target Weight')) || 'Target Weight (lb)';
+    const estCol = h.find(c => c === 'Estimated Weight (lb)') || h.find(c => String(c).startsWith('Estimated Weight')) || 'Estimated Weight (lb)';
     S.weights = rows.slice(1).filter(r => r[h.indexOf('Subsystem')] != null).map(r => {
       const g = k => r[h.indexOf(k)];
       return {
         subsystem: String(g('Subsystem') || ''),
         group:     String(g('Group') || ''),
-        target:    Number(g('Target Weight (lb)')) || 0,
-        estimated: Number(g('Estimated Weight (lb)')) || 0,
+        target:    Number(g(tgtCol)) || 0,
+        estimated: Number(g(estCol)) || 0,
         status:    String(g('Status') || 'TBD'),
         notes:     String(g('Notes') || ''),
       };
@@ -1547,6 +1637,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
+let _zoomSaveTimer = null;
 function adjustZoom(dir) {
   const right = document.getElementById('gantt-right');
   const oldPx = ganttZoom;
@@ -1557,6 +1648,8 @@ function adjustZoom(dir) {
   renderGantt();
   // Scale scroll position proportionally so the view stays anchored to the same date
   right.scrollLeft = Math.round(oldScroll * (ganttZoom / oldPx));
+  clearTimeout(_zoomSaveTimer);
+  _zoomSaveTimer = setTimeout(() => localStorage.setItem('vh-zoom-gantt', zoomIdx), 500);
 }
 
 document.getElementById('gantt-right').addEventListener('wheel', e => {
@@ -1567,14 +1660,75 @@ document.getElementById('gantt-right').addEventListener('wheel', e => {
 
 function toggleGanttCalendar() {
   const cal = document.getElementById('gantt-calendar');
+  const btn = document.getElementById('cal-toggle-btn');
   if (!cal) return;
   const isOpen = cal.classList.toggle('open');
+  if (btn) btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   if (isOpen) {
     const today = new Date();
     calDisplayMonth = { year: today.getFullYear(), month: today.getMonth() };
     renderGanttCalendar();
   }
 }
+
+const WD_NAMES = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+const WD_LABELS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+function workdaysSummary(wds) {
+  const days = [1,2,3,4,5,6,0].filter(d => wds.includes(d)); // Mon-first display order
+  if (days.length === 0) return 'No work days';
+  if (JSON.stringify([...wds].sort()) === JSON.stringify([1,2,3,4,5])) return 'Mon–Fri';
+  if (JSON.stringify([...wds].sort()) === JSON.stringify([1,2,3,4])) return 'Mon–Thu';
+  return days.map(d => WD_NAMES[d]).join(',');
+}
+
+function applyWorkDays(wds) {
+  ganttWorkDays = wds;
+  localStorage.setItem('vh-workdays', JSON.stringify(wds));
+  const btn = document.getElementById('workdays-btn');
+  if (btn) btn.textContent = workdaysSummary(wds) + ' ▾';
+  if (S.tasks.length) renderGantt();
+}
+
+function toggleWorkdaysPicker() {
+  const picker = document.getElementById('workdays-picker');
+  const btn    = document.getElementById('workdays-btn');
+  if (!picker) return;
+  const isOpen = picker.style.display !== 'none';
+  if (isOpen) {
+    picker.style.display = 'none';
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    return;
+  }
+  // Build checkboxes
+  const dayOrder = [1,2,3,4,5,6,0]; // Mon–Sun
+  picker.innerHTML = `<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:8px">Work Days</div>` +
+    dayOrder.map(d => `
+      <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" data-dow="${d}" ${ganttWorkDays.includes(d) ? 'checked' : ''} style="accent-color:var(--accent)">
+        ${WD_LABELS[d]}
+      </label>`).join('');
+  picker.style.display = 'block';
+  if (btn) btn.setAttribute('aria-expanded', 'true');
+  picker.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = Array.from(picker.querySelectorAll('input[type="checkbox"]:checked')).map(c => +c.dataset.dow);
+      if (checked.length === 0) { cb.checked = true; return; } // require at least 1
+      applyWorkDays(checked);
+      if (btn) btn.textContent = workdaysSummary(ganttWorkDays) + ' ▾';
+    });
+  });
+}
+
+// Close work days picker when clicking outside
+document.addEventListener('click', e => {
+  const picker = document.getElementById('workdays-picker');
+  const btn    = document.getElementById('workdays-btn');
+  if (picker && picker.style.display !== 'none' && !picker.contains(e.target) && btn && !btn.contains(e.target)) {
+    picker.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+  }
+});
 
 function navigateCalendar(delta) {
   if (!calDisplayMonth) return;
@@ -1652,7 +1806,7 @@ function renderGanttCalendar() {
     const phStyle = phEntry ? `border-top:2px solid ${phEntry.color};padding-top:1px;` : '';
     const cls     = 'cal-d' + (isToday ? ' cal-today' : '') + (isOff ? ' cal-off' : '');
     const inner   = `<div>${d}</div><div class="cal-marker">${markerHtml}</div>`;
-    html += `<button type="button" class="${cls}" style="${phStyle}"${tipAttr} onclick="jumpToGanttDate('${ds}')">${inner}</button>`;
+    html += `<button type="button" class="${cls}" style="${phStyle}"${tipAttr} data-date="${ds}">${inner}</button>`;
   }
 
   const endDow = new Date(year, month, daysInMonth).getDay();
@@ -1666,6 +1820,9 @@ function renderGanttCalendar() {
   </div>`;
 
   cal.innerHTML = html;
+  cal.querySelectorAll('button[data-date]').forEach(btn => {
+    btn.addEventListener('click', () => jumpToGanttDate(btn.dataset.date));
+  });
 }
 
 function jumpToGanttDate(dateStr) {
@@ -1681,12 +1838,15 @@ function jumpToGanttDate(dateStr) {
 // ── Specs zoom ────────────────────────────────────────────────────────────────
 const SPECS_ZOOM_STEPS = [0.6, 0.72, 0.84, 1.0, 1.15, 1.3, 1.5];
 let specsZoomIdx = 2; // default 0.84rem = 100%
+let _specsZoomSaveTimer = null;
 function adjustSpecsZoom(dir) {
   specsZoomIdx = Math.max(0, Math.min(SPECS_ZOOM_STEPS.length - 1, specsZoomIdx + dir));
   const scale = SPECS_ZOOM_STEPS[specsZoomIdx];
   document.getElementById('specs-zoom-label').textContent = Math.round((scale / 0.84) * 100) + '%';
   const tbl = document.querySelector('.specs-table');
   if (tbl) tbl.style.fontSize = scale + 'rem';
+  clearTimeout(_specsZoomSaveTimer);
+  _specsZoomSaveTimer = setTimeout(() => localStorage.setItem('vh-zoom-specs', specsZoomIdx), 500);
 }
 document.getElementById('specs-body').addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
@@ -1697,6 +1857,7 @@ document.getElementById('specs-body').addEventListener('wheel', e => {
 // ── Org zoom ──────────────────────────────────────────────────────────────────
 const ORG_ZOOM_STEPS = [0.4, 0.55, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0];
 let orgZoomIdx = 4; // default 1.0 = 100%
+let _orgZoomSaveTimer = null;
 function adjustOrgZoom(dir) {
   orgZoomIdx = Math.max(0, Math.min(ORG_ZOOM_STEPS.length - 1, orgZoomIdx + dir));
   const scale = ORG_ZOOM_STEPS[orgZoomIdx];
@@ -1709,6 +1870,8 @@ function adjustOrgZoom(dir) {
   // Update wrapper dimensions so the container scrolls the full scaled area
   wrap.style.width  = Math.round(parseFloat(svg.getAttribute('width'))  * scale) + 'px';
   wrap.style.height = Math.round(parseFloat(svg.getAttribute('height')) * scale) + 'px';
+  clearTimeout(_orgZoomSaveTimer);
+  _orgZoomSaveTimer = setTimeout(() => localStorage.setItem('vh-zoom-org', orgZoomIdx), 500);
 }
 document.getElementById('org-container').addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
@@ -1764,7 +1927,7 @@ function renderGantt() {
 
   const lb = document.getElementById('gantt-left-body');
   if (!visibleTasks.length) {
-    lb.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem;text-align:center">No tasks match the current filters.</div>';
+    lb.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem;text-align:center">No tasks match the current filters. <button onclick="document.getElementById(\'gantt-phase-filter\').value=\'all\';document.getElementById(\'gantt-team-filter\').value=\'all\';ganttPhaseFilter=\'all\';ganttTeamFilter=\'all\';renderGantt()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filters</button></div>';
     document.getElementById('gantt-svg-wrap').innerHTML = '';
     document.getElementById('gantt-header-svg-wrap').innerHTML = '';
     return;
@@ -2272,7 +2435,7 @@ function resetGanttToImported() {
   const snapshot = S.tasks.map(t => ({ ...t, deps: [...t.deps] }));
   S.tasks = S_tasksOriginal.map(t => ({ ...t, deps: [...t.deps] }));
   renderGantt();
-  showToast('Schedule reset to imported state.', () => { S.tasks = snapshot; renderGantt(); }, 15000);
+  showToast('Schedule reset to imported state.', () => { S.tasks = snapshot; renderGantt(); }, 30000);
 }
 
 // ─── SAVE TO EXCEL ────────────────────────────────────────────────────────────
@@ -2311,7 +2474,8 @@ function saveToExcel() {
 
   // Weight Budget
   if (S.weights.length) {
-    const wRows = [['Subsystem','Group','Target Weight (lb)','Estimated Weight (lb)','Status','Notes']];
+    const wu = getWeightUnit();
+    const wRows = [['Subsystem','Group',`Target Weight (${wu})`,`Estimated Weight (${wu})`,'Status','Notes']];
     S.weights.forEach(w => wRows.push([w.subsystem, w.group, w.target, w.estimated, w.status, w.notes]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wRows), 'Weight Budget');
   }
@@ -2412,7 +2576,7 @@ function renderProgDash() {
   const finalMs = milestones.slice().sort((a, b) => (b.end || b.start) - (a.end || a.start))[0];
   const finalMsDate = finalMs ? (finalMs.end || finalMs.start) : null;
   const finalMsDateStr = finalMsDate
-    ? finalMsDate.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' })
+    ? finalMsDate.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' })
     : 'TBD';
   const daysToFinal = finalMsDate ? daysBetween(TODAY, finalMsDate) : null;
   const daysToFinalStr = daysToFinal === null ? '' :
@@ -2460,7 +2624,7 @@ function renderProgDash() {
       const pct = t.pct || 0;
       const [cls, label] = pct >= 100 ? ['tts-done','Done'] : pct > 0 ? ['tts-progress', pct + '%'] : ['tts-pending','Not Started'];
       const msIcon = t.milestone ? ' <span title="Milestone" style="color:#d29922">◆</span>' : '';
-      const dateStr = t.end ? t.end.toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' }) : '';
+      const dateStr = t.end ? t.end.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }) : '';
       return `<div class="team-task-item">
         <span class="tts ${cls}">${label}</span>
         <span style="flex:1">${esc(t.wbs)} &nbsp;${esc(t.name)}${msIcon}</span>
@@ -2537,20 +2701,22 @@ function renderProgDash() {
 }
 
 // ─── WEIGHT BUDGET ────────────────────────────────────────────────────────────
+function getWeightUnit() { return String(S.info['Weight Unit'] || 'lb'); }
 function showWtTooltip(e, el) {
   const est    = Number(el.dataset.est);
   const tgt    = Number(el.dataset.tgt);
   const total  = Number(el.dataset.total);
   const name   = el.dataset.name;
+  const unit   = getWeightUnit();
   const margin = tgt - est;
   const mSign  = margin >= 0 ? '+' : '';
   const mColor = margin >= 0 ? '#3fb950' : '#d29922';
   tooltip.innerHTML = `
     <div style="font-weight:700;margin-bottom:5px">${esc(name)}</div>
-    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Estimated</span><strong>${est.toLocaleString()} lb</strong></div>
-    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Target</span><strong>${tgt.toLocaleString()} lb</strong></div>
-    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Margin</span><strong style="color:${mColor}">${mSign}${margin.toLocaleString()} lb</strong></div>
-    <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--muted);font-size:0.75rem">Total vehicle est.: <strong style="color:var(--text)">${total.toLocaleString()} lb</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Estimated</span><strong>${est.toLocaleString()} ${esc(unit)}</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Target</span><strong>${tgt.toLocaleString()} ${esc(unit)}</strong></div>
+    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Margin</span><strong style="color:${mColor}">${mSign}${margin.toLocaleString()} ${esc(unit)}</strong></div>
+    <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--muted);font-size:0.75rem">Total vehicle est.: <strong style="color:var(--text)">${total.toLocaleString()} ${esc(unit)}</strong></div>
   `;
   tooltip.style.display = 'block';
   positionTooltip(e);
@@ -2561,6 +2727,7 @@ function renderWeightBudget() {
   const body = document.getElementById('weight-body');
   if (!body || !S.weights.length) return;
 
+  const unit        = getWeightUnit();
   const totalTarget = S.weights.reduce((s, w) => s + w.target, 0);
   const totalEst    = S.weights.reduce((s, w) => s + w.estimated, 0);
   const totalMargin = totalTarget - totalEst;
@@ -2573,15 +2740,15 @@ function renderWeightBudget() {
     <div class="kpi-row">
       <div class="kpi-card">
         <div class="kpi-label">Total Target</div>
-        <div class="kpi-value" style="font-size:1.6rem">${totalTarget.toLocaleString()} lb</div>
+        <div class="kpi-value" style="font-size:1.6rem">${totalTarget.toLocaleString()} ${esc(unit)}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Total Estimated</div>
-        <div class="kpi-value" style="font-size:1.6rem">${totalEst.toLocaleString()} lb</div>
+        <div class="kpi-value" style="font-size:1.6rem">${totalEst.toLocaleString()} ${esc(unit)}</div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">Margin Remaining</div>
-        <div class="kpi-value" style="font-size:1.6rem;color:${marginColor}">${marginSign}${totalMargin.toLocaleString()} lb</div>
+        <div class="kpi-value" style="font-size:1.6rem;color:${marginColor}">${marginSign}${totalMargin.toLocaleString()} ${esc(unit)}</div>
         <div class="kpi-sub">${marginPct}% of target</div>
       </div>
     </div>
@@ -2591,8 +2758,8 @@ function renderWeightBudget() {
       <div class="wt-row wt-row-header">
         <div>Subsystem</div>
         <div>Estimated vs Target <span style="font-size:0.65rem;opacity:0.7">│ = target · hover for details</span></div>
-        <div style="text-align:right">Est. (lb)</div>
-        <div style="text-align:right">Tgt (lb)</div>
+        <div style="text-align:right">Est. (${esc(unit)})</div>
+        <div style="text-align:right">Tgt (${esc(unit)})</div>
         <div style="text-align:right">Margin</div>
       </div>
       ${S.weights.map(w => {
@@ -2717,13 +2884,25 @@ function renderSpecTable() {
   }
 
   const wrap = document.getElementById('specs-table-wrap');
+  if (!list.length) {
+    const cat = document.getElementById('specs-filter').value;
+    const msg = cat !== 'all'
+      ? `No specifications match the current filter. <button onclick="document.getElementById('specs-filter').value='all';renderSpecTable()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filter</button>`
+      : 'No specifications loaded.';
+    wrap.innerHTML = `<div style="padding:24px;color:var(--muted);font-size:0.82rem;text-align:center">${msg}</div>`;
+    return;
+  }
   wrap.innerHTML = `<table class="specs-table"><thead><tr>${thHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
   wrap.querySelectorAll('th[data-sort-col]').forEach(th =>
     th.addEventListener('click', () => setSpecSort(th.dataset.sortCol))
   );
   wrap.querySelectorAll('tr[data-spec-id]').forEach(row => {
     row.style.cursor = 'pointer';
+    row.tabIndex = 0;
     row.addEventListener('click', () => openSpecPanel(row.dataset.specId));
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSpecPanel(row.dataset.specId); }
+    });
   });
 }
 
@@ -3156,7 +3335,8 @@ function generateSampleExcel() {
     ['File Administrator','S. Torres'],
     ['Program Start',     '2025-03-03'],
     ['Program End',       '2027-12-19'],
-    ['Work Days',         'Mon,Tue,Wed,Thu'],
+    ['Work Days',         'Mon,Tue,Wed,Thu,Fri'],
+    ['Weight Unit',       'lb'],
     ['Phase 1 Name',      'Concept'],
     ['Phase 2 Name',      'Preliminary Design'],
     ['Phase 3 Name',      'Detail Design'],
@@ -3287,7 +3467,30 @@ function generateSampleExcel() {
 
   XLSX.writeFile(wb, 'vehicle_project.xlsx');
 }
+
+// ─── Init: restore persisted zoom indices and work days button label ──────────
+(function initPersistedState() {
+  const savedGanttZoom = parseInt(localStorage.getItem('vh-zoom-gantt'));
+  if (!isNaN(savedGanttZoom) && savedGanttZoom >= 0 && savedGanttZoom < ZOOM_STEPS.length) {
+    zoomIdx   = savedGanttZoom;
+    ganttZoom = ZOOM_STEPS[zoomIdx];
+    document.getElementById('zoom-label').textContent = Math.round((ganttZoom / 4) * 100) + '%';
+  }
+  const savedSpecsZoom = parseInt(localStorage.getItem('vh-zoom-specs'));
+  if (!isNaN(savedSpecsZoom) && savedSpecsZoom >= 0 && savedSpecsZoom < SPECS_ZOOM_STEPS.length) {
+    specsZoomIdx = savedSpecsZoom;
+    document.getElementById('specs-zoom-label').textContent = Math.round((SPECS_ZOOM_STEPS[specsZoomIdx] / 0.84) * 100) + '%';
+  }
+  const savedOrgZoom = parseInt(localStorage.getItem('vh-zoom-org'));
+  if (!isNaN(savedOrgZoom) && savedOrgZoom >= 0 && savedOrgZoom < ORG_ZOOM_STEPS.length) {
+    orgZoomIdx = savedOrgZoom;
+    document.getElementById('org-zoom-label').textContent = Math.round(ORG_ZOOM_STEPS[orgZoomIdx] * 100) + '%';
+  }
+  // Sync work days button label
+  const wdBtn = document.getElementById('workdays-btn');
+  if (wdBtn) wdBtn.textContent = workdaysSummary(ganttWorkDays) + ' ▾';
+})();
 </script>
-<div id="app-toast"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
+<div id="app-toast" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
 </body>
 </html>
