@@ -1091,7 +1091,7 @@ document.addEventListener('drop', e => {
   if (f) loadFile(f);
 });
 document.getElementById('file-input').addEventListener('change', e => {
-  if (e.target.files[0]) loadFile(e.target.files[0]);
+  if (e.target.files[0]) { loadFile(e.target.files[0]); e.target.value = ''; }
 });
 
 function loadFile(file) {
