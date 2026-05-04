@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.2] — 2026-05-04
+
+### Changed
+- Light mode palette shifted to a warmer, softer neutral: `--bg #edecea`, `--surface #e2e0dc`, `--border #cac7c2` — reduces eye strain vs. the previous near-white; surfaces now clearly distinct from the background
+- Light mode `--muted` darkened: `#636c76` → `#5a6370` — improves small-text contrast from ~5.1:1 to ~5.8:1
+- Org chart node cards in light mode: fill changed from pure `#ffffff` to `#f4f2ef` — warm elevated tone, no longer a harsh white hole against the soft page background
+- Theme toggle now re-renders the org chart (same pattern as Gantt) so node card colors update immediately without a tab switch
+- Dark ↔ light transition smoothed: a `theme-changing` class applies a 220ms `background-color`/`color`/`border-color` transition on key structural elements during the toggle only — hover states are unaffected
+- Reset button renamed "Reset to Imported" for clarity; now requires confirmation: *"Reset to imported state? All edits will be lost."*
+- Gantt bar drag: minimum 4px movement threshold before drag activates — prevents accidental bar moves when clicking a bar to inspect it; click-only interactions no longer trigger a re-render
+
+### Fixed
+- Calendar badge font size raised from `0.65rem` (10.4px) to `0.72rem` (11.5px) — was below the 11px accessibility minimum
+- Calendar day cells converted from `<div onclick>` to `<button type="button">` — keyboard-focusable and correctly announced as interactive by screen readers (WCAG 2.1 Level A)
+
+---
+
 ## [1.4.1] — 2026-05-03
 
 ### Security

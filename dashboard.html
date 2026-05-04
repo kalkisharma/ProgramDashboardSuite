@@ -239,7 +239,8 @@ body {
 .cal-dh.cal-dh-off { opacity: 0.45; }
 .cal-d.cal-off { background: rgba(128,128,128,0.07); }
 .cal-dot { display:inline-block; width:6px; height:6px; transform:rotate(45deg); border-radius:1px; }
-.cal-badge { display:inline-block; font-size:0.65rem; line-height:1.2; padding:0 3px; border-radius:2px; color:#fff; font-weight:700; min-width:14px; text-align:center; }
+.cal-badge { display:inline-block; font-size:0.72rem; line-height:1.2; padding:0 3px; border-radius:2px; color:#fff; font-weight:700; min-width:14px; text-align:center; }
+button.cal-d { background:none; border:none; font:inherit; color:inherit; width:100%; display:block; }
 .cal-marker { min-height:9px; display:flex; align-items:center; justify-content:center; }
 .cal-legend { display:flex; gap:14px; margin-top:10px; font-size:0.72rem; color:var(--muted); align-items:center; flex-wrap:wrap; }
 /* Shared zoom label style */
@@ -584,18 +585,26 @@ body.light-mode .wt-bar-tgt { background: rgba(0,0,0,0.45); }
 
 /* ── LIGHT MODE ──────────────────────────────────────────── */
 body.light-mode {
-  --bg: #f0f2f5;
-  --surface: #e8eaed;
-  --border: #d0d7de;
+  --bg: #edecea;
+  --surface: #e2e0dc;
+  --border: #cac7c2;
   --text: #1f2328;
-  --muted: #636c76;
+  --muted: #5a6370;
   --accent: #0969da;
   --danger: #cf222e;
   --warning: #9a6700;
   --success: #1a7f37;
 }
-body.light-mode #tooltip { background: #f0f2f5; }
-body.light-mode #gantt-drag-label { background: #e8eaed; }
+body.light-mode #tooltip { background: #edecea; }
+body.light-mode #gantt-drag-label { background: #e2e0dc; }
+
+/* Theme switch transition — scoped to toggle only, does not affect hover states */
+body.theme-changing,
+body.theme-changing .topbar,
+body.theme-changing #gantt-left,
+body.theme-changing #gantt-left-header,
+body.theme-changing #gantt-toolbar,
+body.theme-changing #side-panel { transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease; }
 
 /* ── THEME TOGGLE ────────────────────────────────────────── */
 #theme-toggle {
@@ -750,7 +759,7 @@ body.light-mode #gantt-drag-label { background: #e8eaed; }
         <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar">📅</button>
         <div style="width:1px;height:18px;background:var(--border);margin:0 2px 0 6px;flex-shrink:0"></div>
         <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
-        <button class="btn-secondary" onclick="resetGanttToImported()" title="Reset all edits back to imported data">↺ Reset</button>
+        <button class="btn-secondary" onclick="resetGanttToImported()" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
         <div id="gantt-calendar"></div>
       </div>
       <div id="gantt-container">
@@ -905,7 +914,7 @@ function esc(s) {
 let ganttScrolledToday = false;
 
 // Bar drag state
-let barDrag = { active: false, taskId: null, mode: null, startClientX: 0,
+let barDrag = { active: false, pending: false, taskId: null, mode: null, startClientX: 0,
                 origStart: null, origEnd: null, startScrollLeft: 0 };
 let barEls = {}; // taskId -> { bgRect, progRect, outlineRect, diamond, midY }
 
@@ -960,10 +969,13 @@ function wdDisplay(t) {
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 function toggleTheme() {
+  document.body.classList.add('theme-changing');
+  setTimeout(() => document.body.classList.remove('theme-changing'), 300);
   const light = document.body.classList.toggle('light-mode');
   localStorage.setItem('vh-theme', light ? 'light' : 'dark');
   document.getElementById('theme-toggle').textContent = light ? '🌙' : '☀';
   if (S.tasks.length) renderGantt();
+  if (S.org.length) renderOrgChart();
 }
 
 function toggleHelp() {
@@ -1299,10 +1311,9 @@ function startBarDrag(e, taskId) {
   const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
   const zone = getBarZone(svgX, t);
   if (!zone) { startPanDrag(e); return; }
-  barDrag.active = true; barDrag.taskId = taskId; barDrag.mode = zone;
+  barDrag.pending = true; barDrag.taskId = taskId; barDrag.mode = zone;
   barDrag.startClientX = e.clientX; barDrag.startScrollLeft = right.scrollLeft;
   barDrag.origStart = new Date(t.start); barDrag.origEnd = new Date(t.end);
-  right.style.cursor = (zone === 'resize-left' || zone === 'resize-right') ? 'ew-resize' : 'grabbing';
   hideTooltip(); e.preventDefault();
 }
 
@@ -1333,6 +1344,11 @@ function updateBarElementsDirect(taskId, newStart, newEnd) {
 }
 
 function doBarDragMove(e) {
+  if (barDrag.pending && Math.abs(e.clientX - barDrag.startClientX) > 4) {
+    barDrag.pending = false; barDrag.active = true;
+    const right = document.getElementById('gantt-right');
+    right.style.cursor = (barDrag.mode === 'resize-left' || barDrag.mode === 'resize-right') ? 'ew-resize' : 'grabbing';
+  }
   if (!barDrag.active) return;
   const right = document.getElementById('gantt-right');
   const scrollDelta = right.scrollLeft - barDrag.startScrollLeft;
@@ -1370,11 +1386,12 @@ function doBarDragMove(e) {
 }
 
 function endBarDrag() {
-  if (!barDrag.active) return;
-  barDrag.active = false;
+  if (!barDrag.active && !barDrag.pending) return;
+  const wasActive = barDrag.active;
+  barDrag.active = false; barDrag.pending = false;
   document.getElementById('gantt-drag-label').style.display = 'none';
   document.getElementById('gantt-right').style.cursor = '';
-  renderGantt();
+  if (wasActive) renderGantt();
 }
 
 function initGanttPan() {
@@ -1531,7 +1548,7 @@ function renderGanttCalendar() {
     const phStyle = phEntry ? `border-top:2px solid ${phEntry.color};padding-top:1px;` : '';
     const cls     = 'cal-d' + (isToday ? ' cal-today' : '') + (isOff ? ' cal-off' : '');
     const inner   = `<div>${d}</div><div class="cal-marker">${markerHtml}</div>`;
-    html += `<div class="${cls}" style="${phStyle}"${tipAttr} onclick="jumpToGanttDate('${ds}')">${inner}</div>`;
+    html += `<button type="button" class="${cls}" style="${phStyle}"${tipAttr} onclick="jumpToGanttDate('${ds}')">${inner}</button>`;
   }
 
   const endDow = new Date(year, month, daysInMonth).getDay();
@@ -2124,6 +2141,7 @@ function addGanttTask() {
 
 function resetGanttToImported() {
   if (!S_tasksOriginal.length) return;
+  if (!confirm('Reset to imported state? All edits will be lost.')) return;
   S.tasks = S_tasksOriginal.map(t => ({ ...t, deps: [...t.deps] }));
   renderGantt();
 }
@@ -2806,7 +2824,7 @@ function renderOrgChart() {
   svg.style.display = 'block';
 
   const isLightOrg = document.body.classList.contains('light-mode');
-  const cardBg      = isLightOrg ? '#ffffff'           : '#161b22';
+  const cardBg      = isLightOrg ? '#f4f2ef'           : '#161b22';
   const cardBorder  = isLightOrg ? 'rgba(0,0,0,0.08)'  : 'rgba(88,166,255,0.25)';
   const nameFill    = isLightOrg ? '#1f2328'            : '#e6edf3';
   const titleFill   = isLightOrg ? '#636c76'            : '#8b949e';
