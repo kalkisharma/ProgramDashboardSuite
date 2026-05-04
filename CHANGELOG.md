@@ -14,6 +14,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 - Program Dashboard team workload rows: click handler converted from inline `onclick` to `addEventListener` — consistent with the rest of the event model
 - Weight Budget hover tooltip: `onmouseenter`/`onmousemove`/`onmouseleave` attributes removed from bar template; replaced with `addEventListener` after DOM insertion
+- Calendar widget converted from in-flow layout to `position: absolute` overlay — no longer displaces the Gantt chart when opened; floats over it with a drop shadow and rounded corners; click outside to dismiss
+- Calendar typography increased: day numbers `0.82rem`, day headers `0.72rem`, legend and badge `0.72rem`/`0.65rem`; width fixed at `308px`
+
+### Fixed
+- Browse for File: file input value now reset after each load so the same file can be re-selected without reloading the page
 
 ---
 
