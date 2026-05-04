@@ -2121,7 +2121,6 @@ function addGanttTask() {
 function resetGanttToImported() {
   if (!S_tasksOriginal.length) return;
   S.tasks = S_tasksOriginal.map(t => ({ ...t, deps: [...t.deps] }));
-  ganttScrolledToday = false;
   renderGantt();
 }
 
