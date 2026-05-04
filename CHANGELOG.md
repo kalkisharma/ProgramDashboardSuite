@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4] — 2026-05-03
+
+### Added
+- Mini calendar widget in Gantt toolbar (📅 toggle button): shows current month with colored diamond markers for milestones and 2px phase-color top-borders on phase-start days; count badge when multiple milestones fall on the same date. Click any date to scroll the Gantt to that date and auto-collapse the calendar. Navigate with ‹/› arrows; empty months display with no filler markers.
+
+### Changed
+- Program Dashboard team workload rows: click handler converted from inline `onclick` to `addEventListener` — consistent with the rest of the event model
+- Weight Budget hover tooltip: `onmouseenter`/`onmousemove`/`onmouseleave` attributes removed from bar template; replaced with `addEventListener` after DOM insertion
+
+---
+
 ## [1.3] — 2026-05-03
 
 ### Added

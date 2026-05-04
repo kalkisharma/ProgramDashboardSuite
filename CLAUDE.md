@@ -13,7 +13,7 @@ python -m http.server
 
 ## Architecture
 
-**Single-file vanilla JS app** (`dashboard.html`, ~2850 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
+**Single-file vanilla JS app** (`dashboard.html`, ~3050 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
 
 ### Global State
 
@@ -26,6 +26,7 @@ let spCurrentId   = null; // specId string, taskId number, or person name string
 let barDrag = { active: false, taskId: null, mode: null, ... }; // Gantt bar drag state
 let barEls  = {};    // taskId → { bgRect, progRect, outlineRect, midY } (or { diamond, midY })
 let rowDrag = { active: false, srcIdx: null, dropIdx: null, rowCount: 0, lb: null, ghost: null, indicator: null };
+let calDisplayMonth = null; // { year, month } — month shown in the mini calendar; null when calendar was never opened
 ```
 
 - `S.info` — key/value pairs from the "Project Info" sheet
@@ -93,6 +94,8 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - The Gantt timeline is split into two SVGs: a sticky `#gantt-header-svg-wrap` (60px, contains month/week labels and Today marker) inside `#gantt-header-wrap`, and a scrollable `#gantt-svg-wrap` (body rows, bars, arrows) inside `#gantt-right`. Both live inside `#gantt-right-col`. The header SVG follows horizontal scroll via `translateX` set on each scroll event.
 
 **Gantt Filters:** The toolbar contains two `<select>` dropdowns (Phase and Team). State is held in `ganttPhaseFilter` / `ganttTeamFilter` (default `'all'`). `setGanttPhaseFilter()` / `setGanttTeamFilter()` update state and call `renderGantt()`. The filter builds a `visibleTasks` subset; the SVG date axis always spans the full `S.tasks` date range so the timeline doesn't shift when filtering. Dependency arrows are only drawn between tasks that are both visible.
+
+**Mini calendar (D1):** `#gantt-calendar` div lives between `#gantt-toolbar` and `#gantt-container` inside `#gantt-panel`. Toggled by the 📅 button via `toggleGanttCalendar()` (adds/removes `.open` class). `renderGanttCalendar()` builds a 7-column CSS grid for the active month, marking milestone days with phase-color rotated diamonds (count badge if ≥2 on same date) and phase-start days with a 2px phase-color `border-top`. Phase-start tasks are identified by `!wbs.includes('.') || wbs.endsWith('.0')`. `jumpToGanttDate(dateStr)` sets `gantt-right.scrollLeft` to `(target − ganttMinDateRef) / msPerDay * ganttZoom − viewportWidth/2` and removes `.open`. `navigateCalendar(delta)` mutates `calDisplayMonth` and re-renders.
 
 **Interactive editing (Gantt):** All edits operate on `S.tasks` directly and call `renderGantt()` to commit.
 

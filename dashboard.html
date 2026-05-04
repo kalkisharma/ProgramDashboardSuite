@@ -213,6 +213,27 @@ body {
   cursor: pointer;
 }
 #gantt-toolbar select:focus { outline: none; border-color: var(--accent); }
+#gantt-calendar {
+  display: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  flex-shrink: 0;
+  align-self: flex-start;
+  max-width: 268px;
+}
+#gantt-calendar.open { display: block; }
+.cal-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:0.82rem; font-weight:600; }
+.cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; }
+.cal-dh { text-align:center; font-size:0.65rem; color:var(--muted); padding-bottom:4px; }
+.cal-d { position:relative; text-align:center; font-size:0.72rem; padding:3px 1px; cursor:pointer; border-radius:3px; user-select:none; line-height:1.4; }
+.cal-d:hover { background:var(--border); }
+.cal-d.cal-today { font-weight:700; color:var(--accent); }
+.cal-d.cal-empty { cursor:default; }
+.cal-d.cal-empty:hover { background:transparent; }
+.cal-dot { display:inline-block; width:6px; height:6px; transform:rotate(45deg); border-radius:1px; }
+.cal-badge { display:inline-block; font-size:0.55rem; line-height:1.2; padding:0 2px; border-radius:2px; color:#fff; font-weight:700; }
+.cal-legend { display:flex; gap:14px; margin-top:8px; font-size:0.67rem; color:var(--muted); align-items:center; flex-wrap:wrap; }
 /* Shared zoom label style */
 .zoom-label, #zoom-label {
   font-size: 0.76rem;
@@ -718,9 +739,12 @@ body.light-mode #gantt-drag-label { background: #e8eaed; }
           <option value="all">All</option>
         </select>
         <span style="flex:1"></span>
+        <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar">📅</button>
+        <div style="width:1px;height:18px;background:var(--border);margin:0 2px 0 6px;flex-shrink:0"></div>
         <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
         <button class="btn-secondary" onclick="resetGanttToImported()" title="Reset all edits back to imported data">↺ Reset</button>
       </div>
+      <div id="gantt-calendar"></div>
       <div id="gantt-container">
         <div id="gantt-left">
           <div id="gantt-left-header">
@@ -1224,6 +1248,7 @@ let ganttZoom = ZOOM_STEPS[zoomIdx];
 let ganttMinDateRef = null;                      // set during renderGantt for adjustZoom scroll math
 let ganttPhaseFilter = 'all';
 let ganttTeamFilter  = 'all';
+let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
 function setGanttPhaseFilter(val) { ganttPhaseFilter = val; renderGantt(); }
 function setGanttTeamFilter(val)  { ganttTeamFilter  = val; renderGantt(); }
 const RH = 36;
@@ -1399,6 +1424,102 @@ document.getElementById('gantt-right').addEventListener('wheel', e => {
   e.preventDefault();
   adjustZoom(e.deltaY < 0 ? 1 : -1);
 }, { passive: false });
+
+function toggleGanttCalendar() {
+  const cal = document.getElementById('gantt-calendar');
+  if (!cal) return;
+  const isOpen = cal.classList.toggle('open');
+  if (isOpen) {
+    const today = new Date();
+    calDisplayMonth = { year: today.getFullYear(), month: today.getMonth() };
+    renderGanttCalendar();
+  }
+}
+
+function navigateCalendar(delta) {
+  if (!calDisplayMonth) return;
+  calDisplayMonth.month += delta;
+  if (calDisplayMonth.month > 11) { calDisplayMonth.month = 0; calDisplayMonth.year++; }
+  if (calDisplayMonth.month < 0)  { calDisplayMonth.month = 11; calDisplayMonth.year--; }
+  renderGanttCalendar();
+}
+
+function renderGanttCalendar() {
+  const cal = document.getElementById('gantt-calendar');
+  if (!cal || !calDisplayMonth) return;
+  const { year, month } = calDisplayMonth;
+
+  const msMap = {};
+  S.tasks.filter(t => t.milestone).forEach(t => {
+    const d = t.end || t.start;
+    if (!d) return;
+    const key = d.toISOString().slice(0, 10);
+    if (!msMap[key]) msMap[key] = [];
+    msMap[key].push(phaseColor(t.wbs));
+  });
+
+  const phStartMap = {};
+  S.tasks.filter(t => !t.wbs.includes('.') || t.wbs.endsWith('.0')).forEach(t => {
+    if (!t.start) return;
+    const key = t.start.toISOString().slice(0, 10);
+    phStartMap[key] = phaseColor(t.wbs.includes('.') ? t.wbs : t.wbs + '.0');
+  });
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const startDow    = new Date(year, month, 1).getDay();
+  const today       = new Date();
+
+  let html = `<div class="cal-nav">
+    <button class="zoom-btn" onclick="navigateCalendar(-1)">&#8249;</button>
+    <span>${MONTHS[month]} ${year}</span>
+    <button class="zoom-btn" onclick="navigateCalendar(1)">&#8250;</button>
+  </div><div class="cal-grid">`;
+
+  DAYS.forEach(d => { html += `<div class="cal-dh">${d}</div>`; });
+  for (let i = 0; i < startDow; i++) html += `<div class="cal-d cal-empty"></div>`;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
+    const colors  = msMap[ds] || [];
+    const phCol   = phStartMap[ds];
+    const style   = phCol ? `border-top:2px solid ${phCol};padding-top:1px;` : '';
+    const cls     = 'cal-d' + (isToday ? ' cal-today' : '');
+    let inner = `<div>${d}</div>`;
+    if (colors.length === 1) {
+      inner += `<div><span class="cal-dot" style="background:${colors[0]}"></span></div>`;
+    } else if (colors.length > 1) {
+      inner += `<div><span class="cal-badge" style="background:${colors[0]}">${colors.length}</span></div>`;
+    }
+    html += `<div class="${cls}" style="${style}" onclick="jumpToGanttDate('${ds}')">${inner}</div>`;
+  }
+
+  const endDow = new Date(year, month, daysInMonth).getDay();
+  for (let i = endDow + 1; i < 7; i++) html += `<div class="cal-d cal-empty"></div>`;
+  html += `</div>`;
+
+  const legendColor = phaseColor('1.0');
+  html += `<div class="cal-legend">
+    <span><span class="cal-dot" style="background:${legendColor};display:inline-block"></span>&nbsp;Milestone</span>
+    <span style="border-top:2px solid ${legendColor};display:inline-block;padding:1px 4px 0">Phase start</span>
+  </div>`;
+
+  cal.innerHTML = html;
+}
+
+function jumpToGanttDate(dateStr) {
+  if (!ganttMinDateRef) return;
+  const target = new Date(dateStr + 'T12:00:00');
+  const msPerDay = 86400000;
+  const dayOffset = (target - ganttMinDateRef) / msPerDay;
+  const right = document.getElementById('gantt-right');
+  if (!right) return;
+  right.scrollLeft = Math.max(0, dayOffset * ganttZoom - right.clientWidth / 2);
+  const cal = document.getElementById('gantt-calendar');
+  if (cal) cal.classList.remove('open');
+}
 
 // ── Specs zoom ────────────────────────────────────────────────────────────────
 const SPECS_ZOOM_STEPS = [0.6, 0.72, 0.84, 1.0, 1.15, 1.3, 1.5];
@@ -2153,7 +2274,7 @@ function renderProgDash() {
       </div>`;
     }).join('');
     return `
-      <div class="team-row" onclick="toggleTeamRow(this)">
+      <div class="team-row">
         <div class="prog-bar-label" title="${esc(team)}">${esc(team)}</div>
         <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${barW}%;background:var(--accent)"></div></div>
         <div class="prog-bar-pct">${count}</div>
@@ -2216,6 +2337,9 @@ function renderProgDash() {
       ${teamRows}
     </div>
   `;
+  body.querySelectorAll('.team-row').forEach(row => {
+    row.addEventListener('click', () => toggleTeamRow(row));
+  });
 }
 
 // ─── WEIGHT BUDGET ────────────────────────────────────────────────────────────
@@ -2287,8 +2411,7 @@ function renderWeightBudget() {
         return `<div class="wt-row">
           <div title="${esc(w.subsystem)} (${esc(w.group)})">${esc(w.subsystem)}</div>
           <div class="wt-bar-wrap" style="cursor:crosshair"
-            data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}"
-            onmouseenter="showWtTooltip(event,this)" onmousemove="positionTooltip(event)" onmouseleave="hideWtTooltip()">
+            data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}">
             <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
             <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
           </div>
@@ -2299,6 +2422,11 @@ function renderWeightBudget() {
       }).join('')}
     </div>
   `;
+  body.querySelectorAll('.wt-bar-wrap').forEach(el => {
+    el.addEventListener('mouseenter', e => showWtTooltip(e, el));
+    el.addEventListener('mousemove', positionTooltip);
+    el.addEventListener('mouseleave', hideWtTooltip);
+  });
 }
 
 // ─── SPECS ────────────────────────────────────────────────────────────────────
