@@ -6,6 +6,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.8.0] — 2026-05-04
+
+### Added
+- Floating "Today" label: when the Gantt is scrolled horizontally past the Today line, a small red pill label appears anchored at the top of the viewport — always visible regardless of scroll position; disappears when the Today line is in view. Today's date also included in the body SVG `aria-label` for screen readers.
+- Gantt empty state: loading a file with no tasks now shows a centered card ("No tasks found") with guidance and a link to the help modal, instead of a blank panel
+- Specs empty state: loading a file with no specs now shows a centered card ("No specifications found") with guidance
+- Spec text search: text input in the Specifications toolbar filters across spec ID, name, responsible group, and notes simultaneously; debounced 200 ms; shows a × clear button when active; count updates to reflect filtered results
+- Inline spec status editing: clicking (or pressing Enter/Space) on a status badge in the Specifications table cycles Achieved → Target → TBD → Achieved; the side panel updates immediately if open for that spec; status is exported with the next "Export to Excel"
+
+### Fixed
+- Work Days picker: checkboxes now wrapped in `<fieldset>/<legend>` — screen readers correctly announce the group context
+- Work Days picker: pressing Esc while the picker is open now closes it and returns focus to the Work Days button
+- Work Days picker: `renderGantt()` is now debounced 300 ms on checkbox changes — prevents up to 7 sequential re-renders when navigating checkboxes with the keyboard
+- Work Days `localStorage` validation: values restored from `vh-workdays` are now filtered to valid day indices (integers 0–6); corrupt or manually-edited values silently fall back to Mon–Fri default
+- Spec table: row click no longer fires when clicking a status badge (badge click is handled independently)
+
+---
+
 ## [1.7.0] — 2026-05-04
 
 ### Added
