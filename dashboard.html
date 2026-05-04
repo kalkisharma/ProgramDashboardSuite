@@ -1484,9 +1484,12 @@ function renderGanttCalendar() {
   const today       = new Date();
 
   let html = `<div class="cal-nav">
-    <button class="zoom-btn" onclick="navigateCalendar(-1)">&#8249;</button>
+    <button class="zoom-btn" onclick="navigateCalendar(-1);event.stopPropagation()">&#8249;</button>
     <span>${MONTHS[month]} ${year}</span>
-    <button class="zoom-btn" onclick="navigateCalendar(1)">&#8250;</button>
+    <div style="display:flex;gap:4px">
+      <button class="zoom-btn" onclick="navigateCalendar(1);event.stopPropagation()">&#8250;</button>
+      <button class="zoom-btn" onclick="document.getElementById('gantt-calendar').classList.remove('open');event.stopPropagation()" title="Close calendar">&#215;</button>
+    </div>
   </div><div class="cal-grid">`;
 
   DAYS.forEach(d => { html += `<div class="cal-dh">${d}</div>`; });
@@ -1529,8 +1532,6 @@ function jumpToGanttDate(dateStr) {
   const right = document.getElementById('gantt-right');
   if (!right) return;
   right.scrollLeft = Math.max(0, dayOffset * ganttZoom - right.clientWidth / 2);
-  const cal = document.getElementById('gantt-calendar');
-  if (cal) cal.classList.remove('open');
 }
 
 // ── Specs zoom ────────────────────────────────────────────────────────────────
