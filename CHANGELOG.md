@@ -6,6 +6,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.4.3] — 2026-05-04
+
+### Added
+- Dim mode — a third theme between dark and light: `--bg #22272e`, `--surface #2d333b`, `--border #444c56`, `--text #adbac7` — targets ~35% luminance for comfortable sustained-focus work in mixed-light environments; SVG renders with dark-mode colors
+- Theme now cycles dark → dim → light → dark; button icon reflects current state (`🌙` dark · `🌓` dim · `☀` light); tooltip reads "Theme: Dark / Dim / Light"
+
+### Fixed
+- Mini calendar no longer closes when clicking the theme toggle button — the click-outside-to-dismiss listener now correctly excludes the theme toggle
+
+### Changed
+- Theme transition CSS wrapped in `@media (prefers-reduced-motion: no-preference)` — users with reduced-motion OS preference no longer receive the background-color transition
+
+---
+
 ## [1.4.2] — 2026-05-04
 
 ### Changed

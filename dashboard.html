@@ -583,6 +583,21 @@ body.light-mode .wt-bar-tgt { background: rgba(0,0,0,0.45); }
 .wt-margin-pos { color: #3fb950; }
 .wt-margin-neg { color: #f85149; }
 
+/* ── DIM MODE ────────────────────────────────────────────── */
+body.dim-mode {
+  --bg: #22272e;
+  --surface: #2d333b;
+  --border: #444c56;
+  --text: #adbac7;
+  --muted: #768390;
+  --accent: #539bf5;
+  --danger: #e5534b;
+  --warning: #c69026;
+  --success: #46954a;
+}
+body.dim-mode #tooltip { background: #22272e; }
+body.dim-mode #gantt-drag-label { background: #2d333b; }
+
 /* ── LIGHT MODE ──────────────────────────────────────────── */
 body.light-mode {
   --bg: #edecea;
@@ -599,12 +614,14 @@ body.light-mode #tooltip { background: #edecea; }
 body.light-mode #gantt-drag-label { background: #e2e0dc; }
 
 /* Theme switch transition — scoped to toggle only, does not affect hover states */
-body.theme-changing,
-body.theme-changing .topbar,
-body.theme-changing #gantt-left,
-body.theme-changing #gantt-left-header,
-body.theme-changing #gantt-toolbar,
-body.theme-changing #side-panel { transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease; }
+@media (prefers-reduced-motion: no-preference) {
+  body.theme-changing,
+  body.theme-changing .topbar,
+  body.theme-changing #gantt-left,
+  body.theme-changing #gantt-left-header,
+  body.theme-changing #gantt-toolbar,
+  body.theme-changing #side-panel { transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease; }
+}
 
 /* ── THEME TOGGLE ────────────────────────────────────────── */
 #theme-toggle {
@@ -708,7 +725,7 @@ body.theme-changing #side-panel { transition: background-color 0.22s ease, color
     <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
     <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Save current dashboard to Excel" style="display:none">💾 Save to Excel</button>
     <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" title="User guide">?</button>
-    <button id="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">☀</button>
+    <button id="theme-toggle" onclick="toggleTheme()" title="Theme: Dark">🌙</button>
   </div>
 </div>
 
@@ -971,9 +988,17 @@ function wdDisplay(t) {
 function toggleTheme() {
   document.body.classList.add('theme-changing');
   setTimeout(() => document.body.classList.remove('theme-changing'), 300);
-  const light = document.body.classList.toggle('light-mode');
-  localStorage.setItem('vh-theme', light ? 'light' : 'dark');
-  document.getElementById('theme-toggle').textContent = light ? '🌙' : '☀';
+  const wasDim   = document.body.classList.contains('dim-mode');
+  const wasLight = document.body.classList.contains('light-mode');
+  document.body.classList.remove('dim-mode', 'light-mode');
+  // Cycle: dark → dim → light → dark
+  let theme = 'dark';
+  if (!wasDim && !wasLight)   { document.body.classList.add('dim-mode');   theme = 'dim';   }
+  else if (wasDim)            { document.body.classList.add('light-mode'); theme = 'light'; }
+  localStorage.setItem('vh-theme', theme);
+  const btn = document.getElementById('theme-toggle');
+  btn.textContent = theme === 'dark' ? '🌙' : theme === 'dim' ? '🌓' : '☀';
+  btn.title = 'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1);
   if (S.tasks.length) renderGantt();
   if (S.org.length) renderOrgChart();
 }
@@ -987,10 +1012,11 @@ document.getElementById('help-overlay').addEventListener('click', e => {
   if (e.target === document.getElementById('help-overlay')) toggleHelp();
 });
 (function applyTheme() {
-  if (localStorage.getItem('vh-theme') === 'light') {
-    document.body.classList.add('light-mode');
-    document.getElementById('theme-toggle').textContent = '🌙';
-  }
+  const theme = localStorage.getItem('vh-theme') || 'dark';
+  const btn = document.getElementById('theme-toggle');
+  if (theme === 'dim')   { document.body.classList.add('dim-mode');   btn.textContent = '🌓'; btn.title = 'Theme: Dim';   }
+  else if (theme === 'light') { document.body.classList.add('light-mode'); btn.textContent = '☀';  btn.title = 'Theme: Light'; }
+  else                        {                                             btn.textContent = '🌙'; btn.title = 'Theme: Dark';  }
 })();
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
@@ -1120,7 +1146,7 @@ document.getElementById('file-input').addEventListener('change', e => {
 document.addEventListener('click', e => {
   const cal = document.getElementById('gantt-calendar');
   const btn = document.getElementById('cal-toggle-btn');
-  if (cal && cal.classList.contains('open') && !cal.contains(e.target) && btn && !btn.contains(e.target)) {
+  if (cal && cal.classList.contains('open') && !cal.contains(e.target) && btn && !btn.contains(e.target) && !e.target.closest('#theme-toggle')) {
     cal.classList.remove('open');
   }
 });
