@@ -300,7 +300,13 @@ button.cal-d { background:none; border:none; font:inherit; color:inherit; width:
   position: sticky;
   top: 0;
   z-index: 2;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
 }
+.specs-table th:hover { color: var(--accent); }
+.spec-sort-ind { margin-left: 3px; opacity: 0.4; font-size: 0.75em; text-transform: none; }
+.spec-sort-ind.active { opacity: 1; color: var(--accent); }
 .specs-table td { padding: 7px 12px; border-bottom: 1px solid rgba(48,54,61,0.45); vertical-align: middle; }
 .spec-row:hover td { background: rgba(88,166,255,0.05); cursor: pointer; }
 .cat-header td {
@@ -600,18 +606,18 @@ body.dim-mode #gantt-drag-label { background: #2d333b; }
 
 /* ── LIGHT MODE ──────────────────────────────────────────── */
 body.light-mode {
-  --bg: #d8d5cf;
-  --surface: #cec9c3;
-  --border: #b5b0aa;
+  --bg: #edecea;
+  --surface: #e2e0dc;
+  --border: #cac7c2;
   --text: #1f2328;
-  --muted: #4e5760;
+  --muted: #5a6370;
   --accent: #0969da;
   --danger: #cf222e;
   --warning: #9a6700;
   --success: #1a7f37;
 }
-body.light-mode #tooltip { background: #d8d5cf; }
-body.light-mode #gantt-drag-label { background: #cec9c3; }
+body.light-mode #tooltip { background: #edecea; }
+body.light-mode #gantt-drag-label { background: #e2e0dc; }
 
 /* Theme switch transition — scoped to toggle only, does not affect hover states */
 @media (prefers-reduced-motion: no-preference) {
@@ -621,6 +627,25 @@ body.light-mode #gantt-drag-label { background: #cec9c3; }
   body.theme-changing #gantt-left-header,
   body.theme-changing #gantt-toolbar,
   body.theme-changing #side-panel { transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease; }
+}
+
+/* ── TOAST ───────────────────────────────────────────────── */
+#app-toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 800;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 0.83rem; box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  opacity: 0; transform: translateY(6px); pointer-events: none;
+}
+#app-toast.visible { opacity: 1; transform: translateY(0); pointer-events: auto; }
+@media (prefers-reduced-motion: no-preference) {
+  #app-toast { transition: opacity 0.18s ease, transform 0.18s ease; }
+}
+#app-toast-undo {
+  background: none; border: 1px solid var(--border); color: var(--accent);
+  border-radius: 4px; padding: 2px 8px; font-size: 0.78rem;
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
 }
 
 /* ── THEME TOGGLE ────────────────────────────────────────── */
@@ -723,7 +748,7 @@ body.light-mode #gantt-drag-label { background: #cec9c3; }
       <button class="tab-btn" id="org-tab-btn"    data-tab="org"    onclick="switchTab(this,'org')"    style="display:none">Org Chart</button>
     </div>
     <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
-    <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Save current dashboard to Excel" style="display:none">💾 Save to Excel</button>
+    <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Export current dashboard to Excel" style="display:none">Export to Excel</button>
     <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" title="User guide">?</button>
     <button id="theme-toggle" onclick="toggleTheme()" title="Theme: Dark">🌙</button>
   </div>
@@ -774,7 +799,7 @@ body.light-mode #gantt-drag-label { background: #cec9c3; }
         </select>
         <span style="flex:1"></span>
         <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar">📅</button>
-        <div style="width:1px;height:18px;background:var(--border);margin:0 2px 0 6px;flex-shrink:0"></div>
+        <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
         <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
         <button class="btn-secondary" onclick="resetGanttToImported()" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
         <div id="gantt-calendar"></div>
@@ -880,7 +905,7 @@ body.light-mode #gantt-drag-label { background: #cec9c3; }
 
     <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Tabs</p>
     <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:0.82rem">
-      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Gantt Chart</td><td style="padding:6px 8px;color:var(--muted)">Full program schedule with WBS, dependency arrows, today line, and work-day tracking. Best for: <strong>engineers and PMs</strong>. Drag bars to adjust dates, click tasks for details.</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Gantt Chart</td><td style="padding:6px 8px;color:var(--muted)">Full program schedule with WBS, dependency arrows, today line, and work-day tracking. Best for: <strong>engineers and PMs</strong>. Drag bars to adjust dates; click any task name, team, or % to edit inline.</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Specifications</td><td style="padding:6px 8px;color:var(--muted)">All vehicle/system performance specs with status (Achieved / Target / TBD). Best for: <strong>engineers</strong>. Click any row for dependencies and risk flags.</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Program Dashboard</td><td style="padding:6px 8px;color:var(--muted)">KPI summary: overall completion, milestones, phase progress, spec status, team workload. Best for: <strong>leadership and PMs</strong>.</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Weight Budget</td><td style="padding:6px 8px;color:var(--muted)">Mass budget bar chart by subsystem. Shown only if your Excel includes a <em>Weight Budget</em> sheet. Best for: <strong>engineers</strong>.</td></tr>
@@ -905,7 +930,7 @@ body.light-mode #gantt-drag-label { background: #cec9c3; }
     </ul>
 
     <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Saving your edits</p>
-    <p style="color:var(--muted)">Use <strong style="color:var(--text)">💾 Save to Excel</strong> in the top-right to export your current dashboard back to a dated .xlsx file. The exported file can be re-imported into this tool.</p>
+    <p style="color:var(--muted)">Use <strong style="color:var(--text)">Export to Excel</strong> in the top-right to export your current dashboard back to a dated .xlsx file. The exported file can be re-imported into this tool.</p>
 
     </div>
   </div>
@@ -1001,6 +1026,20 @@ function toggleTheme() {
   btn.title = 'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1);
   if (S.tasks.length) renderGantt();
   if (S.org.length) renderOrgChart();
+}
+
+let toastTimer = null;
+function showToast(msg, undoFn, duration) {
+  duration = duration || 5000;
+  const toast   = document.getElementById('app-toast');
+  const msgEl   = document.getElementById('app-toast-msg');
+  const undoBtn = document.getElementById('app-toast-undo');
+  clearTimeout(toastTimer);
+  msgEl.textContent = msg;
+  undoBtn.style.display = undoFn ? '' : 'none';
+  undoBtn.onclick = undoFn ? () => { undoFn(); toast.classList.remove('visible'); } : null;
+  toast.classList.add('visible');
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), duration);
 }
 
 function toggleHelp() {
@@ -1305,6 +1344,7 @@ let ganttZoom = ZOOM_STEPS[zoomIdx];
 let ganttMinDateRef = null;                      // set during renderGantt for adjustZoom scroll math
 let ganttPhaseFilter = 'all';
 let ganttTeamFilter  = 'all';
+let specSortState    = { col: null, dir: 'asc' };
 let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
 function setGanttPhaseFilter(val) { ganttPhaseFilter = val; renderGantt(); }
 function setGanttTeamFilter(val)  { ganttTeamFilter  = val; renderGantt(); }
@@ -1903,7 +1943,7 @@ function renderHeader(svg, NS, minD, maxD, W) {
   const headerBorder  = isLight ? '#d0d7de'         : '#30363d';
   const monthGridLine = isLight ? 'rgba(0,0,0,0.15)': 'rgba(48,54,61,0.6)';
   const weekGridLine  = isLight ? 'rgba(0,0,0,0.08)': 'rgba(48,54,61,0.4)';
-  const monthFill     = isLight ? '#4e5760'          : '#8b949e';
+  const monthFill     = isLight ? '#636c76'          : '#8b949e';
   const weekFill      = isLight ? '#8c959f'          : '#484f58';
 
   appendLine(svg, NS, 0, W, HH, HH, headerBorder, 1);
@@ -2117,6 +2157,7 @@ function endRowDrag(e) {
   S.tasks.splice(targetIdx, 0, dragged);
   recalcWBS(S.tasks);
   renderGantt();
+  showToast('Tasks renumbered — check spec dependency links.');
 }
 
 function recalcWBS(tasks) {
@@ -2163,13 +2204,16 @@ function addGanttTask() {
   };
   S.tasks.push(newTask);
   renderGantt();
+  const phaseNames = getPhaseNames();
+  showToast('Task added to ' + (phaseNames[lastPhase] || ('Phase ' + lastPhase)) + '.');
 }
 
 function resetGanttToImported() {
   if (!S_tasksOriginal.length) return;
-  if (!confirm('Reset to imported state? All edits will be lost.')) return;
+  const snapshot = S.tasks.map(t => ({ ...t, deps: [...t.deps] }));
   S.tasks = S_tasksOriginal.map(t => ({ ...t, deps: [...t.deps] }));
   renderGantt();
+  showToast('Schedule reset to imported state.', () => { S.tasks = snapshot; renderGantt(); }, 15000);
 }
 
 // ─── SAVE TO EXCEL ────────────────────────────────────────────────────────────
@@ -2531,49 +2575,93 @@ function renderSpecs() {
   renderSpecTable();
 }
 
+function specStatusRank(s) {
+  if (s.status === 'TBD') {
+    const risk = s.depIds.some(id => { const t = S.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY; });
+    return risk ? 0 : 1;
+  }
+  return s.status === 'Target' ? 2 : s.status === 'Achieved' ? 3 : 4;
+}
+
+function setSpecSort(col) {
+  if (specSortState.col === col) specSortState.dir = specSortState.dir === 'asc' ? 'desc' : 'asc';
+  else { specSortState.col = col; specSortState.dir = 'asc'; }
+  renderSpecTable();
+}
+
 function renderSpecTable() {
-  const cat = document.getElementById('specs-filter').value;
+  const cat  = document.getElementById('specs-filter').value;
   const list = cat === 'all' ? S.specs : S.specs.filter(s => s.category === cat);
-
-  const groups = {};
-  list.forEach(s => { (groups[s.category] = groups[s.category]||[]).push(s); });
-
   const count = list.length;
   document.getElementById('specs-count').textContent = `${count} specification${count!==1?'s':''}`;
 
-  let html = `<table class="specs-table"><thead><tr>
-    <th>Spec ID</th><th>Specification</th><th>Value</th><th>Units</th>
-    <th>Status</th><th>Responsible Group</th><th>Notes</th><th style="text-align:center">Dep. Tasks</th>
-  </tr></thead><tbody>`;
+  const SORT_COLS   = ['id','name','value','units','status','group','notes','deps'];
+  const SORT_LABELS = ['Spec ID','Specification','Value','Units','Status','Responsible Group','Notes','Dep. Tasks'];
+  const thHtml = SORT_COLS.map((c, i) => {
+    const active  = specSortState.col === c;
+    const ind     = active ? (specSortState.dir === 'asc' ? '↑' : '↓') : '↕';
+    const indCls  = 'spec-sort-ind' + (active ? ' active' : '');
+    const alignSt = c === 'deps' ? ' style="text-align:center"' : '';
+    return `<th${alignSt} data-sort-col="${c}">${SORT_LABELS[i]}<span class="${indCls}">${ind}</span></th>`;
+  }).join('');
 
-  Object.entries(groups).forEach(([c, specs]) => {
-    const col = SPEC_COLORS[c] || { bg:'rgba(88,166,255,.1)', text:'#58a6ff' };
-    html += `<tr class="cat-header"><td colspan="8" style="background:${col.bg};color:${col.text}">${esc(c)}</td></tr>`;
-    specs.forEach(s => {
-      const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
-      const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
-        const t = S.tasks.find(t => t.id === id);
-        return t && t.start && t.start <= TODAY;
-      });
-      const depText = s.depIds.length
-        ? `<span style="color:${hasRisk?'var(--danger)':'var(--muted)'};font-weight:${hasRisk?700:400}">${s.depIds.length}${hasRisk?' ⚠':''}</span>`
-        : `<span style="color:#484f58">—</span>`;
-      html += `<tr class="spec-row" data-spec-id="${esc(s.id)}">
-        <td><code style="color:${col.text};font-size:0.78rem">${esc(s.id)}</code></td>
-        <td><strong>${esc(s.name)}</strong></td>
-        <td>${esc(s.value)}</td>
-        <td style="color:var(--muted)">${esc(s.units)}</td>
-        <td><span class="badge ${sc}">${esc(s.status)}</span></td>
-        <td style="color:var(--muted);font-size:0.8rem">${esc(s.group)}</td>
-        <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${esc(s.notes)}">${esc(s.notes)||'—'}</td>
-        <td style="text-align:center">${depText}</td>
-      </tr>`;
+  const specRow = (s, col) => {
+    const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
+    const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
+      const t = S.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY;
     });
-  });
+    const depText = s.depIds.length
+      ? `<span style="color:${hasRisk?'var(--danger)':'var(--muted)'};font-weight:${hasRisk?700:400}">${s.depIds.length}${hasRisk?' ⚠':''}</span>`
+      : `<span style="color:#484f58">—</span>`;
+    return `<tr class="spec-row" data-spec-id="${esc(s.id)}">
+      <td><code style="color:${col.text};font-size:0.78rem">${esc(s.id)}</code></td>
+      <td><strong>${esc(s.name)}</strong></td>
+      <td>${esc(s.value)}</td>
+      <td style="color:var(--muted)">${esc(s.units)}</td>
+      <td><span class="badge ${sc}">${esc(s.status)}</span></td>
+      <td style="color:var(--muted);font-size:0.8rem">${esc(s.group)}</td>
+      <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${esc(s.notes)}">${esc(s.notes)||'—'}</td>
+      <td style="text-align:center">${depText}</td>
+    </tr>`;
+  };
 
-  html += '</tbody></table>';
+  let bodyHtml = '';
+  if (specSortState.col) {
+    const sorted = [...list].sort((a, b) => {
+      let va, vb;
+      switch (specSortState.col) {
+        case 'id':     va = a.id;             vb = b.id;             break;
+        case 'name':   va = a.name;           vb = b.name;           break;
+        case 'value':  va = a.value;          vb = b.value;          break;
+        case 'units':  va = a.units;          vb = b.units;          break;
+        case 'status': va = specStatusRank(a); vb = specStatusRank(b); break;
+        case 'group':  va = a.group;          vb = b.group;          break;
+        case 'notes':  va = a.notes;          vb = b.notes;          break;
+        case 'deps':   va = a.depIds.length;  vb = b.depIds.length;  break;
+        default: return 0;
+      }
+      const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
+      return specSortState.dir === 'asc' ? cmp : -cmp;
+    });
+    sorted.forEach(s => {
+      const col = SPEC_COLORS[s.category] || { bg:'rgba(88,166,255,.1)', text:'#58a6ff' };
+      bodyHtml += specRow(s, col);
+    });
+  } else {
+    const groups = {};
+    list.forEach(s => { (groups[s.category] = groups[s.category]||[]).push(s); });
+    Object.entries(groups).forEach(([c, specs]) => {
+      const col = SPEC_COLORS[c] || { bg:'rgba(88,166,255,.1)', text:'#58a6ff' };
+      bodyHtml += `<tr class="cat-header"><td colspan="8" style="background:${col.bg};color:${col.text}">${esc(c)}</td></tr>`;
+      specs.forEach(s => { bodyHtml += specRow(s, col); });
+    });
+  }
+
   const wrap = document.getElementById('specs-table-wrap');
-  wrap.innerHTML = html;
+  wrap.innerHTML = `<table class="specs-table"><thead><tr>${thHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+  wrap.querySelectorAll('th[data-sort-col]').forEach(th =>
+    th.addEventListener('click', () => setSpecSort(th.dataset.sortCol))
+  );
   wrap.querySelectorAll('tr[data-spec-id]').forEach(row => {
     row.style.cursor = 'pointer';
     row.addEventListener('click', () => openSpecPanel(row.dataset.specId));
@@ -2853,7 +2941,7 @@ function renderOrgChart() {
   const cardBg      = isLightOrg ? '#f4f2ef'           : '#161b22';
   const cardBorder  = isLightOrg ? 'rgba(0,0,0,0.08)'  : 'rgba(88,166,255,0.25)';
   const nameFill    = isLightOrg ? '#1f2328'            : '#e6edf3';
-  const titleFill   = isLightOrg ? '#4e5760'            : '#8b949e';
+  const titleFill   = isLightOrg ? '#636c76'            : '#8b949e';
 
   // Drop shadow filter (light mode only)
   const defs = document.createElementNS(NS, 'defs');
@@ -3141,5 +3229,6 @@ function generateSampleExcel() {
   XLSX.writeFile(wb, 'vehicle_project.xlsx');
 }
 </script>
+<div id="app-toast"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
 </body>
 </html>

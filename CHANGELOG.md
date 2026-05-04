@@ -6,6 +6,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.0] — 2026-05-04
+
+### Added
+- Undo toast for Reset: clicking "Reset to Imported" now executes immediately and shows a 15-second toast with an Undo button — restores the pre-reset task list on click; replaces the blocking `confirm()` dialog
+- Toast notification system: shared `showToast(msg, undoFn, duration)` infrastructure used by Reset, row reorder, and Add Task; slides in from bottom-right, auto-dismisses, respects `prefers-reduced-motion`
+- Row reorder toast: after dragging a task to a new position a toast reads "Tasks renumbered — check spec dependency links."
+- Add Task toast: after adding a task a toast reads "Task added to [Phase Name]."
+- Specifications table: click any column header to sort — flat sorted view replaces category grouping when a sort is active; Status column uses domain-natural order (At Risk → TBD → Target → Achieved); click again to reverse; active column shows ↑/↓ indicator, inactive columns show ↕
+
+### Changed
+- "💾 Save to Excel" renamed to "Export to Excel" (topbar button + help modal reference) — removes the anachronistic floppy disk emoji and uses standard terminology
+- Gantt toolbar action-zone divider margin balanced (`0 2px 0 6px` → `0 8px`) — clearer separation between view controls and action controls
+- Help modal Gantt Chart description updated: "click any task name, team, or % to edit inline" — surfaces the inline-edit interaction model that was previously undiscoverable
+- Light mode palette reverted to v1.4.3 values (`--bg #edecea`) — v1.4.4 darkening reversed per user decision
+
+---
+
 ## [1.4.4] — 2026-05-04
 
 ### Changed
