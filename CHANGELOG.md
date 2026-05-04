@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.1] — 2026-05-03
+
+### Security
+- Apply `esc()` to phase name labels in Gantt phase filter dropdown — values come from `S.info` (Excel)
+- Apply `esc()` to team names in Gantt team filter dropdown (both `value` attribute and display text) — values come from `S.tasks[].team` (Excel)
+- Apply `esc()` to subsystem name in weight budget tooltip `innerHTML` — value comes from `w.subsystem` (Excel)
+- Apply `esc()` to `w.subsystem` and `w.group` in weight budget bar `title` and `data-name` HTML attributes — unescaped `"` in either could break the surrounding attribute
+
+---
+
 ## [1.2] — 2026-05-03
 
 ### Changed

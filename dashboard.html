@@ -1461,7 +1461,7 @@ function renderGantt() {
     phaseSel.innerHTML = '<option value="all">All</option>';
     allPhases.forEach(ph => {
       const label = phaseNamesMap[ph] || PHASE_NAMES_FALLBACK[ph-1] || 'Phase ' + ph;
-      phaseSel.innerHTML += `<option value="${ph}">${ph}. ${label}</option>`;
+      phaseSel.innerHTML += `<option value="${ph}">${ph}. ${esc(label)}</option>`;
     });
     phaseSel.value = allPhases.map(String).includes(savedPhase) ? savedPhase : 'all';
   }
@@ -1470,7 +1470,7 @@ function renderGantt() {
   const savedTeam = teamSel ? teamSel.value : 'all';
   if (teamSel) {
     teamSel.innerHTML = '<option value="all">All</option>';
-    allTeams.forEach(tm => { teamSel.innerHTML += `<option value="${tm}">${tm}</option>`; });
+    allTeams.forEach(tm => { teamSel.innerHTML += `<option value="${esc(tm)}">${esc(tm)}</option>`; });
     teamSel.value = allTeams.includes(savedTeam) ? savedTeam : 'all';
   }
 
@@ -2226,7 +2226,7 @@ function showWtTooltip(e, el) {
   const mSign  = margin >= 0 ? '+' : '';
   const mColor = margin >= 0 ? '#3fb950' : '#d29922';
   tooltip.innerHTML = `
-    <div style="font-weight:700;margin-bottom:5px">${name}</div>
+    <div style="font-weight:700;margin-bottom:5px">${esc(name)}</div>
     <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Estimated</span><strong>${est.toLocaleString()} lb</strong></div>
     <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Target</span><strong>${tgt.toLocaleString()} lb</strong></div>
     <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Margin</span><strong style="color:${mColor}">${mSign}${margin.toLocaleString()} lb</strong></div>
@@ -2283,9 +2283,9 @@ function renderWeightBudget() {
         const mSign    = margin >= 0 ? '+' : '';
         const mClass   = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
         return `<div class="wt-row">
-          <div title="${w.subsystem} (${w.group})">${w.subsystem}</div>
+          <div title="${esc(w.subsystem)} (${esc(w.group)})">${esc(w.subsystem)}</div>
           <div class="wt-bar-wrap" style="cursor:crosshair"
-            data-name="${w.subsystem}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}"
+            data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}"
             onmouseenter="showWtTooltip(event,this)" onmousemove="positionTooltip(event)" onmouseleave="hideWtTooltip()">
             <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
             <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
