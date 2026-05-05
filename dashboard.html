@@ -768,6 +768,9 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
 }
 .g-pct-edit { width: 100%; text-align: right; }
 
+/* ── DEPENDENCY ARROW FOCUS RING ─────────────────────────── */
+path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-width: 3 !important; outline: none; }
+
 /* ── CRITICAL PATH TOGGLE ────────────────────────────────── */
 #gantt-cp-btn[aria-pressed="true"] {
   background: rgba(224,108,117,0.18);
@@ -790,6 +793,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
   padding-top: 4px;
 }
 
+@page { size: landscape; margin: 10mm; }
 @media print {
   :root {
     --bg: #ffffff; --surface: #f5f5f5; --text: #111111;
@@ -804,6 +808,8 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
   .tab-panel.active { display: block !important; }
   #gantt-right, #org-container { overflow: visible !important; }
   #gantt-right-col, #gantt-left { overflow: visible !important; }
+  #gantt-container { flex-wrap: wrap; }
+  #gantt-left { font-size: 0.72rem; min-width: 180px; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 </style>
@@ -880,6 +886,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
         <button class="btn-secondary" id="workdays-btn" onclick="toggleWorkdaysPicker()" title="Configure work days" aria-label="Configure work days" aria-expanded="false" style="font-size:0.75rem;padding:5px 10px">Mon–Fri ▾</button>
         <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
         <button class="btn-secondary" id="gantt-export-svg-btn" onclick="exportGanttSVG()" title="Export Gantt chart as SVG file" disabled>Export SVG</button>
+        <button class="btn-secondary" id="gantt-export-png-btn" onclick="exportGanttPNG()" title="Export Gantt chart as PNG image" disabled>Export PNG</button>
         <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
         <button class="btn-secondary" onclick="resetGanttToImported()" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
         <div id="gantt-calendar"></div>
@@ -949,6 +956,12 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
         <span id="org-zoom-label" class="zoom-label">100%</span>
         <button class="zoom-btn" onclick="adjustOrgZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom · drag to pan</span>
+        <div style="margin-left:auto;position:relative;display:flex;align-items:center">
+          <input id="org-search" type="text" placeholder="Search people…" aria-label="Search people"
+            style="background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:0.79rem;padding:4px 24px 4px 8px;outline:none;width:150px">
+          <button id="org-search-clear" onclick="orgSearchQuery='';document.getElementById('org-search').value='';renderOrgChart()" aria-label="Clear search"
+            style="display:none;position:absolute;right:5px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:0;line-height:1">×</button>
+        </div>
       </div>
       <div id="org-empty" style="display:none">
         <div style="font-size:2rem">👥</div>
@@ -1029,7 +1042,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> on cell</td><td style="padding:5px 8px;color:var(--muted)">Edit Gantt task name, team, or % inline</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Space</kbd> on row</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for a Specifications row</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Esc</kbd></td><td style="padding:5px 8px;color:var(--muted)">Cancel an inline edit without saving</td></tr>
-      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap">Click dependency arrow</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for the dependent task</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap">Click / Tab+Enter on arrow</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for the dependent task</td></tr>
     </table>
 
     </div>
@@ -1058,7 +1071,8 @@ let ganttScrolledToday = false;
 // Bar drag state
 let barDrag = { active: false, pending: false, taskId: null, mode: null, startClientX: 0,
                 origStart: null, origEnd: null, startScrollLeft: 0 };
-let barEls = {}; // taskId -> { bgRect, progRect, outlineRect, diamond, midY }
+let barEls      = {}; // taskId -> { bgRect, progRect, outlineRect, diamond, midY }
+let depArrowEls = []; // { el, predId, succId } — rebuilt each renderGantt()
 
 // Row reorder state
 let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
@@ -1499,6 +1513,9 @@ function renderDashboard() {
   specSearchQuery = '';
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';
+  orgSearchQuery = '';
+  const osInput2 = document.getElementById('org-search');
+  if (osInput2) { osInput2.value = ''; const osClear2 = document.getElementById('org-search-clear'); if (osClear2) osClear2.style.display = 'none'; }
   renderGantt();
   renderSpecs();
   renderProgDash();
@@ -1517,6 +1534,7 @@ let ganttTeamFilter  = 'all';
 let specSortState      = { col: null, dir: 'asc' };
 let specSearchQuery    = '';
 let showCriticalPath   = false;
+let orgSearchQuery     = '';
 let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
 let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
 function setGanttPhaseFilter(val) { ganttPhaseFilter = val; renderGantt(); }
@@ -2087,6 +2105,54 @@ function exportGanttSVG() {
   URL.revokeObjectURL(url);
 }
 
+function exportGanttPNG() {
+  const hWrap = document.getElementById('gantt-header-svg-wrap');
+  const bWrap = document.getElementById('gantt-svg-wrap');
+  if (!hWrap || !bWrap) return;
+  const hsvg = hWrap.querySelector('svg');
+  const bsvg = bWrap.querySelector('svg');
+  if (!hsvg || !bsvg) return;
+  const W  = +hsvg.getAttribute('width');
+  const hH = +hsvg.getAttribute('height');
+  const bH = +bsvg.getAttribute('height');
+  const NS = 'http://www.w3.org/2000/svg';
+  const combined = document.createElementNS(NS, 'svg');
+  combined.setAttribute('width', W); combined.setAttribute('height', hH + bH);
+  combined.setAttribute('xmlns', NS);
+  const defs = bsvg.querySelector('defs');
+  if (defs) combined.appendChild(defs.cloneNode(true));
+  Array.from(hsvg.childNodes).forEach(n => combined.appendChild(n.cloneNode(true)));
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('transform', `translate(0,${hH})`);
+  Array.from(bsvg.childNodes).forEach(n => { if (n.tagName !== 'defs') g.appendChild(n.cloneNode(true)); });
+  combined.appendChild(g);
+  const svgXml  = new XMLSerializer().serializeToString(combined);
+  const svgBlob = new Blob([svgXml], { type: 'image/svg+xml' });
+  const svgUrl  = URL.createObjectURL(svgBlob);
+  const img = new Image();
+  img.onload = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = hH + bH;
+    const ctx = canvas.getContext('2d');
+    const isDim   = document.body.classList.contains('dim-mode');
+    const isLight = document.body.classList.contains('light-mode');
+    ctx.fillStyle = isLight ? '#edecea' : isDim ? '#22272e' : '#0d1117';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0);
+    canvas.toBlob(pngBlob => {
+      const url = URL.createObjectURL(pngBlob);
+      const a   = document.createElement('a');
+      a.href    = url;
+      a.download = `${S.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(svgUrl);
+    }, 'image/png');
+  };
+  img.onerror = () => URL.revokeObjectURL(svgUrl);
+  img.src = svgUrl;
+}
+
 function renderGantt() {
   if (!S.tasks.length) {
     if (dashboardLoaded) {
@@ -2153,6 +2219,8 @@ function renderGantt() {
   const cpSet = showCriticalPath ? computeCriticalPath(S.tasks) : new Set();
   const exportBtn = document.getElementById('gantt-export-svg-btn');
   if (exportBtn) exportBtn.disabled = false;
+  const exportPngBtn = document.getElementById('gantt-export-png-btn');
+  if (exportPngBtn) exportPngBtn.disabled = false;
 
   // ── Left panel rows ────────────────────────────────
   lb.innerHTML = '';
@@ -2260,7 +2328,8 @@ function renderGantt() {
   headerWrap.style.transform = `translateX(-${document.getElementById('gantt-right').scrollLeft}px)`;
 
   // ── Body SVG ────────────────────────────────────────
-  barEls = {};
+  barEls      = {};
+  depArrowEls = [];
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', W); svg.setAttribute('height', bodyH);
   svg.setAttribute('role', 'application');
@@ -2303,8 +2372,29 @@ function renderGantt() {
     hit.setAttribute('width', W); hit.setAttribute('height', RH);
     hit.setAttribute('fill', 'transparent');
     hit.dataset.taskid = t.id;
-    hit.addEventListener('mouseenter', e => { if (!barDrag.active && !rowDrag.active) showTooltip(t, e); });
-    hit.addEventListener('mouseleave', hideTooltip);
+    hit.addEventListener('mouseenter', e => {
+      if (!barDrag.active && !rowDrag.active) {
+        showTooltip(t, e);
+        if (showCriticalPath && cpSet.has(t.id)) {
+          Object.entries(barEls).forEach(([id, els]) => {
+            const op = cpSet.has(+id) ? '1' : '0.15';
+            ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = op; });
+          });
+          depArrowEls.forEach(({ el, predId, succId }) => {
+            el.style.opacity = (cpSet.has(predId) && cpSet.has(succId)) ? '1' : '0.08';
+          });
+        }
+      }
+    });
+    hit.addEventListener('mouseleave', () => {
+      hideTooltip();
+      if (showCriticalPath) {
+        Object.values(barEls).forEach(els => {
+          ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = ''; });
+        });
+        depArrowEls.forEach(({ el }) => { el.style.opacity = ''; });
+      }
+    });
     hit.addEventListener('click', () => { if (!ganttDragDidMove && !barDrag.active) openTaskPanel(t.id); });
     svg.appendChild(hit);
 
@@ -2370,7 +2460,15 @@ function renderGantt() {
         if (showCriticalPath) p.setAttribute('stroke-dasharray', '5 3');
       }
       p.setAttribute('marker-end', 'url(#arr)');
+      p.setAttribute('tabindex', '0');
+      p.setAttribute('role', 'button');
+      const predTask = S.tasks.find(tk => tk.id === did);
+      p.setAttribute('aria-label', `Open ${t.name} — depends on ${predTask ? predTask.name : did}`);
       p.style.cursor = 'pointer';
+      p.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTaskPanel(t.id); }
+      });
+      depArrowEls.push({ el: p, predId: did, succId: t.id });
       svg.appendChild(p);
     });
   });
@@ -2785,6 +2883,14 @@ function getPhaseNames() {
   return names;
 }
 
+function toggleWtGroup(el) {
+  const items = el.nextElementSibling;
+  const arrow = el.querySelector('.wt-group-arrow');
+  const open  = items.style.display !== 'none';
+  items.style.display = open ? 'none' : '';
+  if (arrow) arrow.textContent = open ? '▶' : '▼';
+  el.setAttribute('aria-expanded', String(!open));
+}
 function toggleTeamRow(el) {
   const dd    = el.nextElementSibling;
   const arrow = el.querySelector('.team-row-arrow');
@@ -3007,7 +3113,7 @@ function renderWeightBudget() {
           if (!grouped[g]) grouped[g] = [];
           grouped[g].push(w);
         });
-        return Object.entries(grouped).map(([grpName, items]) => {
+        return Object.entries(grouped).map(([grpName, items], n) => {
           const gEst    = items.reduce((s, w) => s + w.estimated, 0);
           const gTgt    = items.reduce((s, w) => s + w.target, 0);
           const gMargin = gTgt - gEst;
@@ -3016,8 +3122,8 @@ function renderWeightBudget() {
           const gColor  = gMargin < 0 ? '#d29922' : '#3fb950';
           const gEstPct = Math.min(100, Math.round(gEst / maxVal * 100));
           const gTgtPct = Math.min(100, Math.round(gTgt / maxVal * 100));
-          const header  = `<div class="wt-row wt-group-header">
-            <div style="font-weight:700">${esc(grpName)}</div>
+          const header  = `<div class="wt-row wt-group-header" role="button" tabindex="0" aria-expanded="true" aria-controls="wt-grp-${n}" style="cursor:pointer">
+            <div style="font-weight:700"><span class="wt-group-arrow" style="margin-right:6px">▼</span>${esc(grpName)}</div>
             <div class="wt-bar-wrap" style="cursor:crosshair"
               data-name="${esc(grpName)}" data-est="${gEst}" data-tgt="${gTgt}" data-total="${totalEst}">
               <div class="wt-bar-est" style="width:${gEstPct}%;background:${gColor}"></div>
@@ -3026,7 +3132,7 @@ function renderWeightBudget() {
             <div style="text-align:right;font-weight:700">${gEst.toLocaleString()}</div>
             <div style="text-align:right;color:var(--muted);font-weight:700">${gTgt.toLocaleString()}</div>
             <div style="text-align:right;font-weight:700" class="${gClass}">${gSign}${gMargin.toLocaleString()}</div>
-          </div>`;
+          </div><div class="wt-group-items" id="wt-grp-${n}">`;
           const rows = items.map(w => {
             const margin   = w.target - w.estimated;
             const estPct   = Math.min(100, Math.round(w.estimated / maxVal * 100));
@@ -3046,7 +3152,7 @@ function renderWeightBudget() {
               <div style="text-align:right" class="${mClass}">${mSign}${margin.toLocaleString()}</div>
             </div>`;
           }).join('');
-          return header + rows;
+          return header + rows + '</div>';
         }).join('');
       })()}
       <div class="wt-row wt-total-row">
@@ -3062,6 +3168,12 @@ function renderWeightBudget() {
     el.addEventListener('mouseenter', e => showWtTooltip(e, el));
     el.addEventListener('mousemove', positionTooltip);
     el.addEventListener('mouseleave', hideWtTooltip);
+  });
+  body.addEventListener('click', e => { const h = e.target.closest('.wt-group-header'); if (h) toggleWtGroup(h); });
+  body.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      const h = e.target.closest('.wt-group-header'); if (h) { e.preventDefault(); toggleWtGroup(h); }
+    }
   });
 }
 
@@ -3456,11 +3568,15 @@ function renderOrgChart() {
   empty.style.display = 'none';
   container.style.display = 'block';
 
-  // Build tree
+  // Build tree (filtered by search query when active)
+  const q = orgSearchQuery.toLowerCase();
+  const orgData = q
+    ? S.org.filter(p => [p.name, p.title, p.team, p.email].some(v => v && v.toLowerCase().includes(q)))
+    : S.org;
   const nodeMap = {};
-  S.org.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
+  orgData.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
   const roots = [];
-  S.org.forEach(p => {
+  orgData.forEach(p => {
     const primary = p.reportsTo[0];
     if (primary && nodeMap[primary]) nodeMap[primary].children.push(nodeMap[p.name]);
     else roots.push(nodeMap[p.name]);
@@ -3805,6 +3921,22 @@ function generateSampleExcel() {
   // Sync work days button label
   const wdBtn = document.getElementById('workdays-btn');
   if (wdBtn) wdBtn.textContent = workdaysSummary(ganttWorkDays) + ' ▾';
+
+  // Wire org search input
+  let _orgSearchTimer = null;
+  const osInput = document.getElementById('org-search');
+  const osClear = document.getElementById('org-search-clear');
+  if (osInput) {
+    osInput.addEventListener('input', () => {
+      orgSearchQuery = osInput.value;
+      if (osClear) osClear.style.display = orgSearchQuery ? 'block' : 'none';
+      clearTimeout(_orgSearchTimer);
+      _orgSearchTimer = setTimeout(renderOrgChart, 200);
+    });
+    osInput.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { orgSearchQuery = ''; osInput.value = ''; if (osClear) osClear.style.display = 'none'; renderOrgChart(); }
+    });
+  }
 
   // Wire spec search input
   let _specSearchTimer = null;

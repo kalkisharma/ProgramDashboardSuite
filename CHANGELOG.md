@@ -6,6 +6,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.0] — 2026-05-04
+
+### Added
+- Export Gantt as PNG: "Export PNG" button in Gantt toolbar downloads a rasterized version of the merged Gantt (header + body SVGs) as a dated `.png` file; canvas background fills with the current theme color (`#0d1117` dark / `#22272e` dim / `#edecea` light) so the PNG renders cleanly without transparency artifacts
+- Org chart person search: text input in Org Chart toolbar filters the tree by name, title, team, or email (case-insensitive substring, debounced 200 ms); clear (×) button when active; resets on file load
+- Critical path hover highlight: when CP mode is active, hovering a critical-path task bar dims all non-critical bars (to 0.15 opacity) and arrows (to 0.08 opacity), focusing attention on the critical chain; moving away restores all elements instantly
+
+### Fixed
+- Dependency arrow keyboard access: arrows now have `tabindex="0"`, `role="button"`, and descriptive `aria-label`; Enter/Space opens the dependent task's side panel; CSS `:focus-visible` stroke ring added — resolves WCAG 2.1 SC 2.1.1 violation
+- Weight Budget group headers: clicking a group header now collapses/expands its subsystem rows (`toggleWtGroup()`); header shows ▼/▶ indicator; `aria-expanded` and `aria-controls` attributes maintained — consistent with team workload rows in Program Dashboard
+
+### Changed
+- Print stylesheet: added `@page { size: landscape; margin: 10mm; }` — Gantt prints in landscape orientation; task list column font reduced to 0.72rem for print; `#gantt-container` wraps for better multi-column layout
+
+---
+
 ## [1.9.0] — 2026-05-04
 
 ### Added
