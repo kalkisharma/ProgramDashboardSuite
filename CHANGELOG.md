@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.12.0] — 2026-05-04
+
+### Fixed
+- Program Dashboard "Next Milestone" KPI: was sorted by end date but displayed by start date — now sorts by start date, so the card always shows the milestone whose start date is nearest
+- Gantt bar drag: extending a task bar to the right caused the progress fill to visually shrink during drag (stale pct × new width calculation) — progress rect x position is now the only live update; width is corrected on the post-drag re-render
+- Org chart search: searching for a person whose manager did not match the query caused the person to appear as a root-level node, breaking the tree hierarchy — the search result now expands to include all ancestors up the reporting chain; matched nodes are highlighted in accent color while ancestor-only nodes render normally
+- Side panel focus: closing the spec/task/org side panel (via ✕ button, Escape, or clicking the same item again) now restores keyboard focus to the element that originally opened it — consistent with the help modal behavior; resolves WCAG 2.4.3 focus management gap
+- Specifications table "Dep. Tasks" column: count and risk warning (⚠) now have `aria-label` attributes — screen readers announce "N dependent tasks" and, when risk is present, "risk: dependent task already started" instead of bare numbers and symbol names
+- Undo toast suppression: adding a task or making another non-undoable action during the Gantt reset undo window (30s) previously discarded the new notification silently — the new message is now appended to the active toast text for 3 seconds so users receive confirmation
+
+---
+
 ## [1.11.0] — 2026-05-04
 
 ### Added

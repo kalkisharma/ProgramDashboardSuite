@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.11 — 2026-05-04 -->
+<!-- Program Dashboard Suite v1.12 — 2026-05-04 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1065,6 +1065,7 @@ let S_tasksOriginal = [];          // deep-copy at parse time for reset
 let ganttWorkDays = [1,2,3,4,5];  // Mon–Fri default; overridden by Project Info or Work Days UI
 let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks which item the side panel is showing
 let spCurrentId   = null; // specId string, taskId number, or person name string
+let spOpener      = null; // element that triggered the side panel open (focus restored on close)
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
@@ -1156,8 +1157,15 @@ let toastTimer = null;
 let toastHasUndo = false;
 function showToast(msg, undoFn, duration) {
   duration = duration || 5000;
-  // Don't replace an active undo toast with a non-undoable one
-  if (toastHasUndo && !undoFn) return;
+  // Don't replace an active undo toast with a non-undoable one — append briefly instead
+  if (toastHasUndo && !undoFn) {
+    const msgEl = document.getElementById('app-toast-msg');
+    const toast = document.getElementById('app-toast');
+    const prev = msgEl.textContent;
+    msgEl.textContent = prev + '  ·  ' + msg;
+    setTimeout(() => { if (toast.classList.contains('visible')) msgEl.textContent = prev; }, 3000);
+    return;
+  }
   const toast   = document.getElementById('app-toast');
   const msgEl   = document.getElementById('app-toast-msg');
   const undoBtn = document.getElementById('app-toast-undo');
@@ -1618,7 +1626,7 @@ function updateBarElementsDirect(taskId, newStart, newEnd) {
     }
   } else {
     if (els.bgRect)      { els.bgRect.setAttribute('x', x); els.bgRect.setAttribute('width', w); }
-    if (els.progRect)    { els.progRect.setAttribute('x', x); els.progRect.setAttribute('width', Math.max(0, w*(t.pct/100))); }
+    if (els.progRect)    { els.progRect.setAttribute('x', x); }
     if (els.outlineRect) { els.outlineRect.setAttribute('x', x); els.outlineRect.setAttribute('width', w); }
   }
 }
@@ -3017,7 +3025,7 @@ function renderProgDash() {
   const milestoneDone = milestones.filter(t => t.pct >= 100).length;
   const nextMs = milestones
     .filter(t => t.pct < 100)
-    .sort((a, b) => (a.end||a.start) - (b.end||b.start))[0];
+    .sort((a, b) => (a.start||a.end) - (b.start||b.end))[0];
   const daysToNext = nextMs ? daysBetween(TODAY, nextMs.start) : null;
 
   // Final milestone — last milestone chronologically by end/start date
@@ -3352,9 +3360,10 @@ function renderSpecTable() {
     const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
       const t = S.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY;
     });
+    const riskDesc = hasRisk ? ' — risk: dependent task already started' : '';
     const depText = s.depIds.length
-      ? `<span style="color:${hasRisk?'var(--danger)':'var(--muted)'};font-weight:${hasRisk?700:400}">${s.depIds.length}${hasRisk?' ⚠':''}</span>`
-      : `<span style="color:#484f58">—</span>`;
+      ? `<span aria-label="${s.depIds.length} dependent task${s.depIds.length!==1?'s':''}${riskDesc}" style="color:${hasRisk?'var(--danger)':'var(--muted)'};font-weight:${hasRisk?700:400}">${s.depIds.length}${hasRisk?' ⚠':''}</span>`
+      : `<span aria-label="No dependent tasks" style="color:#484f58">—</span>`;
     return `<tr class="spec-row" data-spec-id="${esc(s.id)}">
       <td><code style="color:${col.text};font-size:0.78rem">${esc(s.id)}</code></td>
       <td><strong>${esc(s.name)}</strong></td>
@@ -3450,6 +3459,7 @@ function cycleSpecStatus(specId) {
 // ─── SIDE PANEL – SPEC ───────────────────────────────────────────────────────
 function openSpecPanel(specId) {
   if (spCurrentType === 'spec' && spCurrentId === specId) { closeSidePanel(); return; }
+  spOpener = document.activeElement;
   const s = S.specs.find(s => s.id === specId);
   if (!s) return;
   const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
@@ -3504,6 +3514,7 @@ function openSpecPanel(specId) {
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
 function openTaskPanel(taskId) {
   if (spCurrentType === 'task' && spCurrentId === taskId) { closeSidePanel(); return; }
+  spOpener = document.activeElement;
   const t = S.tasks.find(t => t.id === taskId);
   if (!t) return;
   const gc = ganttColor(t.category);
@@ -3580,6 +3591,7 @@ function openTaskPanel(taskId) {
 // ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
 function openOrgPanel(name) {
   if (spCurrentType === 'org' && spCurrentId === name) { closeSidePanel(); return; }
+  spOpener = document.activeElement;
   const person = S.org.find(p => p.name === name);
   if (!person) return;
   const col = teamColor(person.team);
@@ -3651,6 +3663,8 @@ function closeSidePanel() {
   document.getElementById('gantt-right-col').style.marginRight = '';
   spCurrentType = null;
   spCurrentId   = null;
+  if (spOpener && typeof spOpener.focus === 'function') { spOpener.focus(); }
+  spOpener = null;
 }
 
 // ─── ORG CHART ───────────────────────────────────────────────────────────────
@@ -3688,11 +3702,27 @@ function renderOrgChart() {
   empty.style.display = 'none';
   container.style.display = 'block';
 
-  // Build tree (filtered by search query when active)
+  // Build tree (filtered by search query when active; ancestors included to preserve hierarchy)
   const q = orgSearchQuery.toLowerCase();
-  const orgData = q
-    ? S.org.filter(p => [p.name, p.title, p.team, p.email].some(v => v && v.toLowerCase().includes(q)))
-    : S.org;
+  let orgData = S.org;
+  const matchedNames = new Set();
+  if (q) {
+    const matched = S.org.filter(p =>
+      [p.name, p.title, p.team, p.email].some(v => v && v.toLowerCase().includes(q)));
+    const ancestorSet = new Set();
+    matched.forEach(p => {
+      matchedNames.add(p.name);
+      ancestorSet.add(p.name);
+      let cur = p;
+      while (cur.reportsTo && cur.reportsTo[0]) {
+        const parent = S.org.find(x => x.name === cur.reportsTo[0]);
+        if (!parent || ancestorSet.has(parent.name)) break;
+        ancestorSet.add(parent.name);
+        cur = parent;
+      }
+    });
+    orgData = S.org.filter(p => ancestorSet.has(p.name));
+  }
   const nodeMap = {};
   orgData.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
   const roots = [];
@@ -3798,11 +3828,13 @@ function renderOrgChart() {
     card.addEventListener('mouseenter', () => rect.setAttribute('fill', cardBgHover));
     card.addEventListener('mouseleave', () => rect.setAttribute('fill', cardBg));
 
-    // Name
+    // Name (highlight if this node matched the search query)
+    const isMatch = matchedNames.has(node.name);
     const nameEl = document.createElementNS(NS, 'text');
     nameEl.setAttribute('x', nx + NW/2); nameEl.setAttribute('y', ny + 24);
     nameEl.setAttribute('text-anchor', 'middle');
-    nameEl.setAttribute('fill', nameFill); nameEl.setAttribute('font-size', '12');
+    nameEl.setAttribute('fill', isMatch ? 'var(--accent)' : nameFill);
+    nameEl.setAttribute('font-size', '12');
     nameEl.setAttribute('font-weight', '700');
     nameEl.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
     nameEl.textContent = node.name.length > 22 ? node.name.slice(0,21)+'…' : node.name;
