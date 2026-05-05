@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.1 — 2026-05-03 -->
+<!-- Program Dashboard Suite v1.11 — 2026-05-04 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -777,6 +777,11 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   border-color: #e06c75;
   color: #e06c75;
 }
+#legend-btn[aria-expanded="true"] {
+  background: rgba(88,166,255,0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* ── WEIGHT BUDGET GROUP ROWS ────────────────────────────── */
 .wt-group-header {
@@ -810,6 +815,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   #gantt-right-col, #gantt-left { overflow: visible !important; }
   #gantt-container { flex-wrap: wrap; }
   #gantt-left { font-size: 0.72rem; min-width: 180px; }
+  #gantt-header-svg-wrap svg, #gantt-svg-wrap svg { max-width: 100%; height: auto; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 </style>
@@ -881,6 +887,8 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
           <option value="all">All</option>
         </select>
         <span style="flex:1"></span>
+        <button class="btn-secondary" id="legend-btn" onclick="toggleGanttLegend()" title="Toggle phase color legend" aria-label="Toggle phase color legend" aria-expanded="false" style="font-size:0.75rem;padding:5px 10px">Legend</button>
+        <div id="gantt-legend" style="display:none;position:absolute;top:100%;right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap;min-width:180px" role="region" aria-label="Phase color legend"></div>
         <button class="btn-secondary" id="gantt-cp-btn" onclick="toggleCriticalPath()" title="Highlight critical path" aria-label="Toggle critical path highlighting" aria-pressed="false" style="font-size:0.75rem;padding:5px 10px">CP</button>
         <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar" aria-label="Toggle mini calendar" aria-expanded="false">📅</button>
         <button class="btn-secondary" id="workdays-btn" onclick="toggleWorkdaysPicker()" title="Configure work days" aria-label="Configure work days" aria-expanded="false" style="font-size:0.75rem;padding:5px 10px">Mon–Fri ▾</button>
@@ -918,7 +926,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
     <div class="tab-panel" id="specs-panel" role="tabpanel" aria-labelledby="tab-btn-specs">
       <div id="specs-toolbar">
         <span style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase">Filter:</span>
-        <select id="specs-filter" onchange="renderSpecTable()">
+        <select id="specs-filter" onchange="setSpecsCategoryFilter(this.value)">
           <option value="all">All Categories</option>
         </select>
         <div style="position:relative;display:flex;align-items:center">
@@ -1203,6 +1211,13 @@ document.addEventListener('keydown', e => {
     if (picker && picker.style.display !== 'none') {
       picker.style.display = 'none';
       if (wdBtn) { wdBtn.setAttribute('aria-expanded', 'false'); wdBtn.focus(); }
+    }
+    const legend = document.getElementById('gantt-legend');
+    const legendBtn = document.getElementById('legend-btn');
+    if (legend && legend.style.display !== 'none') {
+      showGanttLegend = false;
+      legend.style.display = 'none';
+      if (legendBtn) { legendBtn.setAttribute('aria-expanded', 'false'); legendBtn.focus(); }
     }
   }
 });
@@ -1510,9 +1525,15 @@ function renderDashboard() {
   document.getElementById('save-excel-btn').style.display = '';
   dashboardLoaded = true;
   ganttScrolledToday = false;
-  specSearchQuery = '';
+  ganttPhaseFilter = 'all';
+  ganttTeamFilter  = 'all';
+  specSearchQuery  = '';
+  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search']
+    .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';
+  const ssClearFile = document.getElementById('specs-search-clear');
+  if (ssClearFile) ssClearFile.style.display = 'none';
   orgSearchQuery = '';
   const osInput2 = document.getElementById('org-search');
   if (osInput2) { osInput2.value = ''; const osClear2 = document.getElementById('org-search-clear'); if (osClear2) osClear2.style.display = 'none'; }
@@ -1534,11 +1555,12 @@ let ganttTeamFilter  = 'all';
 let specSortState      = { col: null, dir: 'asc' };
 let specSearchQuery    = '';
 let showCriticalPath   = false;
+let showGanttLegend    = false;
 let orgSearchQuery     = '';
 let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
 let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
-function setGanttPhaseFilter(val) { ganttPhaseFilter = val; renderGantt(); }
-function setGanttTeamFilter(val)  { ganttTeamFilter  = val; renderGantt(); }
+function setGanttPhaseFilter(val) { ganttPhaseFilter = val; localStorage.setItem('vh-filter-phase', val); renderGantt(); }
+function setGanttTeamFilter(val)  { ganttTeamFilter  = val; localStorage.setItem('vh-filter-team', val);  renderGantt(); }
 const RH = 36;
 const HH = 60;
 
@@ -1830,6 +1852,13 @@ document.addEventListener('click', e => {
     picker.style.display = 'none';
     btn.setAttribute('aria-expanded', 'false');
   }
+  const legend    = document.getElementById('gantt-legend');
+  const legendBtn = document.getElementById('legend-btn');
+  if (legend && legend.style.display !== 'none' && !legend.contains(e.target) && legendBtn && !legendBtn.contains(e.target)) {
+    showGanttLegend = false;
+    legend.style.display = 'none';
+    legendBtn.setAttribute('aria-expanded', 'false');
+  }
 });
 
 function navigateCalendar(delta) {
@@ -2068,6 +2097,40 @@ function toggleCriticalPath() {
   renderGantt();
 }
 
+function toggleGanttLegend() {
+  showGanttLegend = !showGanttLegend;
+  const btn = document.getElementById('legend-btn');
+  const panel = document.getElementById('gantt-legend');
+  if (!btn || !panel) return;
+  btn.setAttribute('aria-expanded', showGanttLegend ? 'true' : 'false');
+  panel.style.display = showGanttLegend ? 'block' : 'none';
+  if (showGanttLegend) renderGanttLegend();
+}
+
+function renderGanttLegend() {
+  const panel = document.getElementById('gantt-legend');
+  if (!panel) return;
+  const phaseNamesMap = getPhaseNames();
+  const allPhases = [...new Set(S.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b) => a-b);
+  const phaseRows = allPhases.map(ph => {
+    const color = phaseColor(ph + '.0');
+    const name  = phaseNamesMap[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.8rem">
+      <div style="width:12px;height:12px;border-radius:2px;background:${color};flex-shrink:0"></div>
+      <span>${ph}. ${esc(name)}</span>
+    </div>`;
+  }).join('');
+  panel.innerHTML = `
+    <div style="font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px">Phases</div>
+    ${phaseRows}
+    <div style="border-top:1px solid var(--border);margin:8px 0"></div>
+    <div style="font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:6px">Symbols</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.8rem"><span style="color:#d29922;font-size:0.9rem">◆</span><span>Milestone</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.8rem"><span style="color:var(--muted)">→</span><span>Dependency arrow</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.8rem"><span style="display:inline-block;width:14px;height:10px;border:1.5px dashed #f85149;border-radius:2px"></span><span>Overdue task</span></div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.8rem"><span style="display:inline-block;width:14px;height:10px;border:2px solid #e06c75;border-radius:2px"></span><span>Critical path</span></div>`;
+}
+
 function exportGanttSVG() {
   const hWrap = document.getElementById('gantt-header-svg-wrap');
   const bWrap = document.getElementById('gantt-svg-wrap');
@@ -2082,6 +2145,7 @@ function exportGanttSVG() {
   const combined = document.createElementNS(NS, 'svg');
   combined.setAttribute('width', W);
   combined.setAttribute('height', hH + bH);
+  combined.setAttribute('viewBox', `0 0 ${W} ${hH + bH}`);
   combined.setAttribute('xmlns', NS);
   // Clone defs first so marker references resolve
   const defs = bsvg.querySelector('defs');
@@ -2118,6 +2182,7 @@ function exportGanttPNG() {
   const NS = 'http://www.w3.org/2000/svg';
   const combined = document.createElementNS(NS, 'svg');
   combined.setAttribute('width', W); combined.setAttribute('height', hH + bH);
+  combined.setAttribute('viewBox', `0 0 ${W} ${hH + bH}`);
   combined.setAttribute('xmlns', NS);
   const defs = bsvg.querySelector('defs');
   if (defs) combined.appendChild(defs.cloneNode(true));
@@ -2173,22 +2238,28 @@ function renderGantt() {
   const allTeams  = [...new Set(S.tasks.map(t => t.team || 'Unassigned'))].sort();
 
   const phaseSel  = document.getElementById('gantt-phase-filter');
-  const savedPhase = phaseSel ? phaseSel.value : 'all';
   if (phaseSel) {
     phaseSel.innerHTML = '<option value="all">All</option>';
     allPhases.forEach(ph => {
       const label = phaseNamesMap[ph] || PHASE_NAMES_FALLBACK[ph-1] || 'Phase ' + ph;
       phaseSel.innerHTML += `<option value="${ph}">${ph}. ${esc(label)}</option>`;
     });
-    phaseSel.value = allPhases.map(String).includes(savedPhase) ? savedPhase : 'all';
+    if (!allPhases.map(String).includes(ganttPhaseFilter)) {
+      ganttPhaseFilter = 'all';
+      localStorage.removeItem('vh-filter-phase');
+    }
+    phaseSel.value = ganttPhaseFilter;
   }
 
   const teamSel   = document.getElementById('gantt-team-filter');
-  const savedTeam = teamSel ? teamSel.value : 'all';
   if (teamSel) {
     teamSel.innerHTML = '<option value="all">All</option>';
     allTeams.forEach(tm => { teamSel.innerHTML += `<option value="${esc(tm)}">${esc(tm)}</option>`; });
-    teamSel.value = allTeams.includes(savedTeam) ? savedTeam : 'all';
+    if (!allTeams.includes(ganttTeamFilter) && ganttTeamFilter !== 'all') {
+      ganttTeamFilter = 'all';
+      localStorage.removeItem('vh-filter-team');
+    }
+    teamSel.value = ganttTeamFilter;
   }
 
   // ── Build filtered task list ───────────────────────
@@ -2302,6 +2373,7 @@ function renderGantt() {
   // ── Header SVG (sticky) ────────────────────────────
   const hsvg = document.createElementNS(NS, 'svg');
   hsvg.setAttribute('width', W); hsvg.setAttribute('height', HH);
+  hsvg.setAttribute('viewBox', `0 0 ${W} ${HH}`);
   hsvg.setAttribute('role', 'img');
   hsvg.setAttribute('aria-label', 'Gantt timeline header — month and week labels');
   hsvg.style.display = 'block';
@@ -2332,6 +2404,7 @@ function renderGantt() {
   depArrowEls = [];
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', W); svg.setAttribute('height', bodyH);
+  svg.setAttribute('viewBox', `0 0 ${W} ${bodyH}`);
   svg.setAttribute('role', 'application');
   svg.setAttribute('aria-label', `Gantt chart — drag bars to adjust dates and duration. Today is ${TODAY.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' })}`);
   svg.style.display = 'block';
@@ -2437,6 +2510,18 @@ function renderGantt() {
         ring.style.pointerEvents = 'none';
         svg.appendChild(ring);
       }
+      // Overdue ring (non-milestone, past end date, not complete)
+      if (t.end && t.end < TODAY && (t.pct || 0) < 100) {
+        const overRing = document.createElementNS(NS, 'rect');
+        overRing.setAttribute('x', x - 1); overRing.setAttribute('y', by - 1);
+        overRing.setAttribute('width', w + 2); overRing.setAttribute('height', bh + 2);
+        overRing.setAttribute('rx', 5); overRing.setAttribute('fill', 'none');
+        overRing.setAttribute('stroke', '#f85149');
+        overRing.setAttribute('stroke-width', 1.5);
+        overRing.setAttribute('stroke-dasharray', '3 2');
+        overRing.style.pointerEvents = 'none';
+        svg.appendChild(overRing);
+      }
     }
   });
 
@@ -2468,6 +2553,18 @@ function renderGantt() {
       p.addEventListener('keydown', e => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openTaskPanel(t.id); }
       });
+      const predTaskName = predTask ? predTask.name : 'Task ' + did;
+      p.addEventListener('mouseenter', e => {
+        tooltip.innerHTML = `<div style="font-weight:700;margin-bottom:4px;font-size:0.8rem">Dependency</div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:0.82rem">
+            <span style="color:var(--muted)">${esc(predTaskName)}</span>
+            <span style="color:var(--accent)">→</span>
+            <span>${esc(t.name)}</span>
+          </div>`;
+        tooltip.style.display = 'block'; positionTooltip(e);
+      });
+      p.addEventListener('mousemove', positionTooltip);
+      p.addEventListener('mouseleave', hideTooltip);
       depArrowEls.push({ el: p, predId: did, succId: t.id });
       svg.appendChild(p);
     });
@@ -2884,12 +2981,18 @@ function getPhaseNames() {
 }
 
 function toggleWtGroup(el) {
-  const items = el.nextElementSibling;
-  const arrow = el.querySelector('.wt-group-arrow');
-  const open  = items.style.display !== 'none';
+  const items   = el.nextElementSibling;
+  const arrow   = el.querySelector('.wt-group-arrow');
+  const open    = items.style.display !== 'none';
+  const grpName = el.getAttribute('data-group-name');
   items.style.display = open ? 'none' : '';
   if (arrow) arrow.textContent = open ? '▶' : '▼';
   el.setAttribute('aria-expanded', String(!open));
+  if (grpName) {
+    let collapsed = JSON.parse(localStorage.getItem('vh-wt-collapsed') || '[]');
+    collapsed = open ? [...new Set([...collapsed, grpName])] : collapsed.filter(g => g !== grpName);
+    localStorage.setItem('vh-wt-collapsed', JSON.stringify(collapsed));
+  }
 }
 function toggleTeamRow(el) {
   const dd    = el.nextElementSibling;
@@ -2926,6 +3029,8 @@ function renderProgDash() {
   const daysToFinalStr = daysToFinal === null ? '' :
     daysToFinal > 0 ? `${daysToFinal} days remaining` :
     daysToFinal === 0 ? 'Today' : 'Completed';
+
+  const overdueTasks = S.tasks.filter(t => t.end && t.end < TODAY && (t.pct || 0) < 100 && !t.milestone).length;
 
   const specAchieved = S.specs.filter(s => s.status === 'Achieved').length;
   const specTarget   = S.specs.filter(s => s.status === 'Target').length;
@@ -2996,6 +3101,11 @@ function renderProgDash() {
         <div class="kpi-label">Milestones</div>
         <div class="kpi-value">${milestoneDone}<span style="font-size:1rem;font-weight:400;color:var(--muted)"> / ${milestones.length}</span></div>
         <div class="kpi-sub">${milestones.length - milestoneDone} remaining</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Overdue</div>
+        <div class="kpi-value" style="${overdueTasks > 0 ? 'color:#f85149' : ''}">${overdueTasks}</div>
+        <div class="kpi-sub">tasks past due</div>
       </div>
       ${nextMsCard}
       <div class="kpi-card">
@@ -3113,6 +3223,7 @@ function renderWeightBudget() {
           if (!grouped[g]) grouped[g] = [];
           grouped[g].push(w);
         });
+        const collapsedGroups = JSON.parse(localStorage.getItem('vh-wt-collapsed') || '[]');
         return Object.entries(grouped).map(([grpName, items], n) => {
           const gEst    = items.reduce((s, w) => s + w.estimated, 0);
           const gTgt    = items.reduce((s, w) => s + w.target, 0);
@@ -3122,8 +3233,9 @@ function renderWeightBudget() {
           const gColor  = gMargin < 0 ? '#d29922' : '#3fb950';
           const gEstPct = Math.min(100, Math.round(gEst / maxVal * 100));
           const gTgtPct = Math.min(100, Math.round(gTgt / maxVal * 100));
-          const header  = `<div class="wt-row wt-group-header" role="button" tabindex="0" aria-expanded="true" aria-controls="wt-grp-${n}" style="cursor:pointer">
-            <div style="font-weight:700"><span class="wt-group-arrow" style="margin-right:6px">▼</span>${esc(grpName)}</div>
+          const isCollapsed = collapsedGroups.includes(grpName);
+          const header  = `<div class="wt-row wt-group-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}" aria-controls="wt-grp-${n}" data-group-name="${esc(grpName)}" style="cursor:pointer">
+            <div style="font-weight:700"><span class="wt-group-arrow" style="margin-right:6px">${isCollapsed ? '▶' : '▼'}</span>${esc(grpName)}</div>
             <div class="wt-bar-wrap" style="cursor:crosshair"
               data-name="${esc(grpName)}" data-est="${gEst}" data-tgt="${gTgt}" data-total="${totalEst}">
               <div class="wt-bar-est" style="width:${gEstPct}%;background:${gColor}"></div>
@@ -3132,7 +3244,7 @@ function renderWeightBudget() {
             <div style="text-align:right;font-weight:700">${gEst.toLocaleString()}</div>
             <div style="text-align:right;color:var(--muted);font-weight:700">${gTgt.toLocaleString()}</div>
             <div style="text-align:right;font-weight:700" class="${gClass}">${gSign}${gMargin.toLocaleString()}</div>
-          </div><div class="wt-group-items" id="wt-grp-${n}">`;
+          </div><div class="wt-group-items" id="wt-grp-${n}" style="${isCollapsed ? 'display:none' : ''}">`;
           const rows = items.map(w => {
             const margin   = w.target - w.estimated;
             const estPct   = Math.min(100, Math.round(w.estimated / maxVal * 100));
@@ -3185,6 +3297,8 @@ function renderSpecs() {
     const o = document.createElement('option'); o.value = c; o.textContent = c;
     sel.appendChild(o);
   });
+  const savedCat = localStorage.getItem('vh-filter-specs-cat') || 'all';
+  sel.value = [...sel.options].map(o => o.value).includes(savedCat) ? savedCat : 'all';
   renderSpecTable();
 }
 
@@ -3194,6 +3308,11 @@ function specStatusRank(s) {
     return risk ? 0 : 1;
   }
   return s.status === 'Target' ? 2 : s.status === 'Achieved' ? 3 : 4;
+}
+
+function setSpecsCategoryFilter(val) {
+  localStorage.setItem('vh-filter-specs-cat', val);
+  renderSpecTable();
 }
 
 function setSpecSort(col) {
@@ -3945,14 +4064,28 @@ function generateSampleExcel() {
   if (ssInput) {
     ssInput.addEventListener('input', () => {
       specSearchQuery = ssInput.value;
+      localStorage.setItem('vh-filter-specs-search', specSearchQuery);
       if (ssClear) ssClear.style.display = specSearchQuery ? 'block' : 'none';
       clearTimeout(_specSearchTimer);
       _specSearchTimer = setTimeout(renderSpecTable, 200);
     });
     ssInput.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { specSearchQuery = ''; ssInput.value = ''; if (ssClear) ssClear.style.display = 'none'; renderSpecTable(); }
+      if (e.key === 'Escape') {
+        specSearchQuery = ''; ssInput.value = '';
+        localStorage.removeItem('vh-filter-specs-search');
+        if (ssClear) ssClear.style.display = 'none'; renderSpecTable();
+      }
     });
+    // Restore saved spec search query on page load
+    const savedSearch = localStorage.getItem('vh-filter-specs-search') || '';
+    if (savedSearch) { ssInput.value = savedSearch; specSearchQuery = savedSearch; if (ssClear) ssClear.style.display = 'block'; }
   }
+
+  // Restore saved Gantt phase and team filter on page load
+  const _savedPhase = localStorage.getItem('vh-filter-phase');
+  if (_savedPhase) ganttPhaseFilter = _savedPhase;
+  const _savedTeam = localStorage.getItem('vh-filter-team');
+  if (_savedTeam) ganttTeamFilter = _savedTeam;
 })();
 </script>
 <div id="app-toast" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>

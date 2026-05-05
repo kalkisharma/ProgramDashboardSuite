@@ -6,6 +6,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.11.0] — 2026-05-04
+
+### Added
+- Overdue task highlighting: bars whose end date has passed and are less than 100% complete now show a dashed red ring (`#f85149`, `stroke-dasharray="3 2"`) distinct from the solid coral CP ring; works for both bar types (filled and outline)
+- Overdue KPI card: "Overdue" card added to Program Dashboard KPI row showing count of non-milestone tasks past due; count text turns red when > 0
+- Phase color legend: "Legend" button in Gantt toolbar opens a floating popup showing phase color swatches with names, plus a symbol key (milestone diamond, dependency arrow, overdue ring, CP ring); click-outside or Esc to dismiss
+- SVG viewBox attribute: `viewBox` now set on Gantt header SVG, body SVG, and both exported SVGs (Export SVG / Export PNG); print CSS adds `max-width:100%;height:auto` so Gantt SVGs scale proportionally to fit the print page width
+- Dependency arrow hover tooltip: hovering a Gantt dependency arrow shows a tooltip with predecessor name → successor name; uses `esc()` for XSS safety; reuses shared `#tooltip` element and `positionTooltip()`
+- Filter persistence: Gantt phase filter, Gantt team filter, Specifications category filter, and Specifications text search are now saved to `localStorage` and restored across page reloads; filters reset when a new file is loaded; localStorage keys: `vh-filter-phase`, `vh-filter-team`, `vh-filter-specs-cat`, `vh-filter-specs-search`
+- Weight group collapse persistence: collapsed/expanded state of Weight Budget group headers is saved to `localStorage` (`vh-wt-collapsed` JSON array of group names); state is restored on next render; resets when a new file is loaded
+
+---
+
 ## [1.10.0] — 2026-05-04
 
 ### Added
