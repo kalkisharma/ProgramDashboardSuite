@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.9.0] — 2026-05-04
+
+### Added
+- Critical path highlighting: new `CP` toggle button in Gantt toolbar computes critical path via forward/backward CPM pass (topological sort, slack = 0); critical bars get a coral `#e06c75` ring; critical arrows are solid coral at 2.5px; non-critical arrows become dashed `stroke-dasharray="5 3"` — non-color cue for accessibility; CP state persists to `localStorage` (`vh-show-cp`); cycle detection falls back gracefully to no highlight
+- Dependency arrow click: clicking any Gantt dependency arrow opens the side panel for the dependent (successor) task; cursor changes to pointer on hover; note added to keyboard shortcuts table in help modal
+- Export Gantt SVG: new "Export SVG" button in Gantt toolbar downloads the current Gantt (header + body SVGs merged into one) as a dated `.svg` file; `<defs>` block (arrowhead marker) included; button is disabled until a file is loaded
+- Weight Budget group subtotals: subsystem rows are now grouped by the `Group` field; each group shows a bold header row with subtotal estimated, target, and margin; a "Total" row appears at the bottom of the table
+- Print stylesheet: `@media print` block hides UI chrome (topbar, toolbars, side panel, dropzone), forces white background regardless of current theme, and makes only the active tab panel visible; strips all CSS transitions during print
+
+---
+
 ## [1.8.0] — 2026-05-04
 
 ### Added

@@ -767,6 +767,45 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
   cursor: pointer;
 }
 .g-pct-edit { width: 100%; text-align: right; }
+
+/* ── CRITICAL PATH TOGGLE ────────────────────────────────── */
+#gantt-cp-btn[aria-pressed="true"] {
+  background: rgba(224,108,117,0.18);
+  border-color: #e06c75;
+  color: #e06c75;
+}
+
+/* ── WEIGHT BUDGET GROUP ROWS ────────────────────────────── */
+.wt-group-header {
+  font-weight: 700;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+.wt-group-header:first-child { margin-top: 0; border-top: none; }
+.wt-total-row {
+  font-weight: 700;
+  border-top: 2px solid var(--border);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+@media print {
+  :root {
+    --bg: #ffffff; --surface: #f5f5f5; --text: #111111;
+    --muted: #444444; --border: #cccccc;
+  }
+  #topbar, .tab-nav, #gantt-toolbar, #specs-toolbar,
+  #wt-toolbar, #org-toolbar,
+  #side-panel, #tooltip, #gantt-today-float,
+  #workdays-picker, #gantt-calendar, #dropzone,
+  #dashboard-drop-overlay, #app-toast { display: none !important; }
+  .tab-panel { display: none !important; }
+  .tab-panel.active { display: block !important; }
+  #gantt-right, #org-container { overflow: visible !important; }
+  #gantt-right-col, #gantt-left { overflow: visible !important; }
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
 </style>
 </head>
 <body>
@@ -836,9 +875,11 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
           <option value="all">All</option>
         </select>
         <span style="flex:1"></span>
+        <button class="btn-secondary" id="gantt-cp-btn" onclick="toggleCriticalPath()" title="Highlight critical path" aria-label="Toggle critical path highlighting" aria-pressed="false" style="font-size:0.75rem;padding:5px 10px">CP</button>
         <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar" aria-label="Toggle mini calendar" aria-expanded="false">📅</button>
         <button class="btn-secondary" id="workdays-btn" onclick="toggleWorkdaysPicker()" title="Configure work days" aria-label="Configure work days" aria-expanded="false" style="font-size:0.75rem;padding:5px 10px">Mon–Fri ▾</button>
         <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
+        <button class="btn-secondary" id="gantt-export-svg-btn" onclick="exportGanttSVG()" title="Export Gantt chart as SVG file" disabled>Export SVG</button>
         <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
         <button class="btn-secondary" onclick="resetGanttToImported()" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
         <div id="gantt-calendar"></div>
@@ -987,7 +1028,8 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+scroll</kbd></td><td style="padding:5px 8px;color:var(--muted)">Zoom Gantt, Specs, or Org chart (cursor over panel)</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> on cell</td><td style="padding:5px 8px;color:var(--muted)">Edit Gantt task name, team, or % inline</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Space</kbd> on row</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for a Specifications row</td></tr>
-      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Esc</kbd></td><td style="padding:5px 8px;color:var(--muted)">Cancel an inline edit without saving</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Esc</kbd></td><td style="padding:5px 8px;color:var(--muted)">Cancel an inline edit without saving</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap">Click dependency arrow</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for the dependent task</td></tr>
     </table>
 
     </div>
@@ -1472,8 +1514,9 @@ let ganttMinDateRef = null;                      // set during renderGantt for a
 let ganttTodayX    = null;                       // px offset of Today line; null when Today is out of range
 let ganttPhaseFilter = 'all';
 let ganttTeamFilter  = 'all';
-let specSortState    = { col: null, dir: 'asc' };
-let specSearchQuery  = '';
+let specSortState      = { col: null, dir: 'asc' };
+let specSearchQuery    = '';
+let showCriticalPath   = false;
 let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
 let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
 function setGanttPhaseFilter(val) { ganttPhaseFilter = val; renderGantt(); }
@@ -1951,6 +1994,99 @@ function updateTodayFloat() {
   floatEl.style.top = '66px';
 }
 
+function computeCriticalPath(tasks) {
+  if (!tasks || tasks.length === 0) return new Set();
+  const dur = {}, successors = {}, inDeg = {};
+  tasks.forEach(t => {
+    dur[t.id]        = t.start && t.end ? Math.max(1, daysBetween(t.start, t.end)) : 1;
+    successors[t.id] = [];
+    inDeg[t.id]      = 0;
+  });
+  tasks.forEach(t => {
+    (t.deps || []).forEach(did => {
+      if (successors[did] !== undefined) { successors[did].push(t.id); inDeg[t.id]++; }
+    });
+  });
+  // Kahn's topological sort
+  const tmpDeg = { ...inDeg };
+  const queue  = tasks.filter(t => tmpDeg[t.id] === 0).map(t => t.id);
+  const order  = [];
+  while (queue.length) {
+    const id = queue.shift(); order.push(id);
+    successors[id].forEach(sid => { if (--tmpDeg[sid] === 0) queue.push(sid); });
+  }
+  if (order.length < tasks.length) return new Set(); // cycle detected
+  // Forward pass
+  const es = {}, ef = {};
+  tasks.forEach(t => { es[t.id] = 0; });
+  order.forEach(id => {
+    ef[id] = es[id] + dur[id];
+    successors[id].forEach(sid => { if (ef[id] > (es[sid] || 0)) es[sid] = ef[id]; });
+  });
+  // Backward pass
+  const maxEF = Math.max(...order.map(id => ef[id]));
+  const lf = {};
+  order.forEach(id => { lf[id] = maxEF; });
+  [...order].reverse().forEach(id => {
+    successors[id].forEach(sid => {
+      const lsSid = lf[sid] - dur[sid];
+      if (lsSid < lf[id]) lf[id] = lsSid;
+    });
+  });
+  // Identify critical path: slack ≤ 0 and connected to dependency chain
+  const cpSet = new Set();
+  order.forEach(id => {
+    const slack = (lf[id] - dur[id]) - es[id];
+    if (Math.round(slack) <= 0 && (inDeg[id] > 0 || successors[id].length > 0)) cpSet.add(id);
+  });
+  return cpSet;
+}
+
+function toggleCriticalPath() {
+  showCriticalPath = !showCriticalPath;
+  localStorage.setItem('vh-show-cp', showCriticalPath ? '1' : '');
+  const btn = document.getElementById('gantt-cp-btn');
+  if (btn) btn.setAttribute('aria-pressed', showCriticalPath ? 'true' : 'false');
+  renderGantt();
+}
+
+function exportGanttSVG() {
+  const hWrap = document.getElementById('gantt-header-svg-wrap');
+  const bWrap = document.getElementById('gantt-svg-wrap');
+  if (!hWrap || !bWrap) return;
+  const hsvg = hWrap.querySelector('svg');
+  const bsvg = bWrap.querySelector('svg');
+  if (!hsvg || !bsvg) return;
+  const W  = +hsvg.getAttribute('width');
+  const hH = +hsvg.getAttribute('height');
+  const bH = +bsvg.getAttribute('height');
+  const NS = 'http://www.w3.org/2000/svg';
+  const combined = document.createElementNS(NS, 'svg');
+  combined.setAttribute('width', W);
+  combined.setAttribute('height', hH + bH);
+  combined.setAttribute('xmlns', NS);
+  // Clone defs first so marker references resolve
+  const defs = bsvg.querySelector('defs');
+  if (defs) combined.appendChild(defs.cloneNode(true));
+  // Header children
+  Array.from(hsvg.childNodes).forEach(n => combined.appendChild(n.cloneNode(true)));
+  // Body children wrapped in translate group
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('transform', `translate(0,${hH})`);
+  Array.from(bsvg.childNodes).forEach(n => {
+    if (n.tagName !== 'defs') g.appendChild(n.cloneNode(true));
+  });
+  combined.appendChild(g);
+  const xml  = new XMLSerializer().serializeToString(combined);
+  const blob = new Blob([xml], { type: 'image/svg+xml' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `${S.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.svg`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderGantt() {
   if (!S.tasks.length) {
     if (dashboardLoaded) {
@@ -2014,6 +2150,9 @@ function renderGantt() {
   const W = totalDays * ganttZoom;
   const bodyH = visibleTasks.length * RH;
   const NS = 'http://www.w3.org/2000/svg';
+  const cpSet = showCriticalPath ? computeCriticalPath(S.tasks) : new Set();
+  const exportBtn = document.getElementById('gantt-export-svg-btn');
+  if (exportBtn) exportBtn.disabled = false;
 
   // ── Left panel rows ────────────────────────────────
   lb.innerHTML = '';
@@ -2198,6 +2337,16 @@ function renderGantt() {
       }
       barPos[t.id] = { sx: x, ex: x + w, my: midY };
       barEls[t.id] = { bgRect, progRect, outlineRect, midY };
+      // Critical path ring overlay
+      if (showCriticalPath && cpSet.has(t.id)) {
+        const ring = document.createElementNS(NS, 'rect');
+        ring.setAttribute('x', x - 1); ring.setAttribute('y', by - 1);
+        ring.setAttribute('width', w + 2); ring.setAttribute('height', bh + 2);
+        ring.setAttribute('rx', 5); ring.setAttribute('fill', 'none');
+        ring.setAttribute('stroke', '#e06c75'); ring.setAttribute('stroke-width', 2);
+        ring.style.pointerEvents = 'none';
+        svg.appendChild(ring);
+      }
     }
   });
 
@@ -2211,9 +2360,17 @@ function renderGantt() {
       const pathD = `M ${x1} ${y1} L ${ox} ${y1} L ${ox} ${y2} L ${x2} ${y2}`;
       const p = document.createElementNS(NS, 'path');
       p.setAttribute('d', pathD); p.setAttribute('fill', 'none');
-      p.setAttribute('stroke', depStroke); p.setAttribute('stroke-width', 1.5);
+      p.setAttribute('data-pred-id', did);
+      p.setAttribute('data-succ-id', t.id);
+      const isCritical = showCriticalPath && cpSet.has(did) && cpSet.has(t.id);
+      if (isCritical) {
+        p.setAttribute('stroke', '#e06c75'); p.setAttribute('stroke-width', 2.5);
+      } else {
+        p.setAttribute('stroke', depStroke); p.setAttribute('stroke-width', 1.5);
+        if (showCriticalPath) p.setAttribute('stroke-dasharray', '5 3');
+      }
       p.setAttribute('marker-end', 'url(#arr)');
-      p.style.pointerEvents = 'none';
+      p.style.cursor = 'pointer';
       svg.appendChild(p);
     });
   });
@@ -2225,6 +2382,13 @@ function renderGantt() {
 
   document.getElementById('gantt-svg-wrap').innerHTML = '';
   document.getElementById('gantt-svg-wrap').appendChild(svg);
+
+  // Delegated click on arrows → open dependent task panel
+  svg.addEventListener('click', e => {
+    const p = e.target.closest('path[data-succ-id]');
+    if (!p) return;
+    openTaskPanel(+p.getAttribute('data-succ-id'));
+  });
 
   const right = document.getElementById('gantt-right');
   if (!ganttScrolledToday && tx > right.clientWidth / 2) {
@@ -2830,31 +2994,68 @@ function renderWeightBudget() {
     <div class="dash-section">
       <div class="dash-section-title">Subsystem Mass Budget</div>
       <div class="wt-row wt-row-header">
-        <div>Subsystem</div>
+        <div>Subsystem / Group</div>
         <div>Estimated vs Target <span style="font-size:0.65rem;opacity:0.7">│ = target · hover for details</span></div>
         <div style="text-align:right">Est. (${esc(unit)})</div>
         <div style="text-align:right">Tgt (${esc(unit)})</div>
         <div style="text-align:right">Margin</div>
       </div>
-      ${S.weights.map(w => {
-        const margin   = w.target - w.estimated;
-        const estPct   = Math.min(100, Math.round(w.estimated / maxVal * 100));
-        const tgtPct   = Math.min(100, Math.round(w.target    / maxVal * 100));
-        const barColor = margin < 0 ? '#d29922' : '#3fb950';
-        const mSign    = margin >= 0 ? '+' : '';
-        const mClass   = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
-        return `<div class="wt-row">
-          <div title="${esc(w.subsystem)} (${esc(w.group)})">${esc(w.subsystem)}</div>
-          <div class="wt-bar-wrap" style="cursor:crosshair"
-            data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}">
-            <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
-            <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
-          </div>
-          <div style="text-align:right">${w.estimated.toLocaleString()}</div>
-          <div style="text-align:right;color:var(--muted)">${w.target.toLocaleString()}</div>
-          <div style="text-align:right" class="${mClass}">${mSign}${margin.toLocaleString()}</div>
-        </div>`;
-      }).join('')}
+      ${(() => {
+        const grouped = {};
+        S.weights.forEach(w => {
+          const g = w.group || 'Other';
+          if (!grouped[g]) grouped[g] = [];
+          grouped[g].push(w);
+        });
+        return Object.entries(grouped).map(([grpName, items]) => {
+          const gEst    = items.reduce((s, w) => s + w.estimated, 0);
+          const gTgt    = items.reduce((s, w) => s + w.target, 0);
+          const gMargin = gTgt - gEst;
+          const gSign   = gMargin >= 0 ? '+' : '';
+          const gClass  = gMargin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
+          const gColor  = gMargin < 0 ? '#d29922' : '#3fb950';
+          const gEstPct = Math.min(100, Math.round(gEst / maxVal * 100));
+          const gTgtPct = Math.min(100, Math.round(gTgt / maxVal * 100));
+          const header  = `<div class="wt-row wt-group-header">
+            <div style="font-weight:700">${esc(grpName)}</div>
+            <div class="wt-bar-wrap" style="cursor:crosshair"
+              data-name="${esc(grpName)}" data-est="${gEst}" data-tgt="${gTgt}" data-total="${totalEst}">
+              <div class="wt-bar-est" style="width:${gEstPct}%;background:${gColor}"></div>
+              <div class="wt-bar-tgt" style="left:${gTgtPct}%"></div>
+            </div>
+            <div style="text-align:right;font-weight:700">${gEst.toLocaleString()}</div>
+            <div style="text-align:right;color:var(--muted);font-weight:700">${gTgt.toLocaleString()}</div>
+            <div style="text-align:right;font-weight:700" class="${gClass}">${gSign}${gMargin.toLocaleString()}</div>
+          </div>`;
+          const rows = items.map(w => {
+            const margin   = w.target - w.estimated;
+            const estPct   = Math.min(100, Math.round(w.estimated / maxVal * 100));
+            const tgtPct   = Math.min(100, Math.round(w.target    / maxVal * 100));
+            const barColor = margin < 0 ? '#d29922' : '#3fb950';
+            const mSign    = margin >= 0 ? '+' : '';
+            const mClass   = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
+            return `<div class="wt-row" style="padding-left:12px">
+              <div title="${esc(w.subsystem)} (${esc(w.group)})">${esc(w.subsystem)}</div>
+              <div class="wt-bar-wrap" style="cursor:crosshair"
+                data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}">
+                <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
+                <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
+              </div>
+              <div style="text-align:right">${w.estimated.toLocaleString()}</div>
+              <div style="text-align:right;color:var(--muted)">${w.target.toLocaleString()}</div>
+              <div style="text-align:right" class="${mClass}">${mSign}${margin.toLocaleString()}</div>
+            </div>`;
+          }).join('');
+          return header + rows;
+        }).join('');
+      })()}
+      <div class="wt-row wt-total-row">
+        <div>Total</div>
+        <div></div>
+        <div style="text-align:right">${totalEst.toLocaleString()}</div>
+        <div style="text-align:right;color:var(--muted)">${totalTarget.toLocaleString()}</div>
+        <div style="text-align:right" class="${totalMargin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg'}">${totalMargin >= 0 ? '+' : ''}${totalMargin.toLocaleString()}</div>
+      </div>
     </div>
   `;
   body.querySelectorAll('.wt-bar-wrap').forEach(el => {
@@ -3594,6 +3795,13 @@ function generateSampleExcel() {
     orgZoomIdx = savedOrgZoom;
     document.getElementById('org-zoom-label').textContent = Math.round(ORG_ZOOM_STEPS[orgZoomIdx] * 100) + '%';
   }
+  // Restore CP toggle state
+  if (localStorage.getItem('vh-show-cp') === '1') {
+    showCriticalPath = true;
+    const cpBtn = document.getElementById('gantt-cp-btn');
+    if (cpBtn) cpBtn.setAttribute('aria-pressed', 'true');
+  }
+
   // Sync work days button label
   const wdBtn = document.getElementById('workdays-btn');
   if (wdBtn) wdBtn.textContent = workdaysSummary(ganttWorkDays) + ' ▾';
