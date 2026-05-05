@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.13.0] — 2026-05-04
+
+### Changed
+- File load errors (missing required sheets, unparseable file) now display as an inline error card inside the drop zone instead of blocking `alert()` dialogs; error card clears automatically on the next load attempt; includes explicit case-sensitivity guidance for sheet name mismatches
+- Success toast: loading a valid Excel file now shows a summary toast ("Loaded: N tasks · N specs · N people · N weight rows") that auto-dismisses after 6 seconds; if any non-milestone tasks have missing Start or End dates the toast includes a warning count and stays visible for 10 seconds
+
+---
+
 ## [1.12.0] — 2026-05-04
 
 ### Fixed

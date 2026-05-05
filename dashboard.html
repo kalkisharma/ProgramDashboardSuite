@@ -857,6 +857,11 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
         <em style="font-size:0.82em">Optional: <strong>Org Chart</strong> sheet (org view) · <strong>Weight Budget</strong> sheet (mass tracking) · <strong>Phase N Name</strong> rows in Project Info to name each phase</em><br><br>
         — or click below to generate a sample file first —
       </div>
+      <div id="load-error" role="alert" aria-live="assertive"
+           style="display:none;background:var(--danger-bg,#3d1a1a);color:var(--danger,#f85149);
+                  border:1px solid var(--danger,#f85149);border-radius:6px;padding:10px 14px;
+                  font-size:0.85rem;line-height:1.5;text-align:left;margin-top:8px;
+                  white-space:pre-wrap;max-width:480px"></div>
       <label for="file-input" class="btn-primary">Browse for File</label>
     </div>
     <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
@@ -1153,6 +1158,16 @@ function toggleTheme() {
   if (S.org.length) renderOrgChart();
 }
 
+function showLoadError(msg) {
+  const el = document.getElementById('load-error');
+  el.textContent = msg;
+  el.style.display = '';
+}
+function hideLoadError() {
+  const el = document.getElementById('load-error');
+  if (el) el.style.display = 'none';
+}
+
 let toastTimer = null;
 let toastHasUndo = false;
 function showToast(msg, undoFn, duration) {
@@ -1385,6 +1400,7 @@ document.addEventListener('click', e => {
 });
 
 function loadFile(file) {
+  hideLoadError();
   const r = new FileReader();
   r.onload = ev => {
     try {
@@ -1394,10 +1410,12 @@ function loadFile(file) {
       if (!S.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone, Notes)");
       if (!S.specs.length)  missing.push("'Specifications' (columns: Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs)");
       if (missing.length) {
-        alert('Warning: the following required sheets were not found or are empty:\n\n' + missing.join('\n\n') + '\n\nCheck that the sheet names match exactly (case-sensitive).');
+        showLoadError('Required sheets missing:\n\n' + missing.join('\n\n') + '\n\nSheet names are case-sensitive. Check that the names match exactly.');
       }
+      _justLoaded = true;
       renderDashboard();
-    } catch(e) { alert('Could not parse file:\n' + e.message); }
+      _justLoaded = false;
+    } catch(e) { showLoadError('Could not parse file: ' + e.message); }
   };
   r.readAsArrayBuffer(file);
 }
@@ -1551,6 +1569,15 @@ function renderDashboard() {
   renderProgDash();
   renderWeightBudget();
   renderOrgChart();
+  if (_justLoaded && S.tasks.length) {
+    const badDates = S.tasks.filter(t => !t.milestone && (!t.start || !t.end));
+    const parts = [`${S.tasks.length} task${S.tasks.length !== 1 ? 's' : ''}`];
+    if (S.specs.length)   parts.push(`${S.specs.length} spec${S.specs.length !== 1 ? 's' : ''}`);
+    if (S.org.length)     parts.push(`${S.org.length} ${S.org.length === 1 ? 'person' : 'people'}`);
+    if (S.weights.length) parts.push(`${S.weights.length} weight row${S.weights.length !== 1 ? 's' : ''}`);
+    if (badDates.length)  parts.push(`⚠ ${badDates.length} task${badDates.length !== 1 ? 's' : ''} missing dates`);
+    showToast('Loaded: ' + parts.join(' · '), null, badDates.length ? 10000 : 6000);
+  }
 }
 
 // ─── GANTT ────────────────────────────────────────────────────────────────────
@@ -1565,6 +1592,7 @@ let specSortState      = { col: null, dir: 'asc' };
 let specSearchQuery    = '';
 let showCriticalPath   = false;
 let showGanttLegend    = false;
+let _justLoaded        = false; // gates load toast: true only during file parse → renderDashboard()
 let orgSearchQuery     = '';
 let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
 let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
