@@ -106,6 +106,7 @@ body {
 .drop-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
 .drop-sub { color: var(--muted); font-size: 0.88rem; margin-bottom: 20px; }
 .btn-primary {
+  display: inline-block;
   padding: 10px 24px;
   background: var(--accent);
   color: #000;
@@ -856,7 +857,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
         <em style="font-size:0.82em">Optional: <strong>Org Chart</strong> sheet (org view) · <strong>Weight Budget</strong> sheet (mass tracking) · <strong>Phase N Name</strong> rows in Project Info to name each phase</em><br><br>
         — or click below to generate a sample file first —
       </div>
-      <button class="btn-primary" onclick="document.getElementById('file-input').click()">Browse for File</button>
+      <label for="file-input" class="btn-primary">Browse for File</label>
     </div>
     <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
   </div>
