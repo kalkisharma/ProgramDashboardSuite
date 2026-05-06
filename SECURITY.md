@@ -4,8 +4,8 @@
 
 | Version | Supported |
 |---|---|
-| 1.14.0 | Yes — receives security fixes |
-| 1.0–1.13.0 | No — upgrade to 1.14.0 |
+| 1.15.0 | Yes — receives security fixes |
+| 1.0–1.14.0 | No — upgrade to 1.15.0 |
 
 ---
 

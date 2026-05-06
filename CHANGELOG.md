@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.15.0] — 2026-05-06
+
+### Changed
+- CP mode: non-critical-path bars are now persistently dimmed to 0.35 opacity when CP is toggled on, making the critical chain continuously visible without needing to hover; hovering any bar in CP mode spotlights it (and on CP tasks highlights the whole chain) then restores the base 0.35/full dim on mouseleave
+- Bar move drag now requires a 300ms click-and-hold before the drag activates; cursor changes to `grabbing` at 300ms as visual confirmation that the bar is "grabbed" and ready to move; resize-edge drags (left/right 8px zones) still activate on movement as before — only the whole-bar move requires a hold
+
+---
+
 ## [1.14.0] — 2026-05-06
 
 ### Changed

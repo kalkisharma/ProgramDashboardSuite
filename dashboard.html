@@ -1632,6 +1632,14 @@ function startBarDrag(e, taskId) {
   barDrag.startClientX = e.clientX; barDrag.startScrollLeft = right.scrollLeft;
   barDrag.origStart = new Date(t.start); barDrag.origEnd = new Date(t.end);
   barDrag.downTime = Date.now();
+  const isMoveZone = zone === 'move' || zone === 'milestone';
+  barDrag.holdReady = !isMoveZone; // resize zones activate on movement; move requires a hold first
+  if (isMoveZone) {
+    barDrag.holdTimer = setTimeout(() => {
+      barDrag.holdReady = true;
+      document.getElementById('gantt-right').style.cursor = 'grabbing';
+    }, 300);
+  }
   hideTooltip(); e.preventDefault();
 }
 
@@ -1662,10 +1670,15 @@ function updateBarElementsDirect(taskId, newStart, newEnd) {
 }
 
 function doBarDragMove(e) {
-  if (barDrag.pending && Math.abs(e.clientX - barDrag.startClientX) > 8 && (Date.now() - barDrag.downTime) > 80) {
-    barDrag.pending = false; barDrag.active = true;
-    const right = document.getElementById('gantt-right');
-    right.style.cursor = (barDrag.mode === 'resize-left' || barDrag.mode === 'resize-right') ? 'ew-resize' : 'grabbing';
+  if (barDrag.pending) {
+    const isMoveZone = barDrag.mode === 'move' || barDrag.mode === 'milestone';
+    const spatialOk  = Math.abs(e.clientX - barDrag.startClientX) > (isMoveZone ? 4 : 8);
+    const temporalOk = isMoveZone ? barDrag.holdReady : (Date.now() - barDrag.downTime) > 80;
+    if (spatialOk && temporalOk) {
+      barDrag.pending = false; barDrag.active = true;
+      const right = document.getElementById('gantt-right');
+      right.style.cursor = isMoveZone ? 'grabbing' : 'ew-resize';
+    }
   }
   if (!barDrag.active) return;
   const right = document.getElementById('gantt-right');
@@ -1705,6 +1718,8 @@ function doBarDragMove(e) {
 
 function endBarDrag() {
   if (!barDrag.active && !barDrag.pending) return;
+  if (barDrag.holdTimer) { clearTimeout(barDrag.holdTimer); barDrag.holdTimer = null; }
+  barDrag.holdReady = false;
   const wasActive = barDrag.active;
   barDrag.active = false; barDrag.pending = false;
   document.getElementById('gantt-drag-label').style.display = 'none';
@@ -1749,7 +1764,7 @@ function initGanttPan() {
       right.classList.remove('dragging');
       document.getElementById('gantt-header-wrap').classList.remove('dragging');
     }
-    if (barDrag.active) endBarDrag();
+    if (barDrag.active || barDrag.pending) endBarDrag();
     if (rowDrag.active) endRowDrag(e);
   });
 
@@ -2502,8 +2517,9 @@ function renderGantt() {
     hit.addEventListener('mouseleave', () => {
       hideTooltip();
       if (showCriticalPath) {
-        Object.values(barEls).forEach(els => {
-          ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = ''; });
+        Object.entries(barEls).forEach(([id, els]) => {
+          const base = cpSet.has(+id) ? '' : '0.35';
+          ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = base; });
         });
         depArrowEls.forEach(({ el }) => { el.style.opacity = ''; });
       }
@@ -2520,6 +2536,7 @@ function renderGantt() {
       svg.appendChild(d);
       barPos[t.id] = { sx: mx - sz, ex: mx + sz, my: midY };
       barEls[t.id] = { diamond: d, midY };
+      if (showCriticalPath && !cpSet.has(t.id)) d.style.opacity = '0.35';
     } else {
       const by = i*RH + RH*0.28, bh = RH*0.44;
       const bgRect = appendRect(svg, NS, x, by, w, bh, color + '30', 4);
@@ -2540,6 +2557,9 @@ function renderGantt() {
       }
       barPos[t.id] = { sx: x, ex: x + w, my: midY };
       barEls[t.id] = { bgRect, progRect, outlineRect, midY };
+      if (showCriticalPath && !cpSet.has(t.id)) {
+        [bgRect, progRect, outlineRect].forEach(el => { if (el) el.style.opacity = '0.35'; });
+      }
       // Critical path ring overlay
       if (showCriticalPath && cpSet.has(t.id)) {
         const ring = document.createElementNS(NS, 'rect');
