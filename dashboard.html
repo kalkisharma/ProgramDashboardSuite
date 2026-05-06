@@ -274,6 +274,7 @@ button.cal-d { background:none; border:none; font:inherit; color:inherit; width:
 #gantt-right.dragging { cursor: grabbing; user-select: none; }
 #gantt-right::-webkit-scrollbar { height: 6px; width: 4px; }
 #gantt-right::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
 
 /* ── SPECS ───────────────────────────────────────────── */
 #specs-toolbar {
@@ -1630,6 +1631,7 @@ function startBarDrag(e, taskId) {
   barDrag.pending = true; barDrag.taskId = taskId; barDrag.mode = zone;
   barDrag.startClientX = e.clientX; barDrag.startScrollLeft = right.scrollLeft;
   barDrag.origStart = new Date(t.start); barDrag.origEnd = new Date(t.end);
+  barDrag.downTime = Date.now();
   hideTooltip(); e.preventDefault();
 }
 
@@ -1660,7 +1662,7 @@ function updateBarElementsDirect(taskId, newStart, newEnd) {
 }
 
 function doBarDragMove(e) {
-  if (barDrag.pending && Math.abs(e.clientX - barDrag.startClientX) > 4) {
+  if (barDrag.pending && Math.abs(e.clientX - barDrag.startClientX) > 8 && (Date.now() - barDrag.downTime) > 80) {
     barDrag.pending = false; barDrag.active = true;
     const right = document.getElementById('gantt-right');
     right.style.cursor = (barDrag.mode === 'resize-left' || barDrag.mode === 'resize-right') ? 'ew-resize' : 'grabbing';
@@ -2445,6 +2447,7 @@ function renderGantt() {
   svg.setAttribute('role', 'application');
   svg.setAttribute('aria-label', `Gantt chart — drag bars to adjust dates and duration. Today is ${TODAY.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' })}`);
   svg.style.display = 'block';
+  if (showCriticalPath) svg.classList.add('cp-active');
 
   // Arrowhead marker
   const defs = document.createElementNS(NS, 'defs');
@@ -2485,13 +2488,13 @@ function renderGantt() {
     hit.addEventListener('mouseenter', e => {
       if (!barDrag.active && !rowDrag.active) {
         showTooltip(t, e);
-        if (showCriticalPath && cpSet.has(t.id)) {
+        if (showCriticalPath) {
           Object.entries(barEls).forEach(([id, els]) => {
-            const op = cpSet.has(+id) ? '1' : '0.15';
+            const op = cpSet.has(t.id) ? (cpSet.has(+id) ? '1' : '0.2') : (+id === t.id ? '1' : '0.2');
             ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = op; });
           });
           depArrowEls.forEach(({ el, predId, succId }) => {
-            el.style.opacity = (cpSet.has(predId) && cpSet.has(succId)) ? '1' : '0.08';
+            el.style.opacity = cpSet.has(t.id) ? ((cpSet.has(predId) && cpSet.has(succId)) ? '1' : '0.08') : '0.15';
           });
         }
       }

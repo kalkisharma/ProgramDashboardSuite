@@ -6,6 +6,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.0] — 2026-05-06
+
+### Changed
+- CP mode hover now dims all bars (not just when hovering a critical-path bar): hovering any bar dims all other bars to 0.2 opacity; hovering a CP bar still keeps the entire critical chain bright while dimming non-CP bars; dim transition is 60ms to feel intentional rather than abrupt
+- Bar drag activation threshold increased from 4px to 8px, and now also requires 80ms hold time before a pending drag converts to active — eliminates accidental task shifts from confident clicks with slight hand movement
+
+---
+
 ## [1.13.0] — 2026-05-04
 
 ### Changed
