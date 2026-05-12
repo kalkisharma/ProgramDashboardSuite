@@ -6,6 +6,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.16.0] — 2026-05-12
+
+### Added
+- Task notes editing: the Notes area in the task side panel is now a click-to-edit field; clicking (or pressing Enter/Space) opens an inline textarea pre-filled with the current notes; `Ctrl+Enter` or clicking away saves; `Esc` cancels and restores the original text; empty-state shows "Click to add notes…" placeholder; changes are reflected in Gantt state and round-trip through Save to Excel
+- Dependency editing in the task side panel: each "Depends On" card now shows a `×` removal button (hover-reveal) that removes that dependency link immediately; a `+ Add dependency` button below the list opens an inline searchable picker listing all other tasks, filterable by name, WBS, or task ID; tasks that would create a dependency cycle are shown greyed out with a `— cycle` label and cannot be selected; adding or removing a dependency redraws Gantt arrows instantly
+- `wouldCreateCycle(taskId, candidateId)` — BFS successor traversal used to detect forward-chain cycles before allowing a new dependency to be added; prevents the CPM from encountering unresolvable graphs
+
+---
+
 ## [1.15.0] — 2026-05-06
 
 ### Changed

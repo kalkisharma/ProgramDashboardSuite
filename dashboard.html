@@ -490,6 +490,51 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
 
 .no-deps { text-align: center; color: var(--muted); font-size: 0.9rem; padding: 32px 0; }
 
+/* ── NOTES EDIT (side panel) ─────────────────────────── */
+.sp-notes-field {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 1.4em;
+  margin-top: 8px;
+  padding: 4px 3px;
+  border-radius: 3px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.sp-notes-field.empty::before { content: 'Click to add notes\2026'; font-style: italic; color: var(--muted); opacity: 0.6; }
+.sp-notes-field:hover { background: rgba(88,166,255,0.06); }
+.sp-notes-field:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 3px; }
+.sp-notes-ta {
+  width: 100%; box-sizing: border-box; resize: vertical; min-height: 72px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--accent);
+  border-radius: 4px; padding: 6px 8px; font-size: 0.82rem; font-family: inherit;
+  outline: none; margin-top: 6px; display: block;
+}
+.sp-hint { font-size: 0.72rem; color: var(--muted); margin-top: 4px; opacity: 0.7; }
+
+/* ── DEP PICKER (side panel) ─────────────────────────── */
+.sp-dep-picker {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  margin-top: 6px; overflow: hidden; max-height: 220px; display: flex; flex-direction: column;
+}
+.sp-dep-picker-input {
+  width: 100%; box-sizing: border-box; background: transparent; border: none;
+  border-bottom: 1px solid var(--border); padding: 7px 10px; color: var(--text);
+  font-size: 0.82rem; outline: none; flex-shrink: 0;
+}
+.sp-dep-list { overflow-y: auto; flex: 1; }
+.sp-dep-item { padding: 7px 10px; font-size: 0.82rem; cursor: pointer; }
+.sp-dep-item:hover, .sp-dep-item:focus { background: var(--surface); outline: none; }
+.sp-dep-item.cycle { opacity: 0.4; cursor: default; pointer-events: none; font-style: italic; }
+.sp-dep-rm {
+  float: right; background: none; border: none; color: var(--muted);
+  cursor: pointer; font-size: 0.95rem; padding: 0 3px; line-height: 1;
+  opacity: 0; transition: opacity 0.12s;
+}
+.task-card:hover .sp-dep-rm, .sp-dep-rm:focus { opacity: 1; }
+
 /* ── PROGRAM DASHBOARD ───────────────────────────────── */
 #prog-body {
   flex: 1;
@@ -2790,6 +2835,102 @@ function startPctEdit(span, t) {
   input.addEventListener('blur', commit);
 }
 
+// ─── SIDE PANEL: NOTES EDIT ──────────────────────────────────────────────────
+function startNotesEdit(el, t) {
+  if (el.querySelector('textarea')) return;
+  const origNotes = t.notes;
+  const origOpener = spOpener;
+  el.innerHTML = '';
+  el.removeAttribute('tabindex'); el.removeAttribute('role');
+  const ta = document.createElement('textarea');
+  ta.className = 'sp-notes-ta';
+  ta.value = origNotes;
+  ta.placeholder = 'Add notes…';
+  el.appendChild(ta);
+  const hint = document.createElement('div');
+  hint.className = 'sp-hint';
+  hint.textContent = 'Ctrl+Enter to save · Esc to cancel';
+  el.appendChild(hint);
+  ta.focus();
+  let done = false;
+  const save = () => {
+    if (done) return; done = true;
+    t.notes = ta.value;
+    renderGantt();
+    spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+  };
+  const cancel = () => {
+    if (done) return; done = true;
+    spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+    const newEl = document.querySelector('.sp-notes-field');
+    if (newEl) newEl.focus();
+  };
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  ta.addEventListener('blur', save);
+}
+
+// ─── SIDE PANEL: DEPENDENCY EDITING ──────────────────────────────────────────
+function wouldCreateCycle(taskId, candidateId) {
+  const succs = {};
+  S.tasks.forEach(t => { succs[t.id] = []; });
+  S.tasks.forEach(t => { t.deps.forEach(d => { if (succs[d]) succs[d].push(t.id); }); });
+  const visited = new Set([taskId]);
+  const q = [...(succs[taskId] || [])];
+  while (q.length) {
+    const id = q.shift();
+    if (id === candidateId) return true;
+    if (!visited.has(id)) { visited.add(id); (succs[id] || []).forEach(s => q.push(s)); }
+  }
+  return false;
+}
+
+function removeDep(t, depId) {
+  const origOpener = spOpener;
+  t.deps = t.deps.filter(d => d !== depId);
+  renderGantt();
+  spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+}
+
+function addDep(t, depId) {
+  const origOpener = spOpener;
+  if (!t.deps.includes(depId)) { t.deps.push(depId); t.deps.sort((a, b) => a - b); }
+  renderGantt();
+  spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+}
+
+function buildDepPickerList(input, t, listEl) {
+  const q = input.value.trim().toLowerCase();
+  const candidates = S.tasks.filter(c => c.id !== t.id && !t.deps.includes(c.id));
+  const filtered = q ? candidates.filter(c =>
+    c.name.toLowerCase().includes(q) || c.wbs.toLowerCase().includes(q) || String(c.id).includes(q)
+  ) : candidates;
+  listEl.innerHTML = '';
+  if (!filtered.length) {
+    const msg = document.createElement('div');
+    msg.className = 'sp-dep-item';
+    msg.style.cssText = 'color:var(--muted);pointer-events:none';
+    msg.textContent = 'No tasks found';
+    listEl.appendChild(msg);
+    return;
+  }
+  filtered.forEach(c => {
+    const isCycle = wouldCreateCycle(t.id, c.id);
+    const div = document.createElement('div');
+    div.className = 'sp-dep-item' + (isCycle ? ' cycle' : '');
+    div.setAttribute('role', 'option');
+    div.setAttribute('aria-disabled', isCycle ? 'true' : 'false');
+    div.textContent = c.wbs + ' · ' + c.name + (isCycle ? ' — cycle' : '');
+    if (!isCycle) {
+      div.setAttribute('tabindex', '0');
+      div.addEventListener('click', e => { e.stopPropagation(); addDep(t, c.id); });
+    }
+    listEl.appendChild(div);
+  });
+}
+
 // ─── ROW REORDER ─────────────────────────────────────────────────────────────
 function startRowDrag(e, visIdx, t, rowEl) {
   const lb = document.getElementById('gantt-left-body');
@@ -3590,25 +3731,31 @@ function openTaskPanel(taskId) {
     ${statusBadge}
     <div class="sp-meta-notes">
       <strong>Start:</strong> ${fmt(t.start)} &nbsp;·&nbsp; <strong>End:</strong> ${fmt(t.end)}<br>
-      <strong>Work Days:</strong> ${totalWd} total &nbsp;·&nbsp; ${t.pct === 100 ? '<span style="color:var(--success)">Complete ✓</span>' : remWd > 0 ? remWd + ' remaining' : '<span style="color:var(--danger)">Overdue</span>'}<br>
-      ${t.notes ? `<strong>Notes:</strong> ${esc(t.notes)}` : ''}
+      <strong>Work Days:</strong> ${totalWd} total &nbsp;·&nbsp; ${t.pct === 100 ? '<span style="color:var(--success)">Complete ✓</span>' : remWd > 0 ? remWd + ' remaining' : '<span style="color:var(--danger)">Overdue</span>'}
     </div>
+    <div class="sp-notes-field${t.notes ? '' : ' empty'}" tabindex="0" role="button" aria-label="Edit task notes">${t.notes ? esc(t.notes).replace(/\n/g,'<br>') : ''}</div>
   </div>`;
 
   // Dependencies (tasks this one depends on)
-  if (t.deps.length) {
-    html += `<div class="sp-section-label">Depends On (${t.deps.length})</div>`;
-    t.deps.forEach(id => {
-      const dep = S.tasks.find(d => d.id === id);
-      if (!dep) { html += `<div class="task-card future"><div class="tc-id">Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`; return; }
-      const dc = ganttColor(dep.category);
-      html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" data-task-id="${dep.id}">
-        <div class="tc-id">Task ${dep.id} · ${esc(dep.wbs)} · <span style="color:${dc}">${esc(dep.category)}</span></div>
-        <div class="tc-name">${esc(dep.name)}</div>
-        <div class="tc-meta">${fmt(dep.start)} → ${fmt(dep.end)} · ${dep.pct}% complete</div>
-      </div>`;
-    });
-  }
+  html += `<div class="sp-section-label">Depends On${t.deps.length ? ` (${t.deps.length})` : ''}</div>`;
+  t.deps.forEach(id => {
+    const dep = S.tasks.find(d => d.id === id);
+    if (!dep) {
+      html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${id}" aria-label="Remove dependency" title="Remove dependency">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`;
+      return;
+    }
+    const dc = ganttColor(dep.category);
+    html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" data-task-id="${dep.id}">
+      <div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${dep.id}" aria-label="Remove dependency: ${esc(dep.wbs)} ${esc(dep.name)}" title="Remove dependency">×</button>Task ${dep.id} · ${esc(dep.wbs)} · <span style="color:${dc}">${esc(dep.category)}</span></div>
+      <div class="tc-name">${esc(dep.name)}</div>
+      <div class="tc-meta">${fmt(dep.start)} → ${fmt(dep.end)} · ${dep.pct}% complete</div>
+    </div>`;
+  });
+  html += `<button class="btn-secondary" id="sp-add-dep-btn" style="width:100%;margin-top:4px;margin-bottom:4px" aria-expanded="false">+ Add dependency</button>
+  <div id="sp-dep-picker" class="sp-dep-picker" style="display:none" role="listbox" aria-label="Select a task to add as dependency">
+    <input class="sp-dep-picker-input" type="text" placeholder="Search by name or WBS…" aria-label="Search tasks to add as dependency">
+    <div class="sp-dep-list" id="sp-dep-list"></div>
+  </div>`;
 
   // Linked specs
   const linkedSpecs = S.specs.filter(s => s.depIds.includes(t.id));
@@ -3629,12 +3776,76 @@ function openTaskPanel(taskId) {
 
   const spBody = document.getElementById('sp-body');
   spBody.innerHTML = html;
+
+  // Task cards → open task panel
   spBody.querySelectorAll('[data-task-id]').forEach(el => {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
+  // Spec cards → open spec panel
   spBody.querySelectorAll('[data-spec-id]').forEach(el => {
     el.addEventListener('click', () => openSpecPanel(el.dataset.specId));
   });
+
+  // Notes: click or keyboard activates inline edit
+  const notesEl = spBody.querySelector('.sp-notes-field');
+  if (notesEl) {
+    notesEl.addEventListener('click', () => startNotesEdit(notesEl, t));
+    notesEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startNotesEdit(notesEl, t); }
+    });
+  }
+
+  // Dep × remove buttons (stop propagation so parent card click doesn't fire)
+  spBody.querySelectorAll('[data-rm-dep]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); removeDep(t, +btn.dataset.rmDep); });
+  });
+
+  // Add dependency picker
+  const addDepBtn = document.getElementById('sp-add-dep-btn');
+  const depPickerEl = document.getElementById('sp-dep-picker');
+  const depInputEl = depPickerEl ? depPickerEl.querySelector('.sp-dep-picker-input') : null;
+  const depListEl = document.getElementById('sp-dep-list');
+  if (addDepBtn && depPickerEl && depInputEl && depListEl) {
+    const taskRef = t;
+    const openPicker = () => {
+      depPickerEl.style.display = '';
+      addDepBtn.setAttribute('aria-expanded', 'true');
+      buildDepPickerList(depInputEl, taskRef, depListEl);
+      depInputEl.focus();
+    };
+    const closePicker = () => {
+      depPickerEl.style.display = 'none';
+      addDepBtn.setAttribute('aria-expanded', 'false');
+    };
+    addDepBtn.addEventListener('click', () => {
+      depPickerEl.style.display === 'none' ? openPicker() : closePicker();
+    });
+    depInputEl.addEventListener('input', () => buildDepPickerList(depInputEl, taskRef, depListEl));
+    depInputEl.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const first = depListEl.querySelector('.sp-dep-item:not(.cycle)');
+        if (first) first.focus();
+      }
+      if (e.key === 'Escape') { closePicker(); addDepBtn.focus(); }
+    });
+    depListEl.addEventListener('keydown', e => {
+      const items = [...depListEl.querySelectorAll('.sp-dep-item:not(.cycle)')];
+      const idx = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); if (idx > 0) items[idx - 1].focus(); else depInputEl.focus(); }
+      if (e.key === 'Escape') { closePicker(); addDepBtn.focus(); }
+      if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
+    });
+    const _onDocClick = e => {
+      if (!depPickerEl.contains(e.target) && e.target !== addDepBtn) {
+        closePicker();
+        document.removeEventListener('click', _onDocClick);
+      }
+    };
+    document.addEventListener('click', _onDocClick);
+  }
+
   spCurrentType = 'task'; spCurrentId = taskId;
   showSidePanel();
 }

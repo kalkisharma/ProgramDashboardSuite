@@ -88,11 +88,14 @@ Changes are made directly in the browser and saved back to Excel with **💾 Sav
 | Edit task name | Click the name cell |
 | Change team | Click the team cell |
 | Edit % complete | Click the % cell |
+| Edit task notes | Open a task in the side panel → click the notes area; `Ctrl+Enter` saves, `Esc` cancels |
+| Add a dependency | Open a task in the side panel → click **+ Add dependency**; search by name, WBS, or ID |
+| Remove a dependency | Open a task in the side panel → hover a "Depends On" card → click `×` |
 | Add a task | Click **+ Add Task** in the toolbar |
 | Reset all edits | Click **↺ Reset** — reverts to the last imported state |
 | Save to Excel | Click **💾 Save to Excel** — exports a dated `.xlsx` re-importable into this tool |
 
-Bar drags snap to configured work days. Dependency arrows redraw automatically on drop.
+Bar drags snap to configured work days. Dependency arrows redraw automatically on drop. The dependency picker prevents cycles — tasks that would create a circular dependency are shown greyed out.
 
 ---
 
