@@ -2849,7 +2849,7 @@ function startNotesEdit(el, t) {
   el.appendChild(ta);
   const hint = document.createElement('div');
   hint.className = 'sp-hint';
-  hint.textContent = 'Ctrl+Enter to save · Esc to cancel';
+  hint.textContent = 'Ctrl/Cmd+Enter to save · Esc to cancel';
   el.appendChild(hint);
   ta.focus();
   let done = false;
@@ -2866,7 +2866,8 @@ function startNotesEdit(el, t) {
     if (newEl) newEl.focus();
   };
   ta.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); save(); }
+    e.stopPropagation(); // prevent Space/Enter from bubbling to parent div's activation listener
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
     if (e.key === 'Escape') { e.preventDefault(); cancel(); }
   });
   ta.addEventListener('blur', save);
