@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.19.0 — 2026-05-14 -->
+<!-- Program Dashboard Suite v1.20.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -736,13 +736,17 @@ body.light-mode {
 #theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ── GANTT COLUMN GRID (WBS | Name | Team | WD | %) ─────── */
-#gantt-left-header { grid-template-columns: 44px 1fr 68px 40px 44px; }
-.gantt-row         { grid-template-columns: 44px 1fr 68px 40px 44px; }
+#gantt-left-header { grid-template-columns: 44px 1fr 68px 40px 44px 18px; }
+.gantt-row         { grid-template-columns: 44px 1fr 68px 40px 44px 18px; }
 
 /* ── WD COLUMN ───────────────────────────────────────────── */
 .g-wd        { font-size: 0.72rem; font-weight: 600; text-align: right; color: var(--muted); }
 .g-wd.overdue{ color: var(--danger); }
 .g-wd.done   { color: var(--success); }
+
+/* ── CONFLICT COLUMN ─────────────────────────────────────── */
+.g-conflict        { font-size:0.78rem; color:var(--warning); visibility:hidden; display:flex; align-items:center; justify-content:center; }
+.g-conflict.active { visibility:visible; }
 
 /* ── DRAG LABEL ──────────────────────────────────────────── */
 #gantt-drag-label {
@@ -963,6 +967,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
             <span style="text-align:right">Team</span>
             <span style="text-align:right" title="Work days remaining until task end date">WD Left</span>
             <span style="text-align:right">%</span>
+            <span></span>
           </div>
           <div id="gantt-left-body"></div>
         </div>
@@ -1125,7 +1130,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.19.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.20.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1145,6 +1150,9 @@ let depArrowEls = []; // { el, predId, succId } — rebuilt each renderGantt()
 
 // Row reorder state
 let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
+let undoStack = [];            // max 20 entries, LIFO; each: { label, snapshot }
+let conflictSet = new Set();   // task IDs with scheduling conflicts; recomputed on each render
+let barDragPreSnapshot = null; // task snapshot captured at bar drag start
 
 // Org chart drag-pan state (module-level so guarded listeners share one copy)
 let orgPanListenersAttached = false;
@@ -1245,6 +1253,28 @@ function showToast(msg, undoFn, duration) {
   undoBtn.onclick = undoFn ? () => { undoFn(); toast.classList.remove('visible'); toastHasUndo = false; } : null;
   toast.classList.add('visible');
   toastTimer = setTimeout(() => { toast.classList.remove('visible'); toastHasUndo = false; }, duration);
+}
+
+function taskSnapshot() {
+  return S.tasks.map(t => ({
+    ...t,
+    start: t.start ? new Date(t.start) : null,
+    end:   t.end   ? new Date(t.end)   : null,
+    deps:  [...t.deps]
+  }));
+}
+function pushUndo(label) {
+  if (undoStack.length >= 20) undoStack.shift();
+  undoStack.push({ label, snapshot: taskSnapshot() });
+}
+function applyUndo() {
+  const entry = undoStack.pop();
+  if (!entry) return;
+  S.tasks = entry.snapshot;
+  recalcWBS(S.tasks);
+  renderGantt();
+  if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
+  showToast('Undone: ' + entry.label, null, 3000);
 }
 
 let _helpOpener = null;
@@ -1477,6 +1507,7 @@ function loadFile(file) {
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
 function parseWorkbook(wb) {
   S.info = {}; S.tasks = []; S.specs = []; S.org = []; S.weights = [];
+  undoStack = [];
 
   const ws1 = wb.Sheets['Project Info'];
   if (ws1) {
@@ -1681,6 +1712,7 @@ function startBarDrag(e, taskId) {
   const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
   const zone = getBarZone(svgX, t);
   if (!zone) { startPanDrag(e); return; }
+  barDragPreSnapshot = taskSnapshot();
   barDrag.pending = true; barDrag.taskId = taskId; barDrag.mode = zone;
   barDrag.startClientX = e.clientX; barDrag.startScrollLeft = right.scrollLeft;
   barDrag.origStart = new Date(t.start); barDrag.origEnd = new Date(t.end);
@@ -1777,7 +1809,24 @@ function endBarDrag() {
   barDrag.active = false; barDrag.pending = false;
   document.getElementById('gantt-drag-label').style.display = 'none';
   document.getElementById('gantt-right').style.cursor = '';
-  if (wasActive) renderGantt();
+  if (wasActive) {
+    const t = S.tasks.find(t => t.id === barDrag.taskId);
+    if (t && t.end <= t.start) {
+      t.start = barDrag.origStart;
+      t.end   = barDrag.origEnd;
+      barDragPreSnapshot = null;
+      renderGantt();
+      showToast('End date cannot be before start date', null, 3500);
+    } else {
+      if (barDragPreSnapshot) {
+        undoStack.push({ label: 'date adjusted', snapshot: barDragPreSnapshot });
+        if (undoStack.length > 20) undoStack.shift();
+      }
+      barDragPreSnapshot = null;
+      renderGantt();
+      showToast('Date adjusted', applyUndo, 12000);
+    }
+  }
 }
 
 function initGanttPan() {
@@ -2208,6 +2257,20 @@ function computeCriticalPath(tasks) {
   return cpSet;
 }
 
+function computeConflicts(tasks) {
+  const byId = {};
+  tasks.forEach(t => { byId[t.id] = t; });
+  const set = new Set();
+  tasks.forEach(t => {
+    if (t.milestone || !t.start) return;
+    t.deps.forEach(predId => {
+      const pred = byId[predId];
+      if (pred && pred.end && t.start < pred.end) set.add(t.id);
+    });
+  });
+  return set;
+}
+
 function toggleCriticalPath() {
   showCriticalPath = !showCriticalPath;
   localStorage.setItem('vh-show-cp', showCriticalPath ? '1' : '');
@@ -2413,6 +2476,7 @@ function prepareGanttData() {
   const W = totalDays * ganttZoom;
   const bodyH = visibleTasks.length * RH;
   const cpSet = showCriticalPath ? computeCriticalPath(S.tasks) : new Set();
+  conflictSet = computeConflicts(S.tasks);
   const exportBtn = document.getElementById('gantt-export-svg-btn');
   if (exportBtn) exportBtn.disabled = false;
   const exportPngBtn = document.getElementById('gantt-export-png-btn');
@@ -2423,10 +2487,10 @@ function prepareGanttData() {
 
   const isFiltered = ganttPhaseFilter !== 'all' || ganttTeamFilter !== 'all';
 
-  return { visibleTasks, isFiltered, minD, maxD, W, bodyH, cpSet, tx };
+  return { visibleTasks, isFiltered, minD, maxD, W, bodyH, cpSet, conflictSet, tx };
 }
 
-function renderGanttLeft({ visibleTasks, isFiltered }) {
+function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
   const lb = document.getElementById('gantt-left-body');
   lb.innerHTML = '';
   visibleTasks.forEach((t, i) => {
@@ -2447,7 +2511,8 @@ function renderGanttLeft({ visibleTasks, isFiltered }) {
       <span class="g-name" style="padding-left:${depth*10}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
       <span class="g-team" title="${esc(t.team)}">${esc(t.team)}</span>
       <span class="g-wd ${wd.cls}">${wd.text}</span>
-      <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>`;
+      <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>
+      <span class="g-conflict${conflictSet.has(t.id) ? ' active' : ''}" aria-label="Scheduling conflict" title="Scheduling conflict: starts before a predecessor ends">⚠</span>`;
 
     // WBS drag handle — whole cell is the hit target, ⠿ is visual only
     if (showHandle) {
@@ -2815,8 +2880,18 @@ function startNameEdit(span, t) {
   input.focus(); input.select();
   const commit = () => {
     const v = input.value.trim();
-    if (v) { t.name = v; }
-    renderGantt();
+    if (!v) {
+      t.name = orig;
+      renderGantt();
+      showToast('Task name cannot be empty', null, 3500);
+    } else if (v !== orig) {
+      pushUndo('name change');
+      t.name = v;
+      renderGantt();
+      showToast('Name changed', applyUndo, 5000);
+    } else {
+      renderGantt();
+    }
   };
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -2840,7 +2915,17 @@ function startTeamEdit(span, t) {
   span.textContent = '';
   span.appendChild(sel);
   sel.focus();
-  const commit = (save) => { if (save) t.team = sel.value; else t.team = orig; renderGantt(); };
+  const commit = (save) => {
+    if (save && sel.value !== orig) {
+      pushUndo('team change');
+      t.team = sel.value;
+      renderGantt();
+      showToast('Team changed', applyUndo, 5000);
+    } else {
+      t.team = orig;
+      renderGantt();
+    }
+  };
   sel.addEventListener('change', () => commit(true));
   sel.addEventListener('keydown', e => { if (e.key === 'Escape') commit(false); });
   sel.addEventListener('blur', () => { if (t.team === orig) commit(false); });
@@ -2858,8 +2943,22 @@ function startPctEdit(span, t) {
   input.focus(); input.select();
   const commit = () => {
     const v = input.value.trim();
-    if (v === '') { t.pct = orig; } else { t.pct = Math.min(100, Math.max(0, Math.round(+v))); }
-    renderGantt();
+    if (v === '') { t.pct = orig; renderGantt(); return; }
+    const raw = +v;
+    const clamped = Math.min(100, Math.max(0, Math.round(raw)));
+    if (raw < 0 || raw > 100) {
+      t.pct = clamped;
+      renderGantt();
+      showToast('Percentage must be between 0 and 100', null, 3500);
+    } else if (clamped !== orig) {
+      pushUndo('progress change');
+      t.pct = clamped;
+      renderGantt();
+      showToast('Progress updated', applyUndo, 5000);
+    } else {
+      t.pct = orig;
+      renderGantt();
+    }
   };
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commit(); }
@@ -3152,6 +3251,8 @@ function endRowDrag(e) {
   const dragged = visibleTasks[srcIdx];
   if (!dragged) { renderGantt(); return; }
 
+  pushUndo('task reorder');
+
   const origIdx = S.tasks.indexOf(dragged);
   S.tasks.splice(origIdx, 1);
 
@@ -3167,7 +3268,7 @@ function endRowDrag(e) {
   S.tasks.splice(targetIdx, 0, dragged);
   recalcWBS(S.tasks);
   renderGantt();
-  showToast('Tasks renumbered — check spec dependency links.');
+  showToast('Task reordered', applyUndo, 5000);
 }
 
 function recalcWBS(tasks) {
@@ -3912,10 +4013,12 @@ function openTaskPanel(taskId) {
       return;
     }
     const dc = ganttColor(dep.category);
+    const hasConflict = dep.end && t.start && t.start < dep.end;
     html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" data-task-id="${dep.id}">
       <div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${dep.id}" aria-label="Remove dependency: ${esc(dep.wbs)} ${esc(dep.name)}" title="Remove dependency">×</button>Task ${dep.id} · ${esc(dep.wbs)} · <span style="color:${dc}">${esc(dep.category)}</span></div>
       <div class="tc-name">${esc(dep.name)}</div>
       <div class="tc-meta">${fmt(dep.start)} → ${fmt(dep.end)} · ${dep.pct}% complete</div>
+      ${hasConflict ? `<div class="tc-risk" style="color:var(--warning)">⚠ Starts before predecessor ends (${fmt(dep.end)})</div>` : ''}
     </div>`;
   });
   html += `<button class="btn-secondary" id="sp-add-dep-btn" style="width:100%;margin-top:4px;margin-bottom:4px" aria-expanded="false">+ Add dependency</button>
