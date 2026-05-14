@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.12 — 2026-05-04 -->
+<!-- Program Dashboard Suite v1.18.0 — 2026-05-13 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -537,9 +537,8 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
 .sp-dep-rm {
   float: right; background: none; border: none; color: var(--muted);
   cursor: pointer; font-size: 0.95rem; padding: 0 3px; line-height: 1;
-  opacity: 0; transition: opacity 0.12s;
 }
-.task-card:hover .sp-dep-rm, .sp-dep-rm:focus { opacity: 1; }
+.sp-dep-rm:hover, .sp-dep-rm:focus { color: var(--danger); }
 
 /* ── PROGRAM DASHBOARD ───────────────────────────────── */
 #prog-body {
@@ -889,6 +888,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
     </div>
     <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
     <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
+    <span id="app-version-label" style="font-size:0.72rem;color:var(--muted);white-space:nowrap"></span>
     <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
     <button id="theme-toggle" onclick="toggleTheme()" aria-label="Switch theme" title="Theme: Dark">🌙</button>
   </div>
@@ -1124,6 +1124,9 @@ let spCurrentId   = null; // specId string, taskId number, or person name string
 let spOpener      = null; // element that triggered the side panel open (focus restored on close)
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
+
+const APP_VERSION = 'v1.18.0'; // also update the HTML comment on line 1
+document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
 function esc(s) {
@@ -2949,6 +2952,88 @@ function buildDepPickerList(input, t, listEl) {
   });
 }
 
+function removeSpecDep(s, taskId) {
+  const origOpener = spOpener;
+  s.depIds = s.depIds.filter(id => id !== taskId);
+  renderSpecTable();
+  spCurrentType = null; openSpecPanel(s.id); spOpener = origOpener;
+}
+
+function addSpecDep(s, taskId) {
+  const origOpener = spOpener;
+  if (!s.depIds.includes(taskId)) { s.depIds.push(taskId); s.depIds.sort((a,b) => a-b); }
+  renderSpecTable();
+  spCurrentType = null; openSpecPanel(s.id); spOpener = origOpener;
+}
+
+function buildSpecDepPickerList(input, s, listEl) {
+  const q = input.value.trim().toLowerCase();
+  const candidates = S.tasks.filter(c => !s.depIds.includes(c.id));
+  const filtered = q ? candidates.filter(c =>
+    c.name.toLowerCase().includes(q) || c.wbs.toLowerCase().includes(q) || String(c.id).includes(q)
+  ) : candidates;
+  listEl.innerHTML = '';
+  if (!filtered.length) {
+    const msg = document.createElement('div');
+    msg.className = 'sp-dep-item';
+    msg.style.cssText = 'color:var(--muted);pointer-events:none';
+    msg.textContent = 'No tasks found';
+    listEl.appendChild(msg);
+    return;
+  }
+  filtered.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'sp-dep-item';
+    div.setAttribute('role', 'option');
+    div.setAttribute('tabindex', '0');
+    div.textContent = c.wbs + ' · ' + c.name;
+    div.addEventListener('click', e => { e.stopPropagation(); addSpecDep(s, c.id); });
+    div.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); addSpecDep(s, c.id); } });
+    listEl.appendChild(div);
+  });
+}
+
+function removeSpecLink(s, taskId) {
+  const origOpener = spOpener;
+  s.depIds = s.depIds.filter(id => id !== taskId);
+  renderSpecTable();
+  spCurrentType = null; openTaskPanel(taskId); spOpener = origOpener;
+}
+
+function addSpecLink(s, taskId) {
+  const origOpener = spOpener;
+  if (!s.depIds.includes(taskId)) { s.depIds.push(taskId); s.depIds.sort((a,b) => a-b); }
+  renderSpecTable();
+  spCurrentType = null; openTaskPanel(taskId); spOpener = origOpener;
+}
+
+function buildSpecLinkPickerList(input, t, listEl) {
+  const q = input.value.trim().toLowerCase();
+  const candidates = S.specs.filter(s => !s.depIds.includes(t.id));
+  const filtered = q ? candidates.filter(s =>
+    s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)
+  ) : candidates;
+  listEl.innerHTML = '';
+  if (!filtered.length) {
+    const msg = document.createElement('div');
+    msg.className = 'sp-dep-item';
+    msg.style.cssText = 'color:var(--muted);pointer-events:none';
+    msg.textContent = 'No specs found';
+    listEl.appendChild(msg);
+    return;
+  }
+  filtered.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'sp-dep-item';
+    div.setAttribute('role', 'option');
+    div.setAttribute('tabindex', '0');
+    div.textContent = s.id + ' · ' + s.category + ' · ' + s.name;
+    div.addEventListener('click', e => { e.stopPropagation(); addSpecLink(s, t.id); });
+    div.addEventListener('keydown', e => { if (e.key==='Enter'||e.key===' ') { e.preventDefault(); addSpecLink(s, t.id); } });
+    listEl.appendChild(div);
+  });
+}
+
 // ─── ROW REORDER ─────────────────────────────────────────────────────────────
 function startRowDrag(e, visIdx, t, rowEl) {
   const lb = document.getElementById('gantt-left-body');
@@ -3683,19 +3768,19 @@ function openSpecPanel(specId) {
     ${s.notes ? `<div class="sp-meta-notes">${esc(s.notes)}</div>` : ''}
   </div>`;
 
+  const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
+    const t = S.tasks.find(t => t.id === id);
+    return t && t.start && t.start <= TODAY;
+  });
+  if (hasRisk) html += `<div class="risk-alert">⚠ BLOCKED RISK — Spec is TBD but dependent task(s) have started</div>`;
+  html += `<div class="sp-section-label">Dependent Tasks${s.depIds.length ? ` (${s.depIds.length})` : ''}</div>`;
   if (!s.depIds.length) {
     html += `<div class="no-deps">No task dependencies linked<br>to this specification.</div>`;
   } else {
-    const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
-      const t = S.tasks.find(t => t.id === id);
-      return t && t.start && t.start <= TODAY;
-    });
-    if (hasRisk) html += `<div class="risk-alert">⚠ BLOCKED RISK — Spec is TBD but dependent task(s) have started</div>`;
-    html += `<div class="sp-section-label">Dependent Tasks (${s.depIds.length})</div>`;
     s.depIds.forEach(id => {
       const t = S.tasks.find(t => t.id === id);
       if (!t) {
-        html += `<div class="task-card future"><div class="tc-id">Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found in Schedule</div></div>`;
+        html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-spec-dep="${id}" aria-label="Remove task ${id}" title="Remove">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found in Schedule</div></div>`;
         return;
       }
       const started = t.start && t.start <= TODAY;
@@ -3704,19 +3789,76 @@ function openSpecPanel(specId) {
       const gc      = ganttColor(t.category);
       const showRisk = started && !done && s.status === 'TBD';
       html += `<div class="task-card clickable ${cardCls}" data-task-id="${t.id}">
-        <div class="tc-id">Task ${t.id} · ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span></div>
+        <div class="tc-id"><button class="sp-dep-rm" data-rm-spec-dep="${t.id}" aria-label="Remove task ${esc(t.wbs)} ${esc(t.name)}" title="Remove">×</button>Task ${t.id} · ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span></div>
         <div class="tc-name">${t.milestone ? '◆ ' : ''}${esc(t.name)}</div>
         <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${esc(t.team)} · ${t.pct}% complete</div>
         ${showRisk ? '<div class="tc-risk">⚠ Task active — spec not yet locked</div>' : ''}
       </div>`;
     });
   }
+  html += `<button class="btn-secondary" id="sp-add-spec-dep-btn" style="width:100%;margin-top:4px;margin-bottom:4px" aria-expanded="false">+ Link task</button>
+  <div id="sp-spec-dep-picker" class="sp-dep-picker" style="display:none" role="listbox" aria-label="Select a task to link">
+    <input class="sp-dep-picker-input" type="text" placeholder="Search by name or WBS…" aria-label="Search tasks to link">
+    <div class="sp-dep-list" id="sp-spec-dep-list"></div>
+  </div>`;
 
   const spBody = document.getElementById('sp-body');
   spBody.innerHTML = html;
   spBody.querySelectorAll('[data-task-id]').forEach(el => {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
+
+  // Spec dep × remove buttons
+  spBody.querySelectorAll('[data-rm-spec-dep]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); removeSpecDep(s, +btn.dataset.rmSpecDep); });
+  });
+
+  // Link task picker
+  const addSpecDepBtn = document.getElementById('sp-add-spec-dep-btn');
+  const specDepPickerEl = document.getElementById('sp-spec-dep-picker');
+  const specDepInputEl = specDepPickerEl ? specDepPickerEl.querySelector('.sp-dep-picker-input') : null;
+  const specDepListEl = document.getElementById('sp-spec-dep-list');
+  if (addSpecDepBtn && specDepPickerEl && specDepInputEl && specDepListEl) {
+    const specRef = s;
+    const openPicker = () => {
+      specDepPickerEl.style.display = '';
+      addSpecDepBtn.setAttribute('aria-expanded', 'true');
+      buildSpecDepPickerList(specDepInputEl, specRef, specDepListEl);
+      specDepInputEl.focus();
+    };
+    const closePicker = () => {
+      specDepPickerEl.style.display = 'none';
+      addSpecDepBtn.setAttribute('aria-expanded', 'false');
+    };
+    addSpecDepBtn.addEventListener('click', () => {
+      specDepPickerEl.style.display === 'none' ? openPicker() : closePicker();
+    });
+    specDepInputEl.addEventListener('input', () => buildSpecDepPickerList(specDepInputEl, specRef, specDepListEl));
+    specDepInputEl.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const first = specDepListEl.querySelector('.sp-dep-item[tabindex]');
+        if (first) first.focus();
+      }
+      if (e.key === 'Escape') { closePicker(); addSpecDepBtn.focus(); }
+    });
+    specDepListEl.addEventListener('keydown', e => {
+      const items = [...specDepListEl.querySelectorAll('.sp-dep-item[tabindex]')];
+      const idx = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); if (idx > 0) items[idx - 1].focus(); else specDepInputEl.focus(); }
+      if (e.key === 'Escape') { closePicker(); addSpecDepBtn.focus(); }
+      if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
+    });
+    const _onDocClick = e => {
+      if (!specDepPickerEl.contains(e.target) && e.target !== addSpecDepBtn) {
+        closePicker();
+        document.removeEventListener('click', _onDocClick);
+      }
+    };
+    document.addEventListener('click', _onDocClick);
+  }
+
   spCurrentType = 'spec'; spCurrentId = specId;
   showSidePanel();
 }
@@ -3777,20 +3919,27 @@ function openTaskPanel(taskId) {
 
   // Linked specs
   const linkedSpecs = S.specs.filter(s => s.depIds.includes(t.id));
-  if (linkedSpecs.length) {
-    html += `<div class="sp-section-label" style="margin-top:16px">Linked Specifications (${linkedSpecs.length})</div>`;
+  html += `<div class="sp-section-label" style="margin-top:16px">Linked Specifications${linkedSpecs.length ? ` (${linkedSpecs.length})` : ''}</div>`;
+  if (!linkedSpecs.length) {
+    html += `<div class="no-deps">No specifications linked<br>to this task.</div>`;
+  } else {
     linkedSpecs.forEach(s => {
       const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
       const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
       const hasRisk = s.status === 'TBD' && started && !done;
       html += `<div class="task-card clickable ${hasRisk?'risk':'future'}" data-spec-id="${esc(s.id)}">
-        <div class="tc-id"><code style="color:${col.text}">${esc(s.id)}</code> · ${esc(s.category)}</div>
+        <div class="tc-id"><button class="sp-dep-rm" data-rm-spec-link="${esc(s.id)}" aria-label="Unlink ${esc(s.id)}" title="Unlink">×</button><code style="color:${col.text}">${esc(s.id)}</code> · ${esc(s.category)}</div>
         <div class="tc-name">${esc(s.name)}</div>
         <div class="tc-meta">${esc(s.value)} ${esc(s.units)} &nbsp; <span class="badge ${sc}">${esc(s.status)}</span></div>
         ${hasRisk ? '<div class="tc-risk">⚠ Spec not locked while task is active</div>' : ''}
       </div>`;
     });
   }
+  html += `<button class="btn-secondary" id="sp-add-spec-link-btn" style="width:100%;margin-top:4px;margin-bottom:4px" aria-expanded="false">+ Link specification</button>
+  <div id="sp-spec-link-picker" class="sp-dep-picker" style="display:none" role="listbox" aria-label="Select a specification to link">
+    <input class="sp-dep-picker-input" type="text" placeholder="Search by ID, category, or name…" aria-label="Search specifications to link">
+    <div class="sp-dep-list" id="sp-spec-link-list"></div>
+  </div>`;
 
   const spBody = document.getElementById('sp-body');
   spBody.innerHTML = html;
@@ -3799,7 +3948,7 @@ function openTaskPanel(taskId) {
   spBody.querySelectorAll('[data-task-id]').forEach(el => {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
-  // Spec cards → open spec panel
+  // Spec cards → open spec panel (stop propagation handled by × button)
   spBody.querySelectorAll('[data-spec-id]').forEach(el => {
     el.addEventListener('click', () => openSpecPanel(el.dataset.specId));
   });
@@ -3813,9 +3962,18 @@ function openTaskPanel(taskId) {
     });
   }
 
-  // Dep × remove buttons (stop propagation so parent card click doesn't fire)
+  // Dep × remove buttons
   spBody.querySelectorAll('[data-rm-dep]').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); removeDep(t, +btn.dataset.rmDep); });
+  });
+
+  // Spec link × remove buttons
+  spBody.querySelectorAll('[data-rm-spec-link]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const spec = S.specs.find(s => s.id === btn.dataset.rmSpecLink);
+      if (spec) removeSpecLink(spec, t.id);
+    });
   });
 
   // Add dependency picker
@@ -3862,6 +4020,52 @@ function openTaskPanel(taskId) {
       }
     };
     document.addEventListener('click', _onDocClick);
+  }
+
+  // Link specification picker
+  const addSpecLinkBtn = document.getElementById('sp-add-spec-link-btn');
+  const specLinkPickerEl = document.getElementById('sp-spec-link-picker');
+  const specLinkInputEl = specLinkPickerEl ? specLinkPickerEl.querySelector('.sp-dep-picker-input') : null;
+  const specLinkListEl = document.getElementById('sp-spec-link-list');
+  if (addSpecLinkBtn && specLinkPickerEl && specLinkInputEl && specLinkListEl) {
+    const taskRef = t;
+    const openSpecPicker = () => {
+      specLinkPickerEl.style.display = '';
+      addSpecLinkBtn.setAttribute('aria-expanded', 'true');
+      buildSpecLinkPickerList(specLinkInputEl, taskRef, specLinkListEl);
+      specLinkInputEl.focus();
+    };
+    const closeSpecPicker = () => {
+      specLinkPickerEl.style.display = 'none';
+      addSpecLinkBtn.setAttribute('aria-expanded', 'false');
+    };
+    addSpecLinkBtn.addEventListener('click', () => {
+      specLinkPickerEl.style.display === 'none' ? openSpecPicker() : closeSpecPicker();
+    });
+    specLinkInputEl.addEventListener('input', () => buildSpecLinkPickerList(specLinkInputEl, taskRef, specLinkListEl));
+    specLinkInputEl.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        const first = specLinkListEl.querySelector('.sp-dep-item[tabindex]');
+        if (first) first.focus();
+      }
+      if (e.key === 'Escape') { closeSpecPicker(); addSpecLinkBtn.focus(); }
+    });
+    specLinkListEl.addEventListener('keydown', e => {
+      const items = [...specLinkListEl.querySelectorAll('.sp-dep-item[tabindex]')];
+      const idx = items.indexOf(document.activeElement);
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); if (idx > 0) items[idx - 1].focus(); else specLinkInputEl.focus(); }
+      if (e.key === 'Escape') { closeSpecPicker(); addSpecLinkBtn.focus(); }
+      if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
+    });
+    const _onDocClickSpec = e => {
+      if (!specLinkPickerEl.contains(e.target) && e.target !== addSpecLinkBtn) {
+        closeSpecPicker();
+        document.removeEventListener('click', _onDocClickSpec);
+      }
+    };
+    document.addEventListener('click', _onDocClickSpec);
   }
 
   spCurrentType = 'task'; spCurrentId = taskId;
