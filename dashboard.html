@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.20.0 — 2026-05-14 -->
+<!-- Program Dashboard Suite v1.21.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -998,6 +998,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
         </div>
         <span id="specs-count" style="font-size:0.8rem;color:var(--muted);margin-left:4px"></span>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <button class="btn-secondary" onclick="addNewSpec()" title="Create a new specification">+ Add Spec</button>
           <button class="zoom-btn" onclick="adjustSpecsZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
           <span id="specs-zoom-label" class="zoom-label">100%</span>
           <button class="zoom-btn" onclick="adjustSpecsZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
@@ -1130,7 +1131,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.20.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.21.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1256,12 +1257,15 @@ function showToast(msg, undoFn, duration) {
 }
 
 function taskSnapshot() {
-  return S.tasks.map(t => ({
-    ...t,
-    start: t.start ? new Date(t.start) : null,
-    end:   t.end   ? new Date(t.end)   : null,
-    deps:  [...t.deps]
-  }));
+  return {
+    tasks: S.tasks.map(t => ({
+      ...t,
+      start: t.start ? new Date(t.start) : null,
+      end:   t.end   ? new Date(t.end)   : null,
+      deps:  [...t.deps]
+    })),
+    specs: S.specs.map(s => ({ ...s, depIds: [...s.depIds] }))
+  };
 }
 function pushUndo(label) {
   if (undoStack.length >= 20) undoStack.shift();
@@ -1270,10 +1274,13 @@ function pushUndo(label) {
 function applyUndo() {
   const entry = undoStack.pop();
   if (!entry) return;
-  S.tasks = entry.snapshot;
+  S.tasks = entry.snapshot.tasks;
+  S.specs  = entry.snapshot.specs;
   recalcWBS(S.tasks);
   renderGantt();
+  renderSpecs();
   if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
+  else if (spCurrentType === 'spec') { spCurrentType = null; openSpecPanel(spCurrentId); }
   showToast('Undone: ' + entry.label, null, 3000);
 }
 
@@ -2967,6 +2974,91 @@ function startPctEdit(span, t) {
   input.addEventListener('blur', commit);
 }
 
+// ─── SPEC PANEL INLINE EDITS ─────────────────────────────────────────────────
+function _refreshSpecPanel(s) {
+  renderSpecTable();
+  spCurrentType = null;
+  openSpecPanel(s.id);
+}
+
+function startSpecNameEdit(el, s) {
+  if (el.querySelector('input')) return;
+  const orig = s.name;
+  const input = document.createElement('input');
+  input.className = 'gantt-cell-input'; input.value = orig;
+  el.textContent = ''; el.appendChild(input); input.focus(); input.select();
+  const commit = () => {
+    const v = input.value.trim();
+    if (!v) { s.name = orig; _refreshSpecPanel(s); showToast('Spec name cannot be empty', null, 3500); }
+    else if (v !== orig) { pushUndo('spec name change'); s.name = v; _refreshSpecPanel(s); showToast('Spec name changed', applyUndo, 5000); }
+    else { _refreshSpecPanel(s); }
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { s.name = orig; _refreshSpecPanel(s); } });
+  input.addEventListener('blur', commit);
+}
+
+function startSpecCategoryEdit(el, s) {
+  if (el.querySelector('select')) return;
+  const orig = s.category;
+  const cats = Object.keys(SPEC_COLORS);
+  const sel = document.createElement('select');
+  sel.className = 'gantt-cell-select';
+  cats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; if (c === s.category) o.selected = true; sel.appendChild(o); });
+  el.textContent = ''; el.appendChild(sel); sel.focus();
+  const commit = (save) => {
+    if (save && sel.value !== orig) { pushUndo('spec category change'); s.category = sel.value; _refreshSpecPanel(s); showToast('Category changed', applyUndo, 5000); }
+    else { s.category = orig; _refreshSpecPanel(s); }
+  };
+  sel.addEventListener('change', () => commit(true));
+  sel.addEventListener('keydown', e => { if (e.key === 'Escape') commit(false); });
+  sel.addEventListener('blur', () => { if (s.category === orig) commit(false); });
+}
+
+function startSpecValueEdit(el, s) {
+  if (el.querySelector('input')) return;
+  const orig = s.value;
+  const input = document.createElement('input');
+  input.className = 'gantt-cell-input'; input.value = orig;
+  el.textContent = ''; el.appendChild(input); input.focus(); input.select();
+  const commit = () => {
+    const v = input.value.trim();
+    if (v !== String(orig)) { pushUndo('spec value change'); s.value = v; _refreshSpecPanel(s); showToast('Value changed', applyUndo, 5000); }
+    else { _refreshSpecPanel(s); }
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { s.value = orig; _refreshSpecPanel(s); } });
+  input.addEventListener('blur', commit);
+}
+
+function startSpecUnitsEdit(el, s) {
+  if (el.querySelector('input')) return;
+  const orig = s.units;
+  const input = document.createElement('input');
+  input.className = 'gantt-cell-input'; input.value = orig;
+  el.textContent = ''; el.appendChild(input); input.focus(); input.select();
+  const commit = () => {
+    const v = input.value.trim();
+    if (v !== orig) { pushUndo('spec units change'); s.units = v; _refreshSpecPanel(s); showToast('Units changed', applyUndo, 5000); }
+    else { _refreshSpecPanel(s); }
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { s.units = orig; _refreshSpecPanel(s); } });
+  input.addEventListener('blur', commit);
+}
+
+function startSpecGroupEdit(el, s) {
+  if (el.querySelector('input')) return;
+  const orig = s.group;
+  const input = document.createElement('input');
+  input.className = 'gantt-cell-input'; input.value = orig;
+  el.textContent = ''; el.appendChild(input); input.focus(); input.select();
+  const commit = () => {
+    const v = input.value.trim();
+    if (v !== orig) { pushUndo('spec group change'); s.group = v; _refreshSpecPanel(s); showToast('Group changed', applyUndo, 5000); }
+    else { _refreshSpecPanel(s); }
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } if (e.key === 'Escape') { s.group = orig; _refreshSpecPanel(s); } });
+  input.addEventListener('blur', commit);
+}
+
 // ─── SIDE PANEL: NOTES EDIT ──────────────────────────────────────────────────
 function startNotesEdit(el, t) {
   if (el.querySelector('textarea')) return;
@@ -3289,6 +3381,28 @@ function recalcWBS(tasks) {
 }
 
 // ─── ADD TASK / RESET ─────────────────────────────────────────────────────────
+function addNewSpec() {
+  const filterEl = document.getElementById('specs-filter');
+  const activeCat = (filterEl && filterEl.value !== 'all')
+    ? filterEl.value
+    : (Object.keys(SPEC_COLORS)[0] || 'General');
+  const prefix = activeCat.slice(0, 2).toUpperCase();
+  const existingNums = S.specs
+    .filter(s => s.id.toUpperCase().startsWith(prefix))
+    .map(s => { const m = s.id.match(/(\d+)$/); return m ? parseInt(m[1]) : 0; });
+  const nextNum = existingNums.length ? Math.max(...existingNums) + 1 : 1;
+  const newId = prefix + '-' + String(nextNum).padStart(3, '0');
+  const newSpec = {
+    id: newId, category: activeCat, name: 'New Specification',
+    value: '', units: '—', status: 'TBD', group: '', notes: '', depIds: []
+  };
+  pushUndo('spec added');
+  S.specs.push(newSpec);
+  renderSpecs();
+  openSpecPanel(newId);
+  showToast('Specification added', applyUndo, 5000);
+}
+
 function addGanttTask() {
   if (!S.tasks.length) return;
   const lastTask = S.tasks[S.tasks.length - 1];
@@ -3914,8 +4028,8 @@ function openSpecPanel(specId) {
 
   const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
   let html = `<div class="sp-meta">
-    <div class="sp-meta-id"><code style="color:${col.text}">${esc(s.id)}</code> · ${esc(s.category)} · ${esc(s.group)}</div>
-    <div class="sp-meta-val">${esc(s.value)} <span style="font-size:0.85rem;font-weight:400;color:var(--muted)">${esc(s.units)}</span></div>
+    <div class="sp-meta-id"><code style="color:${col.text}">${esc(s.id)}</code> · <span class="sp-cat-edit" tabindex="0" title="Click to edit category" style="color:${col.text};cursor:pointer">${esc(s.category)}</span> · <span class="sp-group-edit" tabindex="0" title="Click to edit group" style="cursor:text">${esc(s.group) || '<span style="color:var(--muted);font-style:italic">No group</span>'}</span></div>
+    <div class="sp-meta-val"><span class="sp-val-edit" tabindex="0" title="Click to edit value" style="cursor:text">${esc(String(s.value))}</span> <span class="sp-units-edit" tabindex="0" title="Click to edit units" style="font-size:0.85rem;font-weight:400;color:var(--muted);cursor:text">${esc(s.units)}</span></div>
     <span class="badge ${sc}">${esc(s.status)}</span>
     ${s.notes ? `<div class="sp-meta-notes">${esc(s.notes)}</div>` : ''}
   </div>`;
@@ -3965,10 +4079,30 @@ function openSpecPanel(specId) {
     btn.addEventListener('click', e => { e.stopPropagation(); removeSpecDep(s, +btn.dataset.rmSpecDep); });
   });
 
+  // Inline field edits: category, value, units, group
+  [{ sel: '.sp-cat-edit', fn: startSpecCategoryEdit }, { sel: '.sp-val-edit', fn: startSpecValueEdit },
+   { sel: '.sp-units-edit', fn: startSpecUnitsEdit }, { sel: '.sp-group-edit', fn: startSpecGroupEdit }]
+    .forEach(({ sel, fn }) => {
+      const el = spBody.querySelector(sel);
+      if (!el) return;
+      el.addEventListener('click', () => fn(el, s));
+      el.addEventListener('keydown', e => { if (e.key === 'Enter') fn(el, s); });
+    });
+
   wirePicker({ btnId: 'sp-add-spec-dep-btn', pickerId: 'sp-spec-dep-picker', listId: 'sp-spec-dep-list', buildFn: buildSpecDepPickerList, ref: s });
 
   spCurrentType = 'spec'; spCurrentId = specId;
   showSidePanel();
+
+  // Wire title (sp-title) for name edit
+  const titleEl = document.getElementById('sp-title');
+  if (titleEl) {
+    titleEl.style.cursor = 'text';
+    titleEl.setAttribute('tabindex', '0');
+    titleEl.setAttribute('title', 'Click to edit name');
+    titleEl.addEventListener('click', () => startSpecNameEdit(titleEl, s));
+    titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') startSpecNameEdit(titleEl, s); });
+  }
 }
 
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
