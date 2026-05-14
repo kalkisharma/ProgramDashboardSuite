@@ -11,6 +11,7 @@
 :root {
   --bg: #0d1117;
   --surface: #161b22;
+  --surface-overlay: #1c2128;
   --border: #30363d;
   --text: #e6edf3;
   --muted: #8b949e;
@@ -18,6 +19,10 @@
   --danger: #f85149;
   --warning: #d29922;
   --success: #3fb950;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
 }
 
 body {
@@ -74,6 +79,7 @@ body {
   .btn-secondary { transition: all 0.15s; }
 }
 .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-sm { font-size: 0.75rem; padding: 5px 10px; }
 
 /* ── MAIN ────────────────────────────────────────────── */
 #main { flex: 1; overflow: hidden; position: relative; display: flex; flex-direction: column; }
@@ -184,7 +190,7 @@ body {
   cursor: pointer;
 }
 .gantt-row:hover { background: rgba(88,166,255,0.07); }
-.gantt-row.kb-focus { background: rgba(88,166,255,0.12); outline: 1px solid rgba(88,166,255,0.3); outline-offset: -1px; }
+.gantt-row.kb-focus { background: rgba(88,166,255,0.12); outline: 2px solid var(--accent); outline-offset: -1px; }
 .g-wbs { font-size: 0.7rem; font-family: monospace; }
 .g-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
 .g-name:focus-visible, .g-team:focus-visible, .g-pct:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-radius: 2px; }
@@ -196,7 +202,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 12px;
+  padding: 8px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -222,8 +228,8 @@ body {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 5px;
-  padding: 3px 8px;
-  font-size: 0.78rem;
+  padding: 5px 10px;
+  font-size: 0.82rem;
   cursor: pointer;
 }
 #gantt-toolbar select:focus { outline: none; border-color: var(--accent); }
@@ -287,16 +293,16 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
   flex-shrink: 0;
 }
 #specs-toolbar select {
-  padding: 6px 12px;
+  padding: 5px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   cursor: pointer;
 }
 #specs-body { flex: 1; overflow: auto; }
-#specs-body::-webkit-scrollbar { width: 6px; height: 6px; }
+#specs-body::-webkit-scrollbar { width: 4px; height: 4px; }
 #specs-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 #specs-table-wrap { min-width: max-content; }
 
@@ -309,7 +315,7 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
   font-weight: 700;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -376,7 +382,7 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
   position: fixed;
   display: none;
   z-index: 600;
-  background: #1c2128;
+  background: var(--surface-overlay);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 14px;
@@ -411,7 +417,7 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 16px 16px 12px;
+  padding: 16px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -462,7 +468,7 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
   font-size: 0.7rem;
   font-weight: 700;
   color: var(--muted);
-  letter-spacing: 0.07em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 10px;
 }
@@ -660,6 +666,7 @@ body.light-mode .wt-bar-tgt { background: rgba(0,0,0,0.45); }
 body.dim-mode {
   --bg: #22272e;
   --surface: #2d333b;
+  --surface-overlay: #22272e;
   --border: #444c56;
   --text: #adbac7;
   --muted: #768390;
@@ -668,13 +675,12 @@ body.dim-mode {
   --warning: #c69026;
   --success: #46954a;
 }
-body.dim-mode #tooltip { background: #22272e; }
-body.dim-mode #gantt-drag-label { background: #2d333b; }
 
 /* ── LIGHT MODE ──────────────────────────────────────────── */
 body.light-mode {
   --bg: #edecea;
   --surface: #e2e0dc;
+  --surface-overlay: #edecea;
   --border: #cac7c2;
   --text: #1f2328;
   --muted: #5a6370;
@@ -683,8 +689,6 @@ body.light-mode {
   --warning: #9a6700;
   --success: #1a7f37;
 }
-body.light-mode #tooltip { background: #edecea; }
-body.light-mode #gantt-drag-label { background: #e2e0dc; }
 
 /* Theme switch transition — scoped to toggle only, does not affect hover states */
 @media (prefers-reduced-motion: no-preference) {
@@ -746,7 +750,7 @@ body.light-mode #gantt-drag-label { background: #e2e0dc; }
   position: fixed;
   display: none;
   z-index: 700;
-  background: #1c2128;
+  background: var(--surface);
   border: 1px solid var(--accent);
   border-radius: 6px;
   padding: 5px 10px;
@@ -884,7 +888,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
       <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    onclick="switchTab(this,'org')"    style="display:none">Org Chart</button>
     </div>
     <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
-    <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Export current dashboard to Excel" style="display:none">Export to Excel</button>
+    <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
     <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
     <button id="theme-toggle" onclick="toggleTheme()" aria-label="Switch theme" title="Theme: Dark">🌙</button>
   </div>
@@ -931,19 +935,19 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom</span>
         <div style="width:1px;height:18px;background:var(--border);margin:0 10px;flex-shrink:0"></div>
         <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Phase:</span>
-        <select id="gantt-phase-filter" onchange="setGanttPhaseFilter(this.value)">
+        <select id="gantt-phase-filter" aria-label="Filter by phase" onchange="setGanttPhaseFilter(this.value)">
           <option value="all">All</option>
         </select>
         <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-left:10px">Team:</span>
-        <select id="gantt-team-filter" onchange="setGanttTeamFilter(this.value)">
+        <select id="gantt-team-filter" aria-label="Filter by team" onchange="setGanttTeamFilter(this.value)">
           <option value="all">All</option>
         </select>
         <span style="flex:1"></span>
-        <button class="btn-secondary" id="legend-btn" onclick="toggleGanttLegend()" title="Toggle phase color legend" aria-label="Toggle phase color legend" aria-expanded="false" style="font-size:0.75rem;padding:5px 10px">Legend</button>
+        <button class="btn-secondary btn-sm" id="legend-btn" onclick="toggleGanttLegend()" title="Toggle phase color legend" aria-label="Toggle phase color legend" aria-expanded="false">Legend</button>
         <div id="gantt-legend" style="display:none;position:absolute;top:100%;right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap;min-width:180px" role="region" aria-label="Phase color legend"></div>
-        <button class="btn-secondary" id="gantt-cp-btn" onclick="toggleCriticalPath()" title="Highlight critical path" aria-label="Toggle critical path highlighting" aria-pressed="false" style="font-size:0.75rem;padding:5px 10px">CP</button>
+        <button class="btn-secondary btn-sm" id="gantt-cp-btn" onclick="toggleCriticalPath()" title="Highlight critical path" aria-label="Toggle critical path highlighting" aria-pressed="false">CP</button>
         <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar" aria-label="Toggle mini calendar" aria-expanded="false">📅</button>
-        <button class="btn-secondary" id="workdays-btn" onclick="toggleWorkdaysPicker()" title="Configure work days" aria-label="Configure work days" aria-expanded="false" style="font-size:0.75rem;padding:5px 10px">Mon–Fri ▾</button>
+        <button class="btn-secondary btn-sm" id="workdays-btn" onclick="toggleWorkdaysPicker()" title="Configure work days" aria-label="Configure work days" aria-expanded="false">Mon–Fri ▾</button>
         <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
         <button class="btn-secondary" id="gantt-export-svg-btn" onclick="exportGanttSVG()" title="Export Gantt chart as SVG file" disabled>Export SVG</button>
         <button class="btn-secondary" id="gantt-export-png-btn" onclick="exportGanttPNG()" title="Export Gantt chart as PNG image" disabled>Export PNG</button>
@@ -978,7 +982,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
     <div class="tab-panel" id="specs-panel" role="tabpanel" aria-labelledby="tab-btn-specs">
       <div id="specs-toolbar">
         <span style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase">Filter:</span>
-        <select id="specs-filter" onchange="setSpecsCategoryFilter(this.value)">
+        <select id="specs-filter" aria-label="Filter by category" onchange="setSpecsCategoryFilter(this.value)">
           <option value="all">All Categories</option>
         </select>
         <div style="position:relative;display:flex;align-items:center">
@@ -1011,7 +1015,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 
     <!-- ORG CHART TAB -->
     <div class="tab-panel" id="org-panel" role="tabpanel" aria-labelledby="tab-btn-org">
-      <div id="org-toolbar" style="display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+      <div id="org-toolbar" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
         <button class="zoom-btn" onclick="adjustOrgZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
         <span id="org-zoom-label" class="zoom-label">100%</span>
         <button class="zoom-btn" onclick="adjustOrgZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
@@ -1102,7 +1106,8 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> on cell</td><td style="padding:5px 8px;color:var(--muted)">Edit Gantt task name, team, or % inline</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Space</kbd> on row</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for a Specifications row</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Esc</kbd></td><td style="padding:5px 8px;color:var(--muted)">Cancel an inline edit without saving</td></tr>
-      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap">Click / Tab+Enter on arrow</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for the dependent task</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap">Click / Tab+Enter on arrow</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for the dependent task</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Cmd+Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Enter</kbd></td><td style="padding:5px 8px;color:var(--muted)">Save notes in the task side panel (Mac / Win)</td></tr>
     </table>
 
     </div>
@@ -1820,6 +1825,18 @@ function initGanttPan() {
   });
 }
 initGanttPan();
+
+// Clean up drag ghosts if user alt-tabs or the window loses focus mid-drag
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (rowDrag.active) endRowDrag();
+    if (barDrag.active || barDrag.pending) endBarDrag();
+  }
+});
+window.addEventListener('blur', () => {
+  if (rowDrag.active) endRowDrag();
+  if (barDrag.active || barDrag.pending) endBarDrag();
+});
 
 function updateGanttKeyFocus(delta) {
   const lb = document.getElementById('gantt-left-body');
@@ -3089,7 +3106,7 @@ function saveToExcel() {
     schRows.push([
       t.id, t.wbs, t.name, t.category,
       fmtD(t.start), fmtD(t.end), t.pct,
-      t.deps.join(','), t.team,
+      t.deps.filter(id => S.tasks.some(x => x.id === id)).join(','), t.team,
       t.milestone ? 'Y' : 'N', t.notes
     ]);
   });
@@ -3097,7 +3114,7 @@ function saveToExcel() {
 
   // Specifications
   const spRows = [['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs']];
-  S.specs.forEach(s => spRows.push([s.id, s.category, s.name, s.value, s.units, s.status, s.group, s.notes, s.depIds.join(',')]));
+  S.specs.forEach(s => spRows.push([s.id, s.category, s.name, s.value, s.units, s.status, s.group, s.notes, s.depIds.filter(id => S.tasks.some(x => x.id === id)).join(',')]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(spRows), 'Specifications');
 
   // Org Chart
@@ -4384,6 +4401,6 @@ function generateSampleExcel() {
   if (_savedTeam) ganttTeamFilter = _savedTeam;
 })();
 </script>
-<div id="app-toast" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
+<div id="app-toast" role="status" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
 </body>
 </html>
