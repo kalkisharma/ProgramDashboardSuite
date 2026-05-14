@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.18.0 — 2026-05-13 -->
+<!-- Program Dashboard Suite v1.19.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1125,7 +1125,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.18.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.19.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -2338,6 +2338,13 @@ function exportGanttPNG() {
 }
 
 function renderGantt() {
+  const data = prepareGanttData();
+  if (!data) return;
+  renderGanttLeft(data);
+  renderGanttSVG(data);
+}
+
+function prepareGanttData() {
   if (!S.tasks.length) {
     if (dashboardLoaded) {
       const lb = document.getElementById('gantt-left-body');
@@ -2348,7 +2355,7 @@ function renderGantt() {
         <button onclick="toggleHelp()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;margin-top:4px">Open help guide</button>
       </div>`;
     }
-    return;
+    return null;
   }
 
   // ── Populate filter dropdowns ──────────────────────
@@ -2394,7 +2401,7 @@ function renderGantt() {
     lb.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem;text-align:center">No tasks match the current filters. <button onclick="document.getElementById(\'gantt-phase-filter\').value=\'all\';document.getElementById(\'gantt-team-filter\').value=\'all\';ganttPhaseFilter=\'all\';ganttTeamFilter=\'all\';renderGantt()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filters</button></div>';
     document.getElementById('gantt-svg-wrap').innerHTML = '';
     document.getElementById('gantt-header-svg-wrap').innerHTML = '';
-    return;
+    return null;
   }
 
   // Use full task set for date axis so the time range stays stable when filtering
@@ -2405,16 +2412,23 @@ function renderGantt() {
   const totalDays = daysBetween(minD, maxD);
   const W = totalDays * ganttZoom;
   const bodyH = visibleTasks.length * RH;
-  const NS = 'http://www.w3.org/2000/svg';
   const cpSet = showCriticalPath ? computeCriticalPath(S.tasks) : new Set();
   const exportBtn = document.getElementById('gantt-export-svg-btn');
   if (exportBtn) exportBtn.disabled = false;
   const exportPngBtn = document.getElementById('gantt-export-png-btn');
   if (exportPngBtn) exportPngBtn.disabled = false;
 
-  // ── Left panel rows ────────────────────────────────
-  lb.innerHTML = '';
+  const tx = daysBetween(minD, TODAY) * ganttZoom;
+  ganttTodayX = (tx > 0 && tx < W) ? tx : null;
+
   const isFiltered = ganttPhaseFilter !== 'all' || ganttTeamFilter !== 'all';
+
+  return { visibleTasks, isFiltered, minD, maxD, W, bodyH, cpSet, tx };
+}
+
+function renderGanttLeft({ visibleTasks, isFiltered }) {
+  const lb = document.getElementById('gantt-left-body');
+  lb.innerHTML = '';
   visibleTasks.forEach((t, i) => {
     const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
@@ -2480,8 +2494,10 @@ function renderGantt() {
     const rows = lb.querySelectorAll('.gantt-row');
     if (rows[ganttKeyFocusIdx]) rows[ganttKeyFocusIdx].classList.add('kb-focus');
   }
+}
 
-  // ── Build SVG ──────────────────────────────────────
+function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
+  const NS = 'http://www.w3.org/2000/svg';
   const isLight = document.body.classList.contains('light-mode');
   const svgHeaderBg  = isLight ? '#e8eaed'                  : '#161b22';
   const svgRowStripe = isLight ? 'rgba(0,0,0,0.025)'        : 'rgba(255,255,255,0.015)';
@@ -2501,9 +2517,6 @@ function renderGantt() {
   hsvg.appendChild(hTitle);
   appendRect(hsvg, NS, 0, 0, W, HH, svgHeaderBg);
   renderHeader(hsvg, NS, minD, maxD, W);
-  // Today line + label in header
-  const tx = daysBetween(minD, TODAY) * ganttZoom;
-  ganttTodayX = (tx > 0 && tx < W) ? tx : null;
   if (tx > 0 && tx < W) {
     appendLine(hsvg, NS, tx, tx, 0, HH, '#f85149', 1.5, '4,3');
     const htl = document.createElementNS(NS, 'text');
@@ -2920,6 +2933,44 @@ function addDep(t, depId) {
   if (!t.deps.includes(depId)) { t.deps.push(depId); t.deps.sort((a, b) => a - b); }
   renderGantt();
   spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+}
+
+function wirePicker({ btnId, pickerId, listId, buildFn, ref, itemSelector }) {
+  const sel    = itemSelector || '.sp-dep-item[tabindex]';
+  const btn    = document.getElementById(btnId);
+  const picker = document.getElementById(pickerId);
+  if (!btn || !picker) return;
+  const input = picker.querySelector('.sp-dep-picker-input');
+  const list  = document.getElementById(listId);
+  if (!input || !list) return;
+  const open = () => {
+    picker.style.display = '';
+    btn.setAttribute('aria-expanded', 'true');
+    buildFn(input, ref, list);
+    input.focus();
+  };
+  const close = () => {
+    picker.style.display = 'none';
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  btn.addEventListener('click', () => picker.style.display === 'none' ? open() : close());
+  input.addEventListener('input', () => buildFn(input, ref, list));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); const f = list.querySelector(sel); if (f) f.focus(); }
+    if (e.key === 'Escape') { close(); btn.focus(); }
+  });
+  list.addEventListener('keydown', e => {
+    const items = [...list.querySelectorAll(sel)];
+    const idx   = items.indexOf(document.activeElement);
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); if (idx > 0) items[idx - 1].focus(); else input.focus(); }
+    if (e.key === 'Escape')    { close(); btn.focus(); }
+    if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
+  });
+  const _onDocClick = e => {
+    if (!picker.contains(e.target) && e.target !== btn) { close(); document.removeEventListener('click', _onDocClick); }
+  };
+  document.addEventListener('click', _onDocClick);
 }
 
 function buildDepPickerList(input, t, listEl) {
@@ -3813,51 +3864,7 @@ function openSpecPanel(specId) {
     btn.addEventListener('click', e => { e.stopPropagation(); removeSpecDep(s, +btn.dataset.rmSpecDep); });
   });
 
-  // Link task picker
-  const addSpecDepBtn = document.getElementById('sp-add-spec-dep-btn');
-  const specDepPickerEl = document.getElementById('sp-spec-dep-picker');
-  const specDepInputEl = specDepPickerEl ? specDepPickerEl.querySelector('.sp-dep-picker-input') : null;
-  const specDepListEl = document.getElementById('sp-spec-dep-list');
-  if (addSpecDepBtn && specDepPickerEl && specDepInputEl && specDepListEl) {
-    const specRef = s;
-    const openPicker = () => {
-      specDepPickerEl.style.display = '';
-      addSpecDepBtn.setAttribute('aria-expanded', 'true');
-      buildSpecDepPickerList(specDepInputEl, specRef, specDepListEl);
-      specDepInputEl.focus();
-    };
-    const closePicker = () => {
-      specDepPickerEl.style.display = 'none';
-      addSpecDepBtn.setAttribute('aria-expanded', 'false');
-    };
-    addSpecDepBtn.addEventListener('click', () => {
-      specDepPickerEl.style.display === 'none' ? openPicker() : closePicker();
-    });
-    specDepInputEl.addEventListener('input', () => buildSpecDepPickerList(specDepInputEl, specRef, specDepListEl));
-    specDepInputEl.addEventListener('keydown', e => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const first = specDepListEl.querySelector('.sp-dep-item[tabindex]');
-        if (first) first.focus();
-      }
-      if (e.key === 'Escape') { closePicker(); addSpecDepBtn.focus(); }
-    });
-    specDepListEl.addEventListener('keydown', e => {
-      const items = [...specDepListEl.querySelectorAll('.sp-dep-item[tabindex]')];
-      const idx = items.indexOf(document.activeElement);
-      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); if (idx > 0) items[idx - 1].focus(); else specDepInputEl.focus(); }
-      if (e.key === 'Escape') { closePicker(); addSpecDepBtn.focus(); }
-      if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
-    });
-    const _onDocClick = e => {
-      if (!specDepPickerEl.contains(e.target) && e.target !== addSpecDepBtn) {
-        closePicker();
-        document.removeEventListener('click', _onDocClick);
-      }
-    };
-    document.addEventListener('click', _onDocClick);
-  }
+  wirePicker({ btnId: 'sp-add-spec-dep-btn', pickerId: 'sp-spec-dep-picker', listId: 'sp-spec-dep-list', buildFn: buildSpecDepPickerList, ref: s });
 
   spCurrentType = 'spec'; spCurrentId = specId;
   showSidePanel();
@@ -3976,97 +3983,9 @@ function openTaskPanel(taskId) {
     });
   });
 
-  // Add dependency picker
-  const addDepBtn = document.getElementById('sp-add-dep-btn');
-  const depPickerEl = document.getElementById('sp-dep-picker');
-  const depInputEl = depPickerEl ? depPickerEl.querySelector('.sp-dep-picker-input') : null;
-  const depListEl = document.getElementById('sp-dep-list');
-  if (addDepBtn && depPickerEl && depInputEl && depListEl) {
-    const taskRef = t;
-    const openPicker = () => {
-      depPickerEl.style.display = '';
-      addDepBtn.setAttribute('aria-expanded', 'true');
-      buildDepPickerList(depInputEl, taskRef, depListEl);
-      depInputEl.focus();
-    };
-    const closePicker = () => {
-      depPickerEl.style.display = 'none';
-      addDepBtn.setAttribute('aria-expanded', 'false');
-    };
-    addDepBtn.addEventListener('click', () => {
-      depPickerEl.style.display === 'none' ? openPicker() : closePicker();
-    });
-    depInputEl.addEventListener('input', () => buildDepPickerList(depInputEl, taskRef, depListEl));
-    depInputEl.addEventListener('keydown', e => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const first = depListEl.querySelector('.sp-dep-item:not(.cycle)');
-        if (first) first.focus();
-      }
-      if (e.key === 'Escape') { closePicker(); addDepBtn.focus(); }
-    });
-    depListEl.addEventListener('keydown', e => {
-      const items = [...depListEl.querySelectorAll('.sp-dep-item:not(.cycle)')];
-      const idx = items.indexOf(document.activeElement);
-      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); if (idx > 0) items[idx - 1].focus(); else depInputEl.focus(); }
-      if (e.key === 'Escape') { closePicker(); addDepBtn.focus(); }
-      if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
-    });
-    const _onDocClick = e => {
-      if (!depPickerEl.contains(e.target) && e.target !== addDepBtn) {
-        closePicker();
-        document.removeEventListener('click', _onDocClick);
-      }
-    };
-    document.addEventListener('click', _onDocClick);
-  }
+  wirePicker({ btnId: 'sp-add-dep-btn', pickerId: 'sp-dep-picker', listId: 'sp-dep-list', buildFn: buildDepPickerList, ref: t, itemSelector: '.sp-dep-item:not(.cycle)' });
 
-  // Link specification picker
-  const addSpecLinkBtn = document.getElementById('sp-add-spec-link-btn');
-  const specLinkPickerEl = document.getElementById('sp-spec-link-picker');
-  const specLinkInputEl = specLinkPickerEl ? specLinkPickerEl.querySelector('.sp-dep-picker-input') : null;
-  const specLinkListEl = document.getElementById('sp-spec-link-list');
-  if (addSpecLinkBtn && specLinkPickerEl && specLinkInputEl && specLinkListEl) {
-    const taskRef = t;
-    const openSpecPicker = () => {
-      specLinkPickerEl.style.display = '';
-      addSpecLinkBtn.setAttribute('aria-expanded', 'true');
-      buildSpecLinkPickerList(specLinkInputEl, taskRef, specLinkListEl);
-      specLinkInputEl.focus();
-    };
-    const closeSpecPicker = () => {
-      specLinkPickerEl.style.display = 'none';
-      addSpecLinkBtn.setAttribute('aria-expanded', 'false');
-    };
-    addSpecLinkBtn.addEventListener('click', () => {
-      specLinkPickerEl.style.display === 'none' ? openSpecPicker() : closeSpecPicker();
-    });
-    specLinkInputEl.addEventListener('input', () => buildSpecLinkPickerList(specLinkInputEl, taskRef, specLinkListEl));
-    specLinkInputEl.addEventListener('keydown', e => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const first = specLinkListEl.querySelector('.sp-dep-item[tabindex]');
-        if (first) first.focus();
-      }
-      if (e.key === 'Escape') { closeSpecPicker(); addSpecLinkBtn.focus(); }
-    });
-    specLinkListEl.addEventListener('keydown', e => {
-      const items = [...specLinkListEl.querySelectorAll('.sp-dep-item[tabindex]')];
-      const idx = items.indexOf(document.activeElement);
-      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx < items.length - 1) items[idx + 1].focus(); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); if (idx > 0) items[idx - 1].focus(); else specLinkInputEl.focus(); }
-      if (e.key === 'Escape') { closeSpecPicker(); addSpecLinkBtn.focus(); }
-      if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
-    });
-    const _onDocClickSpec = e => {
-      if (!specLinkPickerEl.contains(e.target) && e.target !== addSpecLinkBtn) {
-        closeSpecPicker();
-        document.removeEventListener('click', _onDocClickSpec);
-      }
-    };
-    document.addEventListener('click', _onDocClickSpec);
-  }
+  wirePicker({ btnId: 'sp-add-spec-link-btn', pickerId: 'sp-spec-link-picker', listId: 'sp-spec-link-list', buildFn: buildSpecLinkPickerList, ref: t });
 
   spCurrentType = 'task'; spCurrentId = taskId;
   showSidePanel();

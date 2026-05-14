@@ -179,3 +179,27 @@ Built with a recursive SVG layout algorithm:
 ### Rendering Pattern
 
 Every load triggers a full re-render of all tabs. There is no incremental update — the entire SVG or table is rebuilt on each render call. The tooltip (`#tooltip`) is shared across all tabs and positioned via `positionTooltip(e)`.
+
+## Versioning
+
+Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
+
+- **PATCH**: bug fixes, copy changes, CSS tweaks — no data/schema/layout changes
+- **MINOR**: new features or interactions, backward-compatible
+- **MAJOR**: localStorage schema break, full restructure, or v2.0.0 milestone gate
+
+**Two sync points per release** (both must be updated):
+1. Line 1 HTML comment: `<!-- Program Dashboard Suite vX.Y.Z — YYYY-MM-DD -->`
+2. `APP_VERSION` JS constant (~line 1128): `const APP_VERSION = 'vX.Y.Z';`
+
+**Git tag every release**: `git tag vX.Y.Z <commit-sha>` on the version-bump commit.
+
+### Roadmap to v2.0.0
+
+| Version | Phase | Description |
+|---|---|---|
+| **v1.19.0** | Code Cleanup | `wirePicker()` extraction, `renderGantt()` split, `openTaskPanel()` cleanup |
+| **v1.20.0** | Data Integrity | Input validation, undo/redo stack for task edits, Gantt date conflict detection |
+| **v1.21.0** | UX Maturity | Full keyboard navigation, print stylesheet, mobile-responsive topbar and panels |
+| **v1.22.0** | Feature Freeze | Any remaining core features; no new features after this |
+| **v2.0.0** | Milestone | Undo/redo complete, all panels keyboard-accessible, localStorage schema stable, zero data-loss bugs |
