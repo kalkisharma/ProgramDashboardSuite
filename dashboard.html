@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.21.1 — 2026-05-14 -->
+<!-- Program Dashboard Suite v1.21.2 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1131,7 +1131,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.21.1'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.21.2'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -3464,6 +3464,8 @@ function addNewSpec() {
   renderSpecs();
   openSpecPanel(newId);
   showToast('Specification added', applyUndo, 5000);
+  const nameEl = document.querySelector('#sp-body .sp-name-edit');
+  if (nameEl) startSpecNameEdit(nameEl, newSpec);
 }
 
 function addGanttTask() {
@@ -4091,8 +4093,9 @@ function openSpecPanel(specId) {
 
   const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
   let html = `<div class="sp-meta">
+    <div class="sp-meta-name"><span class="sp-name-edit" tabindex="0" title="Click to edit name" style="font-weight:600;cursor:text">${esc(s.name)}</span></div>
     <div class="sp-meta-id"><code class="sp-id-edit" tabindex="0" title="Click to edit spec ID" style="color:${col.text};cursor:text">${esc(s.id)}</code> · <span class="sp-cat-edit" tabindex="0" title="Click to edit category" style="color:${col.text};cursor:pointer">${esc(s.category)}</span> · <span class="sp-group-edit" tabindex="0" title="Click to edit group" style="cursor:text">${esc(s.group) || '<span style="color:var(--muted);font-style:italic">No group</span>'}</span></div>
-    <div class="sp-meta-val"><span class="sp-val-edit" tabindex="0" title="Click to edit value" style="cursor:text">${esc(String(s.value))}</span> <span class="sp-units-edit" tabindex="0" title="Click to edit units" style="font-size:0.85rem;font-weight:400;color:var(--muted);cursor:text">${esc(s.units)}</span></div>
+    <div class="sp-meta-val"><span class="sp-val-edit" tabindex="0" title="Click to edit value" style="cursor:text">${s.value !== '' && s.value != null ? esc(String(s.value)) : '<span style="color:var(--muted);font-style:italic">Add value…</span>'}</span> <span class="sp-units-edit" tabindex="0" title="Click to edit units" style="font-size:0.85rem;font-weight:400;color:var(--muted);cursor:text">${esc(s.units)}</span></div>
     <span class="badge ${sc}">${esc(s.status)}</span>
     <div class="sp-notes-field${s.notes ? '' : ' empty'}" tabindex="0" role="button" aria-label="Edit spec notes">${s.notes ? esc(s.notes).replace(/\n/g,'<br>') : ''}</div>
   </div>`;
@@ -4142,8 +4145,9 @@ function openSpecPanel(specId) {
     btn.addEventListener('click', e => { e.stopPropagation(); removeSpecDep(s, +btn.dataset.rmSpecDep); });
   });
 
-  // Inline field edits: id, category, value, units, group, notes
-  [{ sel: '.sp-id-edit', fn: startSpecIdEdit }, { sel: '.sp-cat-edit', fn: startSpecCategoryEdit },
+  // Inline field edits: name, id, category, value, units, group, notes
+  [{ sel: '.sp-name-edit', fn: startSpecNameEdit }, { sel: '.sp-id-edit', fn: startSpecIdEdit },
+   { sel: '.sp-cat-edit', fn: startSpecCategoryEdit },
    { sel: '.sp-val-edit', fn: startSpecValueEdit }, { sel: '.sp-units-edit', fn: startSpecUnitsEdit },
    { sel: '.sp-group-edit', fn: startSpecGroupEdit }]
     .forEach(({ sel, fn }) => {
