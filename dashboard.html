@@ -1,4 +1,4 @@
-﻿<!-- Program Dashboard Suite v2.0.0 — 2026-05-14 -->
+﻿<!-- Program Dashboard Suite v2.1.0 — 2026-05-15 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -540,6 +540,14 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
 }
 .sp-dep-rm:hover, .sp-dep-rm:focus { color: var(--danger); }
 
+/* ── SIDE PANEL FORM INPUTS ──────────────────────────── */
+.sp-form-group { margin-bottom: 12px; }
+.sp-form-label { display: block; font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.sp-form-input { width: 100%; box-sizing: border-box; background: var(--surface); border: 1px solid var(--border); border-radius: 5px; color: var(--text); font-size: 0.85rem; padding: 6px 8px; outline: none; font-family: inherit; }
+.sp-form-input:focus { border-color: var(--accent); }
+textarea.sp-form-input { resize: vertical; min-height: 60px; }
+select.sp-form-input { cursor: pointer; }
+
 /* ── PROGRAM DASHBOARD ───────────────────────────────── */
 #prog-body {
   flex: 1;
@@ -908,6 +916,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
     </div>
     <button class="btn-secondary" id="generate-sample-btn" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
     <button class="btn-secondary" id="save-excel-btn" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
+    <button class="btn-secondary btn-sm" id="proj-info-btn" title="Edit project information" style="display:none">Edit Project Info</button>
     <span id="app-version-label" style="font-size:0.72rem;color:var(--muted);white-space:nowrap"></span>
     <button class="btn-secondary" id="help-btn" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
     <button id="theme-toggle" aria-label="Switch theme" title="Theme: Dark">🌙</button>
@@ -1034,6 +1043,9 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 
     <!-- WEIGHT BUDGET TAB -->
     <div class="tab-panel" id="weight-panel" role="tabpanel" aria-labelledby="tab-btn-weight">
+      <div id="wt-toolbar" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <button class="btn-secondary btn-sm" id="weight-add-btn">+ Add Row</button>
+      </div>
       <div id="weight-body"></div>
     </div>
 
@@ -1044,6 +1056,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
         <span id="org-zoom-label" class="zoom-label">100%</span>
         <button class="zoom-btn" id="org-zoom-in-btn" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom · drag to pan</span>
+        <button class="btn-secondary btn-sm" id="org-add-btn" style="margin-left:12px">+ Add Person</button>
         <div style="margin-left:auto;position:relative;display:flex;align-items:center">
           <input id="org-search" type="text" placeholder="Search people…" aria-label="Search people"
             style="background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:0.79rem;padding:4px 24px 4px 8px;outline:none;width:150px">
@@ -1151,7 +1164,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v2.0.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v2.1.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1324,6 +1337,8 @@ function _restoreSnapshot(snapshot) {
   if (ProjectData.org.length)     safeRender(renderOrgChart,     'Org Chart');
   if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
   else if (spCurrentType === 'spec') { spCurrentType = null; openSpecPanel(spCurrentId); }
+  else if (spCurrentType === 'org') { const n = spCurrentId; spCurrentType = null; if (ProjectData.org.find(p => p.name === n)) openOrgPanel(n); else closeSidePanel(); }
+  else if (spCurrentType === 'weight' || spCurrentType === 'info') closeSidePanel();
 }
 /** Pops the top undo entry, pushes current state to redoStack, and restores previous state. */
 function applyUndo() {
@@ -1732,6 +1747,7 @@ function renderDashboard() {
   document.getElementById('weight-tab-btn').style.display = ProjectData.weights.length ? '' : 'none';
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
+  document.getElementById('proj-info-btn').style.display = '';
   dashboardLoaded = true;
   ganttScrolledToday = false;
   ganttPhaseFilter = 'all';
@@ -4056,7 +4072,7 @@ function renderWeightBudget() {
             const barColor = margin < 0 ? '#d29922' : '#3fb950';
             const mSign    = margin >= 0 ? '+' : '';
             const mClass   = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
-            return `<div class="wt-row" style="padding-left:12px">
+            return `<div class="wt-row" style="padding-left:12px;cursor:pointer" data-wt-idx="${ProjectData.weights.indexOf(w)}" title="Click to edit">
               <div title="${esc(w.subsystem)} (${esc(w.group)})">${esc(w.subsystem)}</div>
               <div class="wt-bar-wrap" style="cursor:crosshair"
                 data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}">
@@ -4085,12 +4101,109 @@ function renderWeightBudget() {
     el.addEventListener('mousemove', positionTooltip);
     el.addEventListener('mouseleave', hideWtTooltip);
   });
-  body.addEventListener('click', e => { const h = e.target.closest('.wt-group-header'); if (h) toggleWtGroup(h); });
+  body.addEventListener('click', e => {
+    const h = e.target.closest('.wt-group-header');
+    if (h) { toggleWtGroup(h); return; }
+    const row = e.target.closest('.wt-row[data-wt-idx]');
+    if (row && !e.target.closest('.wt-bar-wrap')) openWeightPanel(+row.dataset.wtIdx);
+  });
   body.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') {
       const h = e.target.closest('.wt-group-header'); if (h) { e.preventDefault(); toggleWtGroup(h); }
     }
   });
+}
+
+// ─── WEIGHT BUDGET EDITING ────────────────────────────────────────────────────
+/** @param {number} idx - Index in ProjectData.weights; opens an edit form in the side panel. */
+function openWeightPanel(idx) {
+  if (spCurrentType === 'weight' && spCurrentId === idx) { closeSidePanel(); return; }
+  spOpener = document.activeElement;
+  const w = ProjectData.weights[idx];
+  if (!w) return;
+  document.getElementById('sp-title').textContent = w.subsystem || 'Weight Row';
+
+  const unit = getWeightUnit();
+  const statusOpts = ['On Track','Over Budget','Under Review','TBD'].map(s =>
+    `<option${s === w.status ? ' selected' : ''}>${esc(s)}</option>`).join('');
+
+  const html = `<div class="sp-meta" style="padding:14px 14px 4px">
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="wt-edit-subsystem">Subsystem</label>
+      <input class="sp-form-input" id="wt-edit-subsystem" type="text" value="${esc(w.subsystem)}">
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="wt-edit-group">Group</label>
+      <input class="sp-form-input" id="wt-edit-group" type="text" value="${esc(w.group)}">
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="wt-edit-target">Target Weight (${esc(unit)})</label>
+      <input class="sp-form-input" id="wt-edit-target" type="number" step="0.1" min="0" value="${w.target}">
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="wt-edit-est">Estimated Weight (${esc(unit)})</label>
+      <input class="sp-form-input" id="wt-edit-est" type="number" step="0.1" min="0" value="${w.estimated}">
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="wt-edit-status">Status</label>
+      <select class="sp-form-input" id="wt-edit-status">${statusOpts}</select>
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="wt-edit-notes">Notes</label>
+      <textarea class="sp-form-input" id="wt-edit-notes" rows="3">${esc(w.notes || '')}</textarea>
+    </div>
+  </div>
+  <div style="padding:0 16px">
+    <button class="btn-primary" id="wt-save-btn" style="width:100%;margin-bottom:8px">Save Changes</button>
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <button class="btn-secondary btn-sm" id="wt-delete-btn" style="width:100%">Delete Row</button>
+    </div>
+  </div>`;
+
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  document.getElementById('wt-save-btn').addEventListener('click', () => saveWeightRow(idx));
+  document.getElementById('wt-delete-btn').addEventListener('click', () => deleteWeightRow(idx));
+  spCurrentType = 'weight'; spCurrentId = idx;
+  showSidePanel();
+}
+
+function saveWeightRow(idx) {
+  pushUndo('edit weight row');
+  const w = ProjectData.weights[idx];
+  w.subsystem = document.getElementById('wt-edit-subsystem').value.trim() || w.subsystem;
+  w.group     = document.getElementById('wt-edit-group').value.trim();
+  w.target    = parseFloat(document.getElementById('wt-edit-target').value) || 0;
+  w.estimated = parseFloat(document.getElementById('wt-edit-est').value) || 0;
+  w.status    = document.getElementById('wt-edit-status').value;
+  w.notes     = document.getElementById('wt-edit-notes').value;
+  document.getElementById('sp-title').textContent = w.subsystem || 'Weight Row';
+  safeRender(renderWeightBudget, 'Weight Budget');
+  showToast('Weight row saved');
+}
+
+function deleteWeightRow(idx) {
+  const btn = document.getElementById('wt-delete-btn');
+  if (!btn.dataset.confirming) {
+    btn.dataset.confirming = '1'; btn.textContent = 'Tap again to confirm delete';
+    btn.style.background = 'var(--danger)'; btn.style.color = '#fff';
+    setTimeout(() => { if (btn.dataset.confirming) { btn.dataset.confirming = ''; btn.textContent = 'Delete Row'; btn.style.background = ''; btn.style.color = ''; } }, 3000);
+    return;
+  }
+  pushUndo('delete weight row');
+  ProjectData.weights.splice(idx, 1);
+  closeSidePanel();
+  if (!ProjectData.weights.length) document.getElementById('weight-tab-btn').style.display = 'none';
+  else safeRender(renderWeightBudget, 'Weight Budget');
+  showToast('Weight row deleted · undo with Ctrl+Z');
+}
+
+function addWeightRow() {
+  pushUndo('add weight row');
+  ProjectData.weights.push({ subsystem: 'New Subsystem', group: 'Other', target: 0, estimated: 0, status: 'TBD', notes: '' });
+  document.getElementById('weight-tab-btn').style.display = '';
+  safeRender(renderWeightBudget, 'Weight Budget');
+  openWeightPanel(ProjectData.weights.length - 1);
 }
 
 // ─── SPECS ────────────────────────────────────────────────────────────────────
@@ -4538,6 +4651,10 @@ function openOrgPanel(name) {
     html += `<div class="no-deps">No tasks assigned to the ${esc(person.team)} team.</div>`;
   }
 
+  html += `<div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+    <button class="btn-secondary btn-sm" id="org-edit-person-btn" style="width:100%">Edit Person</button>
+  </div>`;
+
   const spBody = document.getElementById('sp-body');
   spBody.innerHTML = html;
   spBody.querySelectorAll('[data-org-name]').forEach(el => {
@@ -4546,8 +4663,169 @@ function openOrgPanel(name) {
   spBody.querySelectorAll('[data-task-id]').forEach(el => {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
+  spBody.querySelector('#org-edit-person-btn').addEventListener('click', () => openOrgEditPanel(name));
   spCurrentType = 'org'; spCurrentId = name;
   showSidePanel();
+}
+
+// ─── ORG CHART EDITING ────────────────────────────────────────────────────────
+/** @param {string|null} name - Person's current name, or null to create a new person. */
+function openOrgEditPanel(name) {
+  const person = name ? ProjectData.org.find(p => p.name === name) : null;
+  const isNew  = !person;
+  spOpener = spOpener || document.activeElement;
+  document.getElementById('sp-title').textContent = isNew ? 'Add Person' : `Edit: ${person.name}`;
+
+  const allTeams = [...new Set(ProjectData.org.map(p => p.team).filter(Boolean))].sort();
+  const teamDl   = allTeams.map(t => `<option>${esc(t)}</option>`).join('');
+
+  const html = `<div class="sp-meta" style="padding:14px 14px 4px">
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="org-edit-name">Name</label>
+      <input class="sp-form-input" id="org-edit-name" type="text" value="${esc(person ? person.name : '')}">
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="org-edit-title">Title / Role</label>
+      <input class="sp-form-input" id="org-edit-title" type="text" value="${esc(person ? person.title : '')}">
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="org-edit-team">Team</label>
+      <input class="sp-form-input" id="org-edit-team" type="text" list="org-team-dl" value="${esc(person ? person.team : '')}">
+      <datalist id="org-team-dl">${teamDl}</datalist>
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="org-edit-reports">Reports To <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.7rem">(comma-separated)</span></label>
+      <input class="sp-form-input" id="org-edit-reports" type="text" value="${esc(person ? person.reportsTo.join(', ') : '')}">
+    </div>
+    <div class="sp-form-group">
+      <label class="sp-form-label" for="org-edit-email">Email</label>
+      <input class="sp-form-input" id="org-edit-email" type="email" value="${esc(person ? person.email : '')}">
+    </div>
+  </div>
+  <div style="padding:0 16px">
+    <button class="btn-primary" id="org-save-btn" style="width:100%;margin-bottom:8px">${isNew ? 'Add Person' : 'Save Changes'}</button>
+    ${!isNew ? `<button class="btn-secondary btn-sm" id="org-cancel-btn" style="width:100%;margin-bottom:8px">Cancel</button>
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <button class="btn-secondary btn-sm" id="org-delete-btn" style="width:100%">Delete Person</button>
+    </div>` : ''}
+  </div>`;
+
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  document.getElementById('org-save-btn').addEventListener('click', () => saveOrgPerson(name));
+  if (!isNew) {
+    document.getElementById('org-cancel-btn').addEventListener('click', () => openOrgPanel(name));
+    document.getElementById('org-delete-btn').addEventListener('click', () => deleteOrgPerson(name));
+  }
+
+  if (!spCurrentType) { spCurrentType = 'org'; spCurrentId = name; showSidePanel(); }
+}
+
+function saveOrgPerson(oldName) {
+  const newName    = document.getElementById('org-edit-name').value.trim();
+  const newTitle   = document.getElementById('org-edit-title').value.trim();
+  const newTeam    = document.getElementById('org-edit-team').value.trim();
+  const newReports = document.getElementById('org-edit-reports').value.split(',').map(s => s.trim()).filter(Boolean);
+  const newEmail   = document.getElementById('org-edit-email').value.trim();
+  if (!newName) { showToast('Name is required'); return; }
+
+  pushUndo(oldName ? 'edit org person' : 'add org person');
+
+  if (oldName) {
+    const person = ProjectData.org.find(p => p.name === oldName);
+    if (!person) return;
+    if (newName !== oldName) {
+      ProjectData.org.forEach(p => { p.reportsTo = p.reportsTo.map(r => r === oldName ? newName : r); });
+    }
+    person.name = newName; person.title = newTitle; person.team = newTeam;
+    person.reportsTo = newReports; person.email = newEmail;
+  } else {
+    ProjectData.org.push({ name: newName, title: newTitle, team: newTeam, reportsTo: newReports, email: newEmail });
+    document.getElementById('org-tab-btn').style.display = '';
+  }
+
+  spCurrentType = null;
+  safeRender(renderOrgChart, 'Org Chart');
+  openOrgPanel(newName);
+  showToast(oldName ? 'Person updated' : `${newName} added`);
+}
+
+function deleteOrgPerson(name) {
+  const btn = document.getElementById('org-delete-btn');
+  if (!btn.dataset.confirming) {
+    btn.dataset.confirming = '1'; btn.textContent = 'Tap again to confirm delete';
+    btn.style.background = 'var(--danger)'; btn.style.color = '#fff';
+    setTimeout(() => { if (btn.dataset.confirming) { btn.dataset.confirming = ''; btn.textContent = 'Delete Person'; btn.style.background = ''; btn.style.color = ''; } }, 3000);
+    return;
+  }
+  pushUndo('delete org person');
+  ProjectData.org = ProjectData.org.filter(p => p.name !== name);
+  ProjectData.org.forEach(p => { p.reportsTo = p.reportsTo.filter(r => r !== name); });
+  closeSidePanel();
+  if (!ProjectData.org.length) document.getElementById('org-tab-btn').style.display = 'none';
+  else safeRender(renderOrgChart, 'Org Chart');
+  showToast('Person deleted · undo with Ctrl+Z');
+}
+
+// ─── PROJECT INFO EDITING ─────────────────────────────────────────────────────
+/** Opens the project info editor in the side panel. Second call closes it (toggle). */
+function openInfoPanel() {
+  if (spCurrentType === 'info') { closeSidePanel(); return; }
+  spOpener = document.activeElement;
+  document.getElementById('sp-title').textContent = 'Project Info';
+
+  const STANDARD = ['Project Title','Project Subtitle','File Administrator','Program Start','Program End','Work Days','Weight Unit'];
+  const PHASES   = Array.from({ length: 10 }, (_, i) => `Phase ${i + 1} Name`);
+  const extraKeys = Object.keys(ProjectData.info).filter(k => !STANDARD.includes(k) && !PHASES.includes(k));
+
+  const field = (key) => `<div class="sp-form-group" data-info-key="${esc(key)}">
+    <label class="sp-form-label">${esc(key)}</label>
+    <input class="sp-form-input info-edit-input" type="text" value="${esc(String(ProjectData.info[key] || ''))}">
+  </div>`;
+
+  let html = `<div class="sp-meta" style="padding:14px 14px 4px">
+    ${STANDARD.map(field).join('')}
+    <div class="sp-section-label" style="margin:8px 0 6px">Phase Names</div>
+    ${PHASES.map(field).join('')}
+  </div>`;
+
+  if (extraKeys.length) {
+    html += `<div class="sp-section-label" style="margin:8px 16px 6px">Other Fields</div>
+    <div class="sp-meta" style="padding:14px 14px 4px;margin:0 16px">
+      ${extraKeys.map(field).join('')}
+    </div>`;
+  }
+
+  html += `<div style="padding:0 16px;margin-top:8px">
+    <button class="btn-primary" id="info-save-btn" style="width:100%">Save Changes</button>
+  </div>`;
+
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  document.getElementById('info-save-btn').addEventListener('click', saveInfoPanel);
+  spCurrentType = 'info'; spCurrentId = null;
+  showSidePanel();
+}
+
+function saveInfoPanel() {
+  pushUndo('edit project info');
+  document.querySelectorAll('#sp-body [data-info-key]').forEach(group => {
+    const key = group.dataset.infoKey;
+    const val = group.querySelector('.info-edit-input').value.trim();
+    if (val) ProjectData.info[key] = val; else delete ProjectData.info[key];
+  });
+  const wd = ProjectData.info['Work Days'];
+  if (wd) { ganttWorkDays = parseWorkDays(String(wd)); safeSetItem('vh-workdays', JSON.stringify(ganttWorkDays)); }
+  const title    = ProjectData.info['Project Title']      || 'Vehicle Design Dashboard';
+  const subtitle = ProjectData.info['Project Subtitle']   || '';
+  const admin    = ProjectData.info['File Administrator'] || '';
+  const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
+  document.getElementById('project-title').textContent    = title;
+  document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
+  document.title = title + ' — Program Dashboard';
+  safeRender(renderGantt,    'Gantt Chart');
+  safeRender(renderProgDash, 'Program Dashboard');
+  showToast('Project info saved');
 }
 
 function showSidePanel() {
@@ -5082,6 +5360,11 @@ document.getElementById('org-search-clear').addEventListener('click', () => {
   document.getElementById('org-search').value = '';
   renderOrgChart();
 });
+
+// Weight budget, org chart, and project info editing
+document.getElementById('weight-add-btn').addEventListener('click', addWeightRow);
+document.getElementById('org-add-btn').addEventListener('click', () => openOrgEditPanel(null));
+document.getElementById('proj-info-btn').addEventListener('click', openInfoPanel);
 
 // Side panel and modals
 document.getElementById('sp-close').addEventListener('click', closeSidePanel);
