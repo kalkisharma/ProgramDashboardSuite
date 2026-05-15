@@ -1,4 +1,4 @@
-﻿<!-- Program Dashboard Suite v2.5.0 — 2026-05-15 -->
+﻿<!-- Program Dashboard Suite v2.6.0 — 2026-05-15 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1190,7 +1190,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v2.5.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v2.6.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1850,6 +1850,12 @@ let calDisplayMonth  = null; // { year, month } currently visible in the mini ca
 let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
 function setGanttPhaseFilter(val) { ganttPhaseFilter = val; safeSetItem('vh-filter-phase', val); renderGantt(); }
 function setGanttTeamFilter(val)  { ganttTeamFilter  = val; safeSetItem('vh-filter-team', val);  renderGantt(); }
+function clearGanttFilters() {
+  document.getElementById('gantt-phase-filter').value = 'all';
+  document.getElementById('gantt-team-filter').value  = 'all';
+  ganttPhaseFilter = 'all'; ganttTeamFilter = 'all';
+  renderGantt();
+}
 function togglePhaseCollapse(phaseNum) {
   if (collapsedPhases.has(phaseNum)) collapsedPhases.delete(phaseNum); else collapsedPhases.add(phaseNum);
   safeSetItem('vh-collapsed-phases', JSON.stringify([...collapsedPhases]));
@@ -2335,11 +2341,11 @@ function renderGanttCalendar() {
   const today       = new Date();
 
   let html = `<div class="cal-nav">
-    <button class="zoom-btn" onclick="navigateCalendar(-1);event.stopPropagation()">&#8249;</button>
+    <button class="zoom-btn" data-nav="-1">&#8249;</button>
     <span>${MONTHS[month]} ${year}</span>
     <div style="display:flex;gap:4px">
-      <button class="zoom-btn" onclick="navigateCalendar(1);event.stopPropagation()">&#8250;</button>
-      <button class="zoom-btn" onclick="document.getElementById('gantt-calendar').classList.remove('open');event.stopPropagation()" title="Close calendar">&#215;</button>
+      <button class="zoom-btn" data-nav="1">&#8250;</button>
+      <button class="zoom-btn" data-close-cal title="Close calendar">&#215;</button>
     </div>
   </div><div class="cal-grid">`;
 
@@ -2388,6 +2394,13 @@ function renderGanttCalendar() {
   cal.innerHTML = html;
   cal.querySelectorAll('button[data-date]').forEach(btn => {
     btn.addEventListener('click', () => jumpToGanttDate(btn.dataset.date));
+  });
+  cal.querySelectorAll('button[data-nav]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); navigateCalendar(+btn.dataset.nav); });
+  });
+  cal.querySelector('button[data-close-cal]')?.addEventListener('click', e => {
+    e.stopPropagation();
+    document.getElementById('gantt-calendar').classList.remove('open');
   });
 }
 
@@ -2679,12 +2692,15 @@ function prepareGanttData() {
   if (!ProjectData.tasks.length) {
     if (dashboardLoaded) {
       const lb = document.getElementById('gantt-left-body');
-      if (lb) lb.innerHTML = `<div role="status" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;gap:10px;color:var(--muted);text-align:center">
-        <div style="font-size:2rem">📋</div>
-        <div style="font-weight:700;color:var(--text)">No tasks found</div>
-        <div style="font-size:0.82rem">Check that your Excel file includes a <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Schedule</code> sheet with at least one task row.</div>
-        <button onclick="toggleHelp()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;margin-top:4px">Open help guide</button>
-      </div>`;
+      if (lb) {
+        lb.innerHTML = `<div role="status" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;gap:10px;color:var(--muted);text-align:center">
+          <div style="font-size:2rem">📋</div>
+          <div style="font-weight:700;color:var(--text)">No tasks found</div>
+          <div style="font-size:0.82rem">Check that your Excel file includes a <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Schedule</code> sheet with at least one task row.</div>
+          <button class="empty-help-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;margin-top:4px">Open help guide</button>
+        </div>`;
+        lb.querySelector('.empty-help-btn').addEventListener('click', toggleHelp);
+      }
     }
     return null;
   }
@@ -2734,7 +2750,8 @@ function prepareGanttData() {
 
   const lb = document.getElementById('gantt-left-body');
   if (!visibleTasks.length) {
-    lb.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem;text-align:center">No tasks match the current filters. <button onclick="document.getElementById(\'gantt-phase-filter\').value=\'all\';document.getElementById(\'gantt-team-filter\').value=\'all\';ganttPhaseFilter=\'all\';ganttTeamFilter=\'all\';renderGantt()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filters</button></div>';
+    lb.innerHTML = '<div style="padding:16px;color:var(--muted);font-size:0.82rem;text-align:center">No tasks match the current filters. <button class="gantt-clear-filter-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filters</button></div>';
+    lb.querySelector('.gantt-clear-filter-btn').addEventListener('click', clearGanttFilters);
     document.getElementById('gantt-svg-wrap').innerHTML = '';
     document.getElementById('gantt-header-svg-wrap').innerHTML = '';
     return null;
@@ -4389,6 +4406,12 @@ function setSpecsCategoryFilter(val) {
   safeSetItem('vh-filter-specs-cat', val);
   renderSpecTable();
 }
+function clearSpecsFilters() {
+  document.getElementById('specs-filter').value = 'all';
+  document.getElementById('specs-search').value = '';
+  specSearchQuery = '';
+  renderSpecTable();
+}
 
 function setSpecSort(col) {
   if (specSortState.col === col) specSortState.dir = specSortState.dir === 'asc' ? 'desc' : 'asc';
@@ -4479,14 +4502,16 @@ function renderSpecTable() {
     const cat = document.getElementById('specs-filter').value;
     const hasSearch = specSearchQuery.trim().length > 0;
     if (cat !== 'all' || hasSearch) {
-      wrap.innerHTML = `<div style="padding:24px;color:var(--muted);font-size:0.82rem;text-align:center">No specifications match the current filter. <button onclick="document.getElementById('specs-filter').value='all';document.getElementById('specs-search').value='';specSearchQuery='';renderSpecTable()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filters</button></div>`;
+      wrap.innerHTML = `<div style="padding:24px;color:var(--muted);font-size:0.82rem;text-align:center">No specifications match the current filter. <button class="specs-clear-filter-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filters</button></div>`;
+      wrap.querySelector('.specs-clear-filter-btn').addEventListener('click', clearSpecsFilters);
     } else {
       wrap.innerHTML = `<div role="status" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;gap:10px;color:var(--muted);text-align:center">
         <div style="font-size:2rem">📐</div>
         <div style="font-weight:700;color:var(--text)">No specifications found</div>
         <div style="font-size:0.82rem">Check that your Excel file includes a <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Specifications</code> sheet with at least one row.</div>
-        <button onclick="toggleHelp()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;margin-top:4px">Open help guide</button>
+        <button class="empty-help-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;margin-top:4px">Open help guide</button>
       </div>`;
+      wrap.querySelector('.empty-help-btn').addEventListener('click', toggleHelp);
     }
     return;
   }
@@ -5592,7 +5617,14 @@ window.addEventListener('beforeunload', e => {
     const b = document.createElement('div');
     b.setAttribute('role', 'alert');
     b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#d29922;color:#000;padding:10px 16px;font-size:0.88rem;display:flex;align-items:center;justify-content:space-between;gap:12px';
-    b.innerHTML = '<span>&#9888; <strong>Unsupported browser.</strong> This tool requires Chrome 90+, Firefox 88+, Safari 14+, or Edge 90+. Some features may not work correctly.</span><button onclick="this.parentElement.remove()" style="background:rgba(0,0,0,0.15);border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.82rem;flex-shrink:0">Dismiss</button>';
+    const msg = document.createElement('span');
+    msg.innerHTML = '&#9888; <strong>Unsupported browser.</strong> This tool requires Chrome 90+, Firefox 88+, Safari 14+, or Edge 90+. Some features may not work correctly.';
+    const dismiss = document.createElement('button');
+    dismiss.textContent = 'Dismiss';
+    dismiss.style.cssText = 'background:rgba(0,0,0,0.15);border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.82rem;flex-shrink:0';
+    dismiss.addEventListener('click', () => b.remove());
+    b.appendChild(msg);
+    b.appendChild(dismiss);
     document.body.appendChild(b);
   }
 })();
