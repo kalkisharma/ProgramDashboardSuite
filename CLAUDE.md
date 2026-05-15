@@ -13,7 +13,7 @@ python -m http.server
 
 ## Architecture
 
-**Single-file vanilla JS app** (`dashboard.html`, ~5400 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
+**Single-file vanilla JS app** (`dashboard.html`, ~5550 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
 
 ### Global State
 
@@ -31,6 +31,8 @@ let barEls  = {};    // taskId → { bgRect, progRect, outlineRect, midY } (or {
 let rowDrag = { active: false, srcIdx: null, dropIdx: null, rowCount: 0, lb: null, ghost: null, indicator: null };
 let calDisplayMonth = null; // { year, month } — month shown in the mini calendar; null when calendar was never opened
 let collapsedPhases = new Set(); // phase numbers (ints) whose sub-tasks are hidden in the Gantt; reset on file load
+let isDirty      = false;  // true when ProjectData has unsaved edits since last load/export
+let _draftTimer  = null;   // debounce handle for scheduleDraftSave()
 ```
 
 - `ProjectData.info` — key/value pairs from the "Project Info" sheet
@@ -49,6 +51,15 @@ let collapsedPhases = new Set(); // phase numbers (ints) whose sub-tasks are hid
 - `_restoreSnapshot(snapshot)` — restores all five collections, calls `safeRender()` for each tab
 - `safeRender(fn, label)` — wraps render calls in try-catch, shows toast on error
 - `safeSetItem(key, val)` — wraps `localStorage.setItem`, catches `QuotaExceededError`
+
+### Auto-save / Draft Restore
+
+- `isDirty` — set `true` by `pushUndo()`; cleared by `parseWorkbook()` and `saveToExcel()`
+- `scheduleDraftSave()` — debounces 3s, then serializes `fullSnapshot()` + project title + timestamp to `localStorage` as `vh-draft`
+- `clearDraft()` — removes `vh-draft` from localStorage, resets `isDirty = false`
+- On page load an IIFE calls `checkForDraft()`: if `vh-draft` exists, shows `#draft-banner` with project title and save time. "Restore" button re-parses Date strings and calls `renderDashboard()`; "Dismiss" calls `clearDraft()`
+- `window.beforeunload` fires when `isDirty === true` to warn before navigating away
+- Date objects in snapshots are stored as ISO strings by JSON.stringify; restore must explicitly `new Date(t.start)` etc.
 
 ### Excel Input Format
 
@@ -123,6 +134,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - **Delete task/spec** — `deleteTask(taskId)` / `deleteSpec(specId)` use a two-tap confirm pattern (`btn.dataset.confirming`). Pushes undo before removing. `deleteTask` also cleans up dangling deps in all other tasks and specs.
 - **Phase collapse** — Phase header rows show a ▼/▶ button in the WBS cell. `togglePhaseCollapse(phaseNum)` toggles the phase number in `collapsedPhases` and re-renders. Collapsed phases hide all sub-tasks from `visibleTasks`; the header row remains with `.phase-collapsed` opacity styling. Only active when `ganttPhaseFilter === 'all'`. State persisted to `localStorage` as `vh-collapsed-phases`.
 - **Column resize** — `#gantt-resize-handle` (5px, between `#gantt-left` and `#gantt-right-col`) is a draggable divider. `initGanttColumnResize()` wires `mousedown` → tracks delta from `startX`, clamps width 150–700px, saves to `localStorage` as `vh-gantt-left-width`. No re-render needed; the `1fr` name column reflows automatically.
+- **Inline date picker** — Double-clicking a Gantt bar or milestone diamond opens `#gantt-date-picker` (fixed, 210px wide) via `openGanttDatePicker(t, clientX, clientY)`. Single date input for milestones; Start + End inputs for tasks. Apply snaps to work days via `snapToWorkDay`, calls `pushUndo('edit dates')`, then `renderGantt()`. Enter = apply, Escape = cancel, outside-click dismisses. Positioned near cursor, clamped to viewport.
 
 **Work-day utilities:**
 - `parseWorkDays(str)` — `"Mon,Tue,Wed,Thu"` → `[1,2,3,4]`
@@ -133,6 +145,16 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `wdDisplay(t)` — returns `{ text, cls }`: `"✓"` (done, green), `"0 wd"` (overdue, red), or `"N wd"`
 
 **WD column:** Left task list has columns `44px 1fr 68px 40px 44px 18px` (WBS | Name | Team | WD | % | conflict). The panel itself is resizable via `#gantt-resize-handle` (default 380px, persisted as `vh-gantt-left-width`).
+
+**localStorage keys (full list):**
+- `vh-theme` — light/dark
+- `vh-workdays` — work day array (JSON)
+- `vh-filter-phase` / `vh-filter-team` / `vh-filter-specs-cat` / `vh-filter-specs-search`
+- `vh-wt-collapsed` — collapsed weight budget groups
+- `vh-collapsed-phases` — collapsed Gantt phase numbers (JSON array of ints)
+- `vh-gantt-left-width` — left panel pixel width (e.g. "380px")
+- `vh-zoom-gantt` / `vh-zoom-specs` / `vh-zoom-org` — per-tab zoom index
+- `vh-draft` — auto-saved draft JSON (fullSnapshot + title + timestamp); removed on export/import
 
 **Body grid lines:** `renderBodyGrid(svg, NS, minD, maxD, W, bodyH)` draws month boundary vertical lines (full body height) and, when `ganttZoom >= 5`, week sub-lines at reduced opacity. Non-work-day column shading has been removed.
 
@@ -234,4 +256,6 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v2.0.0** | Milestone Gate | Done |
 | **v2.1.0** | In-app editing: Weight Budget, Org Chart, Project Info | Done |
 | **v2.2.0** | Phase collapse/expand on Gantt | Done |
-| **v2.3.0** | Draggable left-panel resize handle | Done — current release |
+| **v2.3.0** | Draggable left-panel resize handle | Done |
+| **v2.4.0** | Fix safeSetItem recursion bug; auto-save draft to localStorage; beforeunload warning | Done |
+| **v2.5.0** | Inline date picker on double-click of Gantt bars / milestones | Done — current release |
