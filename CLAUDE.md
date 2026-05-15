@@ -13,7 +13,7 @@ python -m http.server
 
 ## Architecture
 
-**Single-file vanilla JS app** (`dashboard.html`, ~5200 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
+**Single-file vanilla JS app** (`dashboard.html`, ~5400 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
 
 ### Global State
 
@@ -21,8 +21,8 @@ python -m http.server
 const ProjectData = { info: {}, tasks: [], specs: [], org: [], weights: [] };
 let originalTasks = [];            // deep-copy at parse time; used by resetGanttToImported()
 let ganttWorkDays = [1,2,3,4,5];  // Mon–Fri default; overridden by Work Days UI or Project Info "Work Days" key
-let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks what the side panel is showing
-let spCurrentId   = null; // specId string, taskId number, or person name string
+let spCurrentType = null; // 'spec' | 'task' | 'org' | 'weight' | 'info' — tracks what the side panel is showing
+let spCurrentId   = null; // specId string, taskId number, person name string, weight array index, or null (info)
 let spOpener      = null; // element that opened the side panel (focus restored on close)
 let undoStack = []; // max 50 entries, LIFO; each: { label, snapshot }
 let redoStack = []; // max 50 entries; populated by applyUndo(), cleared by pushUndo()
@@ -30,6 +30,7 @@ let barDrag = { active: false, taskId: null, mode: null, ... }; // Gantt bar dra
 let barEls  = {};    // taskId → { bgRect, progRect, outlineRect, midY } (or { diamond, midY })
 let rowDrag = { active: false, srcIdx: null, dropIdx: null, rowCount: 0, lb: null, ghost: null, indicator: null };
 let calDisplayMonth = null; // { year, month } — month shown in the mini calendar; null when calendar was never opened
+let collapsedPhases = new Set(); // phase numbers (ints) whose sub-tasks are hidden in the Gantt; reset on file load
 ```
 
 - `ProjectData.info` — key/value pairs from the "Project Info" sheet
@@ -120,6 +121,8 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - **Reset** — `resetGanttToImported()` deep-copies `originalTasks` back into `ProjectData.tasks` and re-renders.
 - **Save to Excel** — `saveToExcel()` rebuilds all 5 sheets from current `ProjectData.*` state using SheetJS and downloads `"[Project Title] - YYYY-MM-DD.xlsx"`. The column layout matches what `parseWorkbook()` expects, so the file can be re-imported.
 - **Delete task/spec** — `deleteTask(taskId)` / `deleteSpec(specId)` use a two-tap confirm pattern (`btn.dataset.confirming`). Pushes undo before removing. `deleteTask` also cleans up dangling deps in all other tasks and specs.
+- **Phase collapse** — Phase header rows show a ▼/▶ button in the WBS cell. `togglePhaseCollapse(phaseNum)` toggles the phase number in `collapsedPhases` and re-renders. Collapsed phases hide all sub-tasks from `visibleTasks`; the header row remains with `.phase-collapsed` opacity styling. Only active when `ganttPhaseFilter === 'all'`. State persisted to `localStorage` as `vh-collapsed-phases`.
+- **Column resize** — `#gantt-resize-handle` (5px, between `#gantt-left` and `#gantt-right-col`) is a draggable divider. `initGanttColumnResize()` wires `mousedown` → tracks delta from `startX`, clamps width 150–700px, saves to `localStorage` as `vh-gantt-left-width`. No re-render needed; the `1fr` name column reflows automatically.
 
 **Work-day utilities:**
 - `parseWorkDays(str)` — `"Mon,Tue,Wed,Thu"` → `[1,2,3,4]`
@@ -129,7 +132,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `workDaysRemaining(endDate)` — work days from today to end, min 0
 - `wdDisplay(t)` — returns `{ text, cls }`: `"✓"` (done, green), `"0 wd"` (overdue, red), or `"N wd"`
 
-**WD column:** Left task list has a 5th column (WD) showing remaining work days. Grid is `44px 1fr 68px 40px 44px` (WBS | Name | Team | WD | %).
+**WD column:** Left task list has columns `44px 1fr 68px 40px 44px 18px` (WBS | Name | Team | WD | % | conflict). The panel itself is resizable via `#gantt-resize-handle` (default 380px, persisted as `vh-gantt-left-width`).
 
 **Body grid lines:** `renderBodyGrid(svg, NS, minD, maxD, W, bodyH)` draws month boundary vertical lines (full body height) and, when `ganttZoom >= 5`, week sub-lines at reduced opacity. Non-work-day column shading has been removed.
 
@@ -138,6 +141,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 **Topbar buttons (right group):**
 - `#generate-sample-btn` — hidden after first file load
 - `#save-excel-btn` — shown after first file load
+- `#proj-info-btn` — shown after first file load; opens project info editor in side panel
 - `#theme-toggle` — always visible (☀ / 🌙)
 
 **Event handling pattern (v1.26.0+):** Static HTML buttons have no `onclick` attributes. All event listeners are wired programmatically in the "WIRE STATIC UI EVENT HANDLERS" block near the end of the `<script>`. Dynamically-generated HTML (inside `innerHTML =` template strings) may still use inline handlers as a pragmatic exception.
@@ -154,10 +158,13 @@ Each tab has its own zoom state and `±` toolbar buttons:
 
 ### Side Panel
 
-`#side-panel` slides in from the right (fixed, 420px). Has `role="dialog"` + `aria-modal="true"`. Three entry points each render different content into `#sp-body`:
-- `openSpecPanel(id)` — spec detail + linked tasks with risk warnings
-- `openTaskPanel(id)` — task detail + linked specs; also shows work days total and remaining
-- `openOrgPanel(name)` — person's profile + their team's tasks
+`#side-panel` slides in from the right (fixed, 420px). Has `role="dialog"` + `aria-modal="true"`. Entry points render into `#sp-body`:
+- `openSpecPanel(id)` — spec detail + linked tasks with risk warnings; all fields inline-editable
+- `openTaskPanel(id)` — task detail + linked specs; also shows work days total and remaining; all fields inline-editable
+- `openOrgPanel(name)` — person's profile + their team's tasks; "Edit Person" button opens `openOrgEditPanel(name)`
+- `openOrgEditPanel(name|null)` — edit form for org person fields; null = add new person; `saveOrgPerson(oldName)` / `deleteOrgPerson(name)`
+- `openWeightPanel(idx)` — edit form for a weight budget row at array index; `saveWeightRow(idx)` / `deleteWeightRow(idx)` / `addWeightRow()`
+- `openInfoPanel()` — edit all project info key/value fields; `saveInfoPanel()` updates title/subtitle/work-days and re-renders Gantt + Program Dashboard
 
 **Toggle behavior:** `spCurrentType` and `spCurrentId` track what is currently open. Clicking the same item a second time calls `closeSidePanel()` instead of re-rendering (toggle). `closeSidePanel()` resets both to `null`.
 
@@ -177,6 +184,8 @@ Each tab has its own zoom state and `±` toolbar buttons:
 
 `renderWeightBudget()` renders a bar chart where each `.wt-bar-wrap` carries `data-est`, `data-tgt`, `data-total`, and `data-name` attributes. `showWtTooltip(e, el)` and `hideWtTooltip()` read those attributes and reuse the shared `#tooltip` element. Bar color: green = estimated ≤ target, yellow = over target.
 
+Individual item rows carry `data-wt-idx` (array index). Clicking a row (not the bar) opens `openWeightPanel(idx)`. A `+ Add Row` button in `#wt-toolbar` calls `addWeightRow()`. Delete uses the two-tap confirm pattern with 3-second timeout.
+
 ### Org Chart
 
 Built with a recursive SVG layout algorithm:
@@ -184,6 +193,8 @@ Built with a recursive SVG layout algorithm:
 2. `calcSubW(node)` → recursively computes subtree width for layout
 3. `assignPos(node, x, depth)` → assigns x/y coordinates
 4. SVG nodes and connector lines are appended to `#org-svg-wrap`
+
+SVG `<g>` card nodes have `tabindex=0`, `role=button`, `aria-label`, and `keydown` handler for Enter/Space. A `+ Add Person` button in `#org-toolbar` opens `openOrgEditPanel(null)`. Renaming a person in `saveOrgPerson` cascades to all `reportsTo` arrays.
 
 ### Cross-linking (core value prop)
 
@@ -207,17 +218,20 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 
 **Two sync points per release** (both must be updated):
 1. Line 1 HTML comment: `<!-- Program Dashboard Suite vX.Y.Z — YYYY-MM-DD -->`
-2. `APP_VERSION` JS constant (~line 1152): `const APP_VERSION = 'vX.Y.Z';`
+2. `APP_VERSION` JS constant (~line 1182): `const APP_VERSION = 'vX.Y.Z';`
 
 **Git tag every release**: `git tag vX.Y.Z <commit-sha>` on the version-bump commit.
 
-### Roadmap to v2.0.0
+### Release History
 
-| Version | Phase | Status |
+| Version | Feature | Status |
 |---|---|---|
 | **v1.22.0** | Undo/Redo Completion | Done |
 | **v1.23.0** | Safety & Validation | Done |
 | **v1.24.0** | Delete Operations | Done |
 | **v1.25.0** | Keyboard Accessibility | Done |
 | **v1.26.0** | Code Quality Pass | Done |
-| **v2.0.0** | Milestone Gate | Done — current release |
+| **v2.0.0** | Milestone Gate | Done |
+| **v2.1.0** | In-app editing: Weight Budget, Org Chart, Project Info | Done |
+| **v2.2.0** | Phase collapse/expand on Gantt | Done |
+| **v2.3.0** | Draggable left-panel resize handle | Done — current release |
