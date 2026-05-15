@@ -166,7 +166,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `#proj-info-btn` — shown after first file load; opens project info editor in side panel
 - `#theme-toggle` — always visible (☀ / 🌙)
 
-**Event handling pattern (v1.26.0+):** Static HTML buttons have no `onclick` attributes. All event listeners are wired programmatically in the "WIRE STATIC UI EVENT HANDLERS" block near the end of the `<script>`. Dynamically-generated HTML (inside `innerHTML =` template strings) may still use inline handlers as a pragmatic exception.
+**Event handling pattern (v2.6.0+):** No `onclick` attributes anywhere in the codebase — including dynamically-generated HTML. After setting `innerHTML`, wire buttons immediately via `querySelector`/`querySelectorAll`. Named filter helpers (`clearGanttFilters()`, `clearSpecsFilters()`) and class-based selectors (`.empty-help-btn`, `.gantt-clear-filter-btn`, `.specs-clear-filter-btn`) are used for post-render wiring. Calendar nav/close use `data-nav` / `data-close-cal` attributes and are wired alongside `data-date` day cells after each `cal.innerHTML` rebuild. Exception: `.onclick` property assignment (not HTML attribute) is acceptable when a closure must be replaced on each call (e.g. date picker `apply` function, toast undo button).
 
 ### Zoom (all tabs)
 
@@ -258,4 +258,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v2.2.0** | Phase collapse/expand on Gantt | Done |
 | **v2.3.0** | Draggable left-panel resize handle | Done |
 | **v2.4.0** | Fix safeSetItem recursion bug; auto-save draft to localStorage; beforeunload warning | Done |
-| **v2.5.0** | Inline date picker on double-click of Gantt bars / milestones | Done — current release |
+| **v2.5.0** | Inline date picker on double-click of Gantt bars / milestones | Done |
+| **v2.6.0** | Code cleanup: eliminate all inline onclick attributes | Done — current release |
