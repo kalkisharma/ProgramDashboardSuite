@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.24.0 — 2026-05-14 -->
+<!-- Program Dashboard Suite v1.25.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -852,6 +852,20 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   padding-top: 4px;
 }
 
+/* Suppress browser default focus ring on gantt rows — .kb-focus provides the custom ring */
+.gantt-row:focus { outline: none; }
+
+@media (max-width: 768px) {
+  #topbar { flex-wrap: wrap; gap: 6px; padding: 6px 10px; min-height: unset; }
+  #topbar > div:last-child { flex-wrap: wrap; gap: 4px; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; white-space: nowrap; max-width: calc(100vw - 20px); }
+  .tab-btn { font-size: 0.75rem; padding: 4px 8px; }
+  #app-version-label { display: none; }
+  #generate-sample-btn, #save-excel-btn { font-size: 0.75rem; }
+  #side-panel { width: 100%; right: -100%; }
+  #side-panel.open { right: 0; }
+}
+
 @page { size: landscape; margin: 10mm; }
 @media print {
   :root {
@@ -869,7 +883,9 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   #gantt-right-col, #gantt-left { overflow: visible !important; }
   #gantt-container { flex-wrap: wrap; }
   #gantt-left { font-size: 0.72rem; min-width: 180px; }
+  #gantt-header-svg-wrap, #gantt-svg-wrap { width: 100% !important; overflow: visible !important; }
   #gantt-header-svg-wrap svg, #gantt-svg-wrap svg { max-width: 100%; height: auto; }
+  .specs-table { font-size: 0.8rem; width: 100%; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 </style>
@@ -971,7 +987,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
             <span style="text-align:right">%</span>
             <span></span>
           </div>
-          <div id="gantt-left-body"></div>
+          <div id="gantt-left-body" role="grid" aria-label="Task list"></div>
         </div>
         <div id="gantt-right-col" style="position:relative">
           <div id="gantt-today-float">Today</div>
@@ -1052,10 +1068,10 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 </div><!-- /main -->
 
 <!-- SIDE PANEL -->
-<div id="side-panel">
+<div id="side-panel" role="dialog" aria-modal="true" aria-labelledby="sp-title">
   <div id="sp-header">
     <div id="sp-title">Details</div>
-    <button id="sp-close" onclick="closeSidePanel()" aria-label="Close" title="Close">✕</button>
+    <button id="sp-close" onclick="closeSidePanel()" aria-label="Close details panel" title="Close">✕</button>
   </div>
   <div id="sp-body"></div>
 </div>
@@ -1135,7 +1151,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.24.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.25.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1399,6 +1415,7 @@ document.addEventListener('keydown', e => {
       legend.style.display = 'none';
       if (legendBtn) { legendBtn.setAttribute('aria-expanded', 'false'); legendBtn.focus(); }
     }
+    if (spCurrentType && !e.target.matches('input, select, textarea')) { closeSidePanel(); return; }
   }
 });
 document.getElementById('help-overlay').addEventListener('click', e => {
@@ -1980,9 +1997,11 @@ function updateGanttKeyFocus(delta) {
   if (!lb) return;
   const rows = lb.querySelectorAll('.gantt-row');
   if (!rows.length) return;
-  lb.querySelectorAll('.gantt-row.kb-focus').forEach(r => r.classList.remove('kb-focus'));
+  lb.querySelectorAll('.gantt-row.kb-focus').forEach(r => { r.classList.remove('kb-focus'); r.setAttribute('aria-selected', 'false'); });
   ganttKeyFocusIdx = Math.max(0, Math.min(rows.length - 1, ganttKeyFocusIdx + delta));
   rows[ganttKeyFocusIdx].classList.add('kb-focus');
+  rows[ganttKeyFocusIdx].setAttribute('aria-selected', 'true');
+  rows[ganttKeyFocusIdx].focus();
   rows[ganttKeyFocusIdx].scrollIntoView({ block: 'nearest' });
 }
 
@@ -2588,6 +2607,12 @@ function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const div = document.createElement('div');
     div.className = 'gantt-row';
     div.dataset.taskid = t.id;
+    div.setAttribute('role', 'row');
+    div.setAttribute('tabindex', '-1');
+    div.setAttribute('aria-selected', 'false');
+    const _rowStart = t.start ? t.start.toISOString().split('T')[0] : 'no date';
+    const _rowEnd   = t.end   ? t.end.toISOString().split('T')[0]   : 'no date';
+    div.setAttribute('aria-label', `${t.wbs}: ${t.name}, ${t.team} team, ${t.pct}% complete, ${_rowStart} to ${_rowEnd}${conflictSet.has(t.id) ? ', scheduling conflict' : ''}`);
     div.innerHTML = `
       <div class="g-wbs-wrap" style="color:${color}">
         ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
@@ -2727,6 +2752,10 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
     hit.setAttribute('x', 0); hit.setAttribute('y', i*RH);
     hit.setAttribute('width', W); hit.setAttribute('height', RH);
     hit.setAttribute('fill', 'transparent');
+    const _hitStart = t.start ? t.start.toISOString().split('T')[0] : '';
+    const _hitEnd   = t.end   ? t.end.toISOString().split('T')[0]   : '';
+    hit.setAttribute('role', 'img');
+    hit.setAttribute('aria-label', `${t.milestone ? 'Milestone' : 'Task'} ${t.wbs}: ${t.name}, ${t.pct}% complete${_hitStart ? ', ' + _hitStart + ' to ' + _hitEnd : ''}`);
     hit.dataset.taskid = t.id;
     hit.addEventListener('mouseenter', e => {
       if (!barDrag.active && !rowDrag.active) {
@@ -4180,7 +4209,8 @@ function renderSpecTable() {
   wrap.querySelectorAll('th[data-sort-col]').forEach(th =>
     th.addEventListener('click', () => setSpecSort(th.dataset.sortCol))
   );
-  wrap.querySelectorAll('tr[data-spec-id]').forEach(row => {
+  const _specRowEls = [...wrap.querySelectorAll('tr[data-spec-id]')];
+  _specRowEls.forEach((row, idx) => {
     row.style.cursor = 'pointer';
     row.tabIndex = 0;
     row.addEventListener('click', e => {
@@ -4189,6 +4219,8 @@ function renderSpecTable() {
     });
     row.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openSpecPanel(row.dataset.specId); }
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (idx + 1 < _specRowEls.length) _specRowEls[idx + 1].focus(); }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); if (idx > 0) _specRowEls[idx - 1].focus(); }
     });
   });
   wrap.querySelectorAll('[data-spec-status-id]').forEach(badge => {
@@ -4506,6 +4538,11 @@ function showSidePanel() {
   const onGantt = document.getElementById('gantt-panel').classList.contains('active');
   document.getElementById('org-container').style.paddingRight  = onOrg   ? '440px' : '';
   document.getElementById('gantt-right-col').style.marginRight  = onGantt ? '440px' : '';
+  requestAnimationFrame(() => {
+    const panel = document.getElementById('side-panel');
+    const first = panel.querySelector('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+    if (first) first.focus();
+  });
 }
 
 function closeSidePanel() {
@@ -4971,6 +5008,19 @@ function generateSampleExcel() {
   const _savedTeam = localStorage.getItem('vh-filter-team');
   if (_savedTeam) ganttTeamFilter = _savedTeam;
 })();
+
+// Focus trap for side panel — keeps Tab/Shift+Tab within the panel while it is open
+document.getElementById('side-panel').addEventListener('keydown', e => {
+  if (e.key !== 'Tab') return;
+  const panel = document.getElementById('side-panel');
+  if (!panel.classList.contains('open')) return;
+  const focusable = [...panel.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last  = focusable[focusable.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 
 // Browser compatibility check
 (function() {
