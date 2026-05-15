@@ -1,4 +1,4 @@
-﻿<!-- Program Dashboard Suite v2.2.0 — 2026-05-15 -->
+﻿<!-- Program Dashboard Suite v2.3.0 — 2026-05-15 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -157,9 +157,17 @@ body {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  border-right: 2px solid var(--border);
   overflow: hidden;
 }
+#gantt-resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  background: var(--border);
+  cursor: col-resize;
+  user-select: none;
+  transition: background 0.15s;
+}
+#gantt-resize-handle:hover, #gantt-resize-handle.resizing { background: var(--accent); }
 #gantt-left-header {
   display: grid;
   padding: 0 10px;
@@ -890,7 +898,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   #wt-toolbar, #org-toolbar,
   #side-panel, #tooltip, #gantt-today-float,
   #workdays-picker, #gantt-calendar, #dropzone,
-  #dashboard-drop-overlay, #app-toast { display: none !important; }
+  #dashboard-drop-overlay, #app-toast, #gantt-resize-handle { display: none !important; }
   .tab-panel { display: none !important; }
   .tab-panel.active { display: block !important; }
   #gantt-right, #org-container { overflow: visible !important; }
@@ -1004,6 +1012,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
           </div>
           <div id="gantt-left-body" role="grid" aria-label="Task list"></div>
         </div>
+        <div id="gantt-resize-handle" title="Drag to resize task list" aria-hidden="true"></div>
         <div id="gantt-right-col" style="position:relative">
           <div id="gantt-today-float">Today</div>
           <div id="gantt-header-wrap">
@@ -1170,7 +1179,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v2.2.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v2.3.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -2016,6 +2025,40 @@ function initGanttPan() {
   });
 }
 initGanttPan();
+
+function initGanttColumnResize() {
+  const handle = document.getElementById('gantt-resize-handle');
+  const left   = document.getElementById('gantt-left');
+  if (!handle || !left) return;
+
+  const saved = localStorage.getItem('vh-gantt-left-width');
+  if (saved) left.style.width = saved;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startW = left.getBoundingClientRect().width;
+    handle.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    function onMove(e) {
+      const newW = Math.max(150, Math.min(700, startW + e.clientX - startX));
+      left.style.width = newW + 'px';
+    }
+    function onUp() {
+      handle.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      safeSetItem('vh-gantt-left-width', left.style.width);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+initGanttColumnResize();
 
 // Clean up drag ghosts if user alt-tabs or the window loses focus mid-drag
 document.addEventListener('visibilitychange', () => {
