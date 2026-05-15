@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.21.2 — 2026-05-14 -->
+<!-- Program Dashboard Suite v1.22.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -955,6 +955,8 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
         <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
         <button class="btn-secondary" id="gantt-export-svg-btn" onclick="exportGanttSVG()" title="Export Gantt chart as SVG file" disabled>Export SVG</button>
         <button class="btn-secondary" id="gantt-export-png-btn" onclick="exportGanttPNG()" title="Export Gantt chart as PNG image" disabled>Export PNG</button>
+        <button class="btn-secondary" id="gantt-undo-btn" onclick="applyUndo()" title="Undo last action (Ctrl+Z)" aria-label="Undo" disabled>⟲ Undo</button>
+        <button class="btn-secondary" id="gantt-redo-btn" onclick="applyRedo()" title="Redo last undone action (Ctrl+Shift+Z)" aria-label="Redo" disabled>⟳ Redo</button>
         <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
         <button class="btn-secondary" onclick="resetGanttToImported()" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
         <div id="gantt-calendar"></div>
@@ -1113,6 +1115,8 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Space</kbd> on row</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for a Specifications row</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Esc</kbd></td><td style="padding:5px 8px;color:var(--muted)">Cancel an inline edit without saving</td></tr>
       <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap">Click / Tab+Enter on arrow</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for the dependent task</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Z</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Cmd+Z</kbd></td><td style="padding:5px 8px;color:var(--muted)">Undo last action (global — works across all tabs)</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Shift+Z</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Y</kbd></td><td style="padding:5px 8px;color:var(--muted)">Redo last undone action</td></tr>
       <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Cmd+Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Enter</kbd></td><td style="padding:5px 8px;color:var(--muted)">Save notes in the task side panel (Mac / Win)</td></tr>
     </table>
 
@@ -1131,7 +1135,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.21.2'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.22.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1151,9 +1155,10 @@ let depArrowEls = []; // { el, predId, succId } — rebuilt each renderGantt()
 
 // Row reorder state
 let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
-let undoStack = [];            // max 20 entries, LIFO; each: { label, snapshot }
+let undoStack = [];            // max 50 entries, LIFO; each: { label, snapshot }
+let redoStack = [];            // max 50 entries; populated by applyUndo(), cleared by pushUndo()
 let conflictSet = new Set();   // task IDs with scheduling conflicts; recomputed on each render
-let barDragPreSnapshot = null; // task snapshot captured at bar drag start
+let barDragPreSnapshot = null; // full snapshot captured at bar drag start
 
 // Org chart drag-pan state (module-level so guarded listeners share one copy)
 let orgPanListenersAttached = false;
@@ -1256,32 +1261,59 @@ function showToast(msg, undoFn, duration) {
   toastTimer = setTimeout(() => { toast.classList.remove('visible'); toastHasUndo = false; }, duration);
 }
 
-function taskSnapshot() {
+function fullSnapshot() {
   return {
-    tasks: S.tasks.map(t => ({
-      ...t,
-      start: t.start ? new Date(t.start) : null,
-      end:   t.end   ? new Date(t.end)   : null,
-      deps:  [...t.deps]
-    })),
-    specs: S.specs.map(s => ({ ...s, depIds: [...s.depIds] }))
+    tasks:   S.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] })),
+    specs:   S.specs.map(s => ({ ...s, depIds: [...s.depIds] })),
+    org:     S.org.map(p => ({ ...p, reportsTo: [...(p.reportsTo || [])] })),
+    weights: S.weights.map(w => ({ ...w })),
+    info:    { ...S.info }
   };
 }
 function pushUndo(label) {
-  if (undoStack.length >= 20) undoStack.shift();
-  undoStack.push({ label, snapshot: taskSnapshot() });
+  if (undoStack.length >= 50) undoStack.shift();
+  undoStack.push({ label, snapshot: fullSnapshot() });
+  redoStack = [];
+  updateUndoRedoBtns();
+}
+function _restoreSnapshot(snapshot) {
+  S.tasks   = snapshot.tasks;
+  S.specs   = snapshot.specs;
+  S.org     = snapshot.org     || S.org;
+  S.weights = snapshot.weights || S.weights;
+  if (snapshot.info) S.info = snapshot.info;
+  recalcWBS(S.tasks);
+  renderGantt();
+  renderSpecs();
+  renderProgDash();
+  if (S.weights.length) renderWeightBudget();
+  if (S.org.length)     renderOrgChart();
+  if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
+  else if (spCurrentType === 'spec') { spCurrentType = null; openSpecPanel(spCurrentId); }
 }
 function applyUndo() {
   const entry = undoStack.pop();
   if (!entry) return;
-  S.tasks = entry.snapshot.tasks;
-  S.specs  = entry.snapshot.specs;
-  recalcWBS(S.tasks);
-  renderGantt();
-  renderSpecs();
-  if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
-  else if (spCurrentType === 'spec') { spCurrentType = null; openSpecPanel(spCurrentId); }
+  if (redoStack.length >= 50) redoStack.shift();
+  redoStack.push({ label: entry.label, snapshot: fullSnapshot() });
+  _restoreSnapshot(entry.snapshot);
   showToast('Undone: ' + entry.label, null, 3000);
+  updateUndoRedoBtns();
+}
+function applyRedo() {
+  const entry = redoStack.pop();
+  if (!entry) return;
+  if (undoStack.length >= 50) undoStack.shift();
+  undoStack.push({ label: entry.label, snapshot: fullSnapshot() });
+  _restoreSnapshot(entry.snapshot);
+  showToast('Redone: ' + entry.label, null, 3000);
+  updateUndoRedoBtns();
+}
+function updateUndoRedoBtns() {
+  const u = document.getElementById('gantt-undo-btn');
+  const r = document.getElementById('gantt-redo-btn');
+  if (u) u.disabled = undoStack.length === 0;
+  if (r) r.disabled = redoStack.length === 0;
 }
 
 let _helpOpener = null;
@@ -1319,6 +1351,14 @@ function _trapHelpFocus(e) {
   }
 }
 document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.matches('input, select, textarea')) {
+    e.preventDefault();
+    if (e.shiftKey) { applyRedo(); } else { applyUndo(); }
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y' && !e.target.matches('input, select, textarea')) {
+    e.preventDefault(); applyRedo(); return;
+  }
   if (e.key === 'Escape') {
     if (document.getElementById('help-overlay').style.display === 'flex') { toggleHelp(); return; }
     const picker = document.getElementById('workdays-picker');
@@ -1514,7 +1554,7 @@ function loadFile(file) {
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
 function parseWorkbook(wb) {
   S.info = {}; S.tasks = []; S.specs = []; S.org = []; S.weights = [];
-  undoStack = [];
+  undoStack = []; redoStack = [];
 
   const ws1 = wb.Sheets['Project Info'];
   if (ws1) {
@@ -1661,6 +1701,7 @@ function renderDashboard() {
   renderProgDash();
   renderWeightBudget();
   renderOrgChart();
+  updateUndoRedoBtns();
   if (_justLoaded && S.tasks.length) {
     const badDates = S.tasks.filter(t => !t.milestone && (!t.start || !t.end));
     const parts = [`${S.tasks.length} task${S.tasks.length !== 1 ? 's' : ''}`];
@@ -1719,7 +1760,7 @@ function startBarDrag(e, taskId) {
   const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
   const zone = getBarZone(svgX, t);
   if (!zone) { startPanDrag(e); return; }
-  barDragPreSnapshot = taskSnapshot();
+  barDragPreSnapshot = fullSnapshot();
   barDrag.pending = true; barDrag.taskId = taskId; barDrag.mode = zone;
   barDrag.startClientX = e.clientX; barDrag.startScrollLeft = right.scrollLeft;
   barDrag.origStart = new Date(t.start); barDrag.origEnd = new Date(t.end);
@@ -1827,7 +1868,9 @@ function endBarDrag() {
     } else {
       if (barDragPreSnapshot) {
         undoStack.push({ label: 'date adjusted', snapshot: barDragPreSnapshot });
-        if (undoStack.length > 20) undoStack.shift();
+        if (undoStack.length > 50) undoStack.shift();
+        redoStack = [];
+        updateUndoRedoBtns();
       }
       barDragPreSnapshot = null;
       renderGantt();
