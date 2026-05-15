@@ -1,4 +1,4 @@
-﻿<!-- Program Dashboard Suite v2.3.0 — 2026-05-15 -->
+﻿<!-- Program Dashboard Suite v2.5.0 — 2026-05-15 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -111,6 +111,12 @@ body {
 .drop-icon { font-size: 3rem; margin-bottom: 14px; }
 .drop-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 8px; }
 .drop-sub { color: var(--muted); font-size: 0.88rem; margin-bottom: 20px; }
+#draft-banner {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: rgba(210,153,34,0.12); border: 1px solid rgba(210,153,34,0.45);
+  border-radius: 8px; padding: 10px 16px; margin-bottom: 14px;
+  font-size: 0.82rem; color: var(--text); max-width: 560px;
+}
 .btn-primary {
   display: inline-block;
   padding: 10px 24px;
@@ -942,6 +948,11 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 
   <!-- DROP ZONE -->
   <div id="dropzone">
+    <div id="draft-banner" style="display:none" role="alert">
+      <span>📝 Unsaved draft: <strong id="draft-title"></strong> <span style="color:var(--muted)" id="draft-time"></span></span>
+      <button class="btn-primary btn-sm" id="draft-restore-btn">Restore Draft</button>
+      <button class="btn-secondary btn-sm" id="draft-dismiss-btn">Dismiss</button>
+    </div>
     <div class="drop-box" id="drop-box">
       <div class="drop-icon">📊</div>
       <div class="drop-title">Drop your Excel file here</div>
@@ -1179,7 +1190,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v2.3.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v2.5.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1306,7 +1317,7 @@ function showToast(msg, undoFn, duration) {
 }
 
 function safeSetItem(key, val) {
-  try { safeSetItem(key, val); } catch (e) {
+  try { localStorage.setItem(key, val); } catch (e) {
     if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22) {
       showToast('⚠ Browser storage is full — preferences not saved. Export your project to preserve data.', null, 8000);
     }
@@ -1335,7 +1346,24 @@ function pushUndo(label) {
   if (undoStack.length >= 50) undoStack.shift();
   undoStack.push({ label, snapshot: fullSnapshot() });
   redoStack = [];
+  isDirty = true;
+  scheduleDraftSave();
   updateUndoRedoBtns();
+}
+
+function scheduleDraftSave() {
+  clearTimeout(_draftTimer);
+  _draftTimer = setTimeout(() => {
+    if (!isDirty || !ProjectData.tasks.length) return;
+    const draft = { snapshot: fullSnapshot(), title: ProjectData.info['Project Title'] || 'Untitled', savedAt: Date.now() };
+    safeSetItem('vh-draft', JSON.stringify(draft));
+  }, 3000);
+}
+
+function clearDraft() {
+  clearTimeout(_draftTimer);
+  isDirty = false;
+  localStorage.removeItem('vh-draft');
 }
 /** @param {object} snapshot - Result of fullSnapshot(); restores state and re-renders all tabs. */
 function _restoreSnapshot(snapshot) {
@@ -1730,6 +1758,7 @@ function parseWorkbook(wb) {
 
   // Deep-copy tasks for reset
   originalTasks = ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
+  clearDraft();
 }
 
 function parseDate(v) {
@@ -1809,6 +1838,8 @@ let ganttTodayX    = null;                       // px offset of Today line; nul
 let ganttPhaseFilter  = 'all';
 let ganttTeamFilter   = 'all';
 let collapsedPhases   = new Set(); // phase numbers (ints) whose sub-tasks are hidden
+let isDirty      = false;  // true when ProjectData has unsaved edits since last load/export
+let _draftTimer  = null;   // debounce handle for auto-draft save
 let specSortState      = { col: null, dir: 'asc' };
 let specSearchQuery    = '';
 let showCriticalPath   = false;
@@ -2025,6 +2056,58 @@ function initGanttPan() {
   });
 }
 initGanttPan();
+
+function openGanttDatePicker(t, clientX, clientY) {
+  const picker = document.getElementById('gantt-date-picker');
+  const fields = document.getElementById('gdp-fields');
+  const label  = document.getElementById('gdp-label');
+
+  label.textContent = t.milestone ? 'Milestone Date' : 'Task Dates';
+  const toVal = d => d ? d.toISOString().slice(0, 10) : '';
+
+  if (t.milestone) {
+    fields.innerHTML = `<label class="sp-form-label" for="gdp-start">Date</label>
+      <input class="sp-form-input" id="gdp-start" type="date" value="${toVal(t.start)}">`;
+  } else {
+    fields.innerHTML = `<label class="sp-form-label" for="gdp-start">Start</label>
+      <input class="sp-form-input" id="gdp-start" type="date" value="${toVal(t.start)}">
+      <label class="sp-form-label" for="gdp-end" style="margin-top:2px">End</label>
+      <input class="sp-form-input" id="gdp-end" type="date" value="${toVal(t.end)}">`;
+  }
+
+  // Position near cursor, keep within viewport
+  const pw = 210, ph = t.milestone ? 130 : 185;
+  let left = clientX + 12, top = clientY - 20;
+  if (left + pw > window.innerWidth  - 8) left = clientX - pw - 12;
+  if (top  + ph > window.innerHeight - 8) top  = clientY - ph;
+  picker.style.left = left + 'px'; picker.style.top = top + 'px';
+  picker.style.display = 'block';
+
+  const apply = () => {
+    const startEl = document.getElementById('gdp-start');
+    const endEl   = document.getElementById('gdp-end');
+    const newStart = startEl ? new Date(startEl.value) : null;
+    const newEnd   = endEl   ? new Date(endEl.value)   : newStart;
+    if (!newStart || isNaN(newStart)) { picker.style.display = 'none'; return; }
+    pushUndo('edit dates');
+    t.start = snapToWorkDay(newStart, ganttWorkDays, 1);
+    t.end   = t.milestone ? t.start : (newEnd && !isNaN(newEnd) && newEnd >= t.start ? snapToWorkDay(newEnd, ganttWorkDays, -1) : t.start);
+    if (!t.milestone && t.end < t.start) t.end = t.start;
+    picker.style.display = 'none';
+    renderGantt();
+  };
+
+  document.getElementById('gdp-apply').onclick = apply;
+  document.getElementById('gdp-close').onclick  = () => { picker.style.display = 'none'; };
+  fields.querySelectorAll('input').forEach(inp => inp.addEventListener('keydown', e => { if (e.key === 'Enter') apply(); if (e.key === 'Escape') picker.style.display = 'none'; }));
+  fields.querySelector('#gdp-start')?.focus();
+}
+
+// Dismiss date picker on outside click
+document.addEventListener('click', e => {
+  const picker = document.getElementById('gantt-date-picker');
+  if (picker && picker.style.display !== 'none' && !picker.contains(e.target)) picker.style.display = 'none';
+}, true);
 
 function initGanttColumnResize() {
   const handle = document.getElementById('gantt-resize-handle');
@@ -2878,6 +2961,7 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
       }
     });
     hit.addEventListener('click', () => { if (!ganttDragDidMove && !barDrag.active) openTaskPanel(t.id); });
+    hit.addEventListener('dblclick', e => { e.stopPropagation(); openGanttDatePicker(t, e.clientX, e.clientY); });
     svg.appendChild(hit);
 
     if (t.milestone) {
@@ -3807,6 +3891,8 @@ function saveToExcel() {
   const title = (ProjectData.info['Project Title'] || 'Dashboard').replace(/[/\\?%*:|"<>]/g, '-');
   const dateStr = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `${title} - ${dateStr}.xlsx`);
+  clearDraft();
+  showToast('Exported to Excel — draft cleared');
 }
 
 // ─── TOOLTIP ─────────────────────────────────────────────────────────────────
@@ -5454,6 +5540,51 @@ document.getElementById('side-panel').addEventListener('keydown', e => {
   else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
 });
 
+// Warn before closing with unsaved edits
+window.addEventListener('beforeunload', e => {
+  if (isDirty) { e.preventDefault(); return (e.returnValue = ''); }
+});
+
+// Draft restore on page load
+(function checkForDraft() {
+  const raw = localStorage.getItem('vh-draft');
+  if (!raw) return;
+  let draft;
+  try { draft = JSON.parse(raw); } catch { localStorage.removeItem('vh-draft'); return; }
+  if (!draft.snapshot || !draft.snapshot.tasks) { localStorage.removeItem('vh-draft'); return; }
+
+  const banner = document.getElementById('draft-banner');
+  const mins = Math.round((Date.now() - draft.savedAt) / 60000);
+  const timeStr = mins < 1 ? 'just now' : mins < 60 ? mins + 'm ago' : Math.round(mins / 60) + 'h ago';
+  document.getElementById('draft-title').textContent = draft.title || 'Untitled';
+  document.getElementById('draft-time').textContent  = '— saved ' + timeStr;
+  banner.style.display = 'flex';
+
+  document.getElementById('draft-restore-btn').addEventListener('click', () => {
+    const snap = draft.snapshot;
+    snap.tasks.forEach(t => {
+      if (t.start) t.start = new Date(t.start);
+      if (t.end)   t.end   = new Date(t.end);
+    });
+    ProjectData.tasks   = snap.tasks;
+    ProjectData.specs   = snap.specs   || [];
+    ProjectData.org     = snap.org     || [];
+    ProjectData.weights = snap.weights || [];
+    ProjectData.info    = snap.info    || {};
+    originalTasks = ProjectData.tasks.map(t => ({ ...t, deps: [...(t.deps || [])] }));
+    recalcWBS(ProjectData.tasks);
+    isDirty = true;
+    renderDashboard();
+    banner.style.display = 'none';
+    showToast('Draft restored — export to Excel to save permanently');
+  });
+
+  document.getElementById('draft-dismiss-btn').addEventListener('click', () => {
+    localStorage.removeItem('vh-draft');
+    banner.style.display = 'none';
+  });
+})();
+
 // Browser compatibility check
 (function() {
   const supported = typeof Promise !== 'undefined' && !!window.CSS && !!Array.prototype.includes && typeof fetch !== 'undefined';
@@ -5467,5 +5598,13 @@ document.getElementById('side-panel').addEventListener('keydown', e => {
 })();
 </script>
 <div id="app-toast" role="status" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
+<div id="gantt-date-picker" style="display:none;position:fixed;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.35);min-width:200px">
+  <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+    <span id="gdp-label">Edit Dates</span>
+    <button id="gdp-close" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:0;line-height:1">✕</button>
+  </div>
+  <div id="gdp-fields" style="display:flex;flex-direction:column;gap:8px"></div>
+  <button id="gdp-apply" class="btn-primary btn-sm" style="width:100%;margin-top:10px">Apply</button>
+</div>
 </body>
 </html>
