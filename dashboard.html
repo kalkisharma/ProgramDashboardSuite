@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.23.0 — 2026-05-14 -->
+<!-- Program Dashboard Suite v1.24.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1135,7 +1135,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.23.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.24.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1373,6 +1373,16 @@ document.addEventListener('keydown', e => {
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y' && !e.target.matches('input, select, textarea')) {
     e.preventDefault(); applyRedo(); return;
+  }
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.matches('input, select, textarea')) {
+    if (spCurrentType === 'task') {
+      const btn = document.getElementById('sp-delete-task-btn');
+      if (btn) { e.preventDefault(); btn.click(); }
+    } else if (spCurrentType === 'spec') {
+      const btn = document.getElementById('sp-delete-spec-btn');
+      if (btn) { e.preventDefault(); btn.click(); }
+    }
+    return;
   }
   if (e.key === 'Escape') {
     if (document.getElementById('help-overlay').style.display === 'flex') { toggleHelp(); return; }
@@ -3536,6 +3546,54 @@ function addNewSpec() {
   if (nameEl) startSpecNameEdit(nameEl, newSpec);
 }
 
+function deleteTask(taskId) {
+  if (!S.tasks.find(t => t.id === taskId)) return;
+  const btn = document.getElementById('sp-delete-task-btn');
+  if (btn && btn.dataset.confirming !== '1') {
+    btn.dataset.confirming = '1';
+    btn.textContent = 'Tap again to confirm delete';
+    btn.style.borderColor = '#f85149'; btn.style.color = '#f85149';
+    setTimeout(() => {
+      if (btn && btn.dataset.confirming === '1') {
+        btn.dataset.confirming = ''; btn.textContent = 'Delete Task';
+        btn.style.borderColor = ''; btn.style.color = '';
+      }
+    }, 3000);
+    return;
+  }
+  pushUndo('task deleted');
+  S.tasks = S.tasks.filter(t => t.id !== taskId);
+  S.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== taskId); });
+  S.specs.forEach(s => { s.depIds = s.depIds.filter(d => d !== taskId); });
+  recalcWBS(S.tasks);
+  safeRender(renderGantt, 'Gantt Chart');
+  safeRender(renderSpecs, 'Specifications');
+  closeSidePanel();
+  showToast('Task deleted', applyUndo, 5000);
+}
+
+function deleteSpec(specId) {
+  if (!S.specs.find(s => s.id === specId)) return;
+  const btn = document.getElementById('sp-delete-spec-btn');
+  if (btn && btn.dataset.confirming !== '1') {
+    btn.dataset.confirming = '1';
+    btn.textContent = 'Tap again to confirm delete';
+    btn.style.borderColor = '#f85149'; btn.style.color = '#f85149';
+    setTimeout(() => {
+      if (btn && btn.dataset.confirming === '1') {
+        btn.dataset.confirming = ''; btn.textContent = 'Delete Specification';
+        btn.style.borderColor = ''; btn.style.color = '';
+      }
+    }, 3000);
+    return;
+  }
+  pushUndo('spec deleted');
+  S.specs = S.specs.filter(s => s.id !== specId);
+  safeRender(renderSpecs, 'Specifications');
+  closeSidePanel();
+  showToast('Specification deleted', applyUndo, 5000);
+}
+
 function addGanttTask() {
   if (!S.tasks.length) return;
   const lastTask = S.tasks[S.tasks.length - 1];
@@ -4200,6 +4258,9 @@ function openSpecPanel(specId) {
   <div id="sp-spec-dep-picker" class="sp-dep-picker" style="display:none" role="listbox" aria-label="Select a task to link">
     <input class="sp-dep-picker-input" type="text" placeholder="Search by name or WBS…" aria-label="Search tasks to link">
     <div class="sp-dep-list" id="sp-spec-dep-list"></div>
+  </div>
+  <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+    <button class="btn-secondary btn-sm" id="sp-delete-spec-btn" style="width:100%" aria-label="Delete this specification">Delete Specification</button>
   </div>`;
 
   const spBody = document.getElementById('sp-body');
@@ -4231,6 +4292,9 @@ function openSpecPanel(specId) {
   }
 
   wirePicker({ btnId: 'sp-add-spec-dep-btn', pickerId: 'sp-spec-dep-picker', listId: 'sp-spec-dep-list', buildFn: buildSpecDepPickerList, ref: s });
+
+  const delSpecBtn = spBody.querySelector('#sp-delete-spec-btn');
+  if (delSpecBtn) delSpecBtn.addEventListener('click', () => deleteSpec(s.id));
 
   spCurrentType = 'spec'; spCurrentId = specId;
   showSidePanel();
@@ -4324,6 +4388,9 @@ function openTaskPanel(taskId) {
   <div id="sp-spec-link-picker" class="sp-dep-picker" style="display:none" role="listbox" aria-label="Select a specification to link">
     <input class="sp-dep-picker-input" type="text" placeholder="Search by ID, category, or name…" aria-label="Search specifications to link">
     <div class="sp-dep-list" id="sp-spec-link-list"></div>
+  </div>
+  <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+    <button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task</button>
   </div>`;
 
   const spBody = document.getElementById('sp-body');
@@ -4364,6 +4431,9 @@ function openTaskPanel(taskId) {
   wirePicker({ btnId: 'sp-add-dep-btn', pickerId: 'sp-dep-picker', listId: 'sp-dep-list', buildFn: buildDepPickerList, ref: t, itemSelector: '.sp-dep-item:not(.cycle)' });
 
   wirePicker({ btnId: 'sp-add-spec-link-btn', pickerId: 'sp-spec-link-picker', listId: 'sp-spec-link-list', buildFn: buildSpecLinkPickerList, ref: t });
+
+  const delTaskBtn = spBody.querySelector('#sp-delete-task-btn');
+  if (delTaskBtn) delTaskBtn.addEventListener('click', () => deleteTask(t.id));
 
   spCurrentType = 'task'; spCurrentId = taskId;
   showSidePanel();
