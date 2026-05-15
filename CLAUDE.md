@@ -56,7 +56,8 @@ let _draftTimer  = null;   // debounce handle for scheduleDraftSave()
 
 - `isDirty` — set `true` by `pushUndo()`; cleared by `parseWorkbook()` and `saveToExcel()`
 - `scheduleDraftSave()` — debounces 3s, then serializes `fullSnapshot()` + project title + timestamp to `localStorage` as `vh-draft`
-- `clearDraft()` — removes `vh-draft` from localStorage, resets `isDirty = false`
+- `scheduleExportReminder()` — called by `pushUndo()`; sets a 15-minute one-shot timer (not reset on subsequent edits); on fire shows a 10s toast nudging Export to Excel; cleared by `clearDraft()`
+- `clearDraft()` — removes `vh-draft` from localStorage, cancels both timers, resets `isDirty = false`
 - On page load an IIFE calls `checkForDraft()`: if `vh-draft` exists, shows `#draft-banner` with project title and save time. "Restore" button re-parses Date strings and calls `renderDashboard()`; "Dismiss" calls `clearDraft()`
 - `window.beforeunload` fires when `isDirty === true` to warn before navigating away
 - Date objects in snapshots are stored as ISO strings by JSON.stringify; restore must explicitly `new Date(t.start)` etc.
@@ -133,7 +134,8 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - **Save to Excel** — `saveToExcel()` rebuilds all 5 sheets from current `ProjectData.*` state using SheetJS and downloads `"[Project Title] - YYYY-MM-DD.xlsx"`. The column layout matches what `parseWorkbook()` expects, so the file can be re-imported.
 - **Delete task/spec** — `deleteTask(taskId)` / `deleteSpec(specId)` use a two-tap confirm pattern (`btn.dataset.confirming`). Pushes undo before removing. `deleteTask` also cleans up dangling deps in all other tasks and specs.
 - **Phase collapse** — Phase header rows show a ▼/▶ button in the WBS cell. `togglePhaseCollapse(phaseNum)` toggles the phase number in `collapsedPhases` and re-renders. Collapsed phases hide all sub-tasks from `visibleTasks`; the header row remains with `.phase-collapsed` opacity styling. Only active when `ganttPhaseFilter === 'all'`. State persisted to `localStorage` as `vh-collapsed-phases`.
-- **Column resize** — `#gantt-resize-handle` (5px, between `#gantt-left` and `#gantt-right-col`) is a draggable divider. `initGanttColumnResize()` wires `mousedown` → tracks delta from `startX`, clamps width 150–700px, saves to `localStorage` as `vh-gantt-left-width`. No re-render needed; the `1fr` name column reflows automatically.
+- **Column resize** — `#gantt-resize-handle` (5px, between `#gantt-left` and `#gantt-right-col`) is a draggable divider. `initGanttColumnResize()` wires `mousedown` → tracks delta from `startX`, clamps width 150–700px, saves to `localStorage` as `vh-gantt-left-width`. No re-render needed; the name column reflows automatically.
+- **Name-column resize** — `#gantt-name-col-handle` (6px) sits on the right edge of the Task Name header cell. `initGanttNameColResize()` sets CSS variable `--gantt-name-col-w` (default `1fr`), shared by `#gantt-left-header` and `.gantt-row` grid-template-columns. Drag clamps 80–400px, persisted to `vh-gantt-name-col-width`.
 - **Inline date picker** — Double-clicking a Gantt bar or milestone diamond opens `#gantt-date-picker` (fixed, 210px wide) via `openGanttDatePicker(t, clientX, clientY)`. Single date input for milestones; Start + End inputs for tasks. Apply snaps to work days via `snapToWorkDay`, calls `pushUndo('edit dates')`, then `renderGantt()`. Enter = apply, Escape = cancel, outside-click dismisses. Positioned near cursor, clamped to viewport.
 
 **Work-day utilities:**
@@ -155,6 +157,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `vh-gantt-left-width` — left panel pixel width (e.g. "380px")
 - `vh-zoom-gantt` / `vh-zoom-specs` / `vh-zoom-org` — per-tab zoom index
 - `vh-draft` — auto-saved draft JSON (fullSnapshot + title + timestamp); removed on export/import
+- `vh-gantt-name-col-width` — Task Name column pixel width (e.g. "180px"); default `1fr`
 
 **Body grid lines:** `renderBodyGrid(svg, NS, minD, maxD, W, bodyH)` draws month boundary vertical lines (full body height) and, when `ganttZoom >= 5`, week sub-lines at reduced opacity. Non-work-day column shading has been removed.
 
@@ -259,4 +262,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v2.3.0** | Draggable left-panel resize handle | Done |
 | **v2.4.0** | Fix safeSetItem recursion bug; auto-save draft to localStorage; beforeunload warning | Done |
 | **v2.5.0** | Inline date picker on double-click of Gantt bars / milestones | Done |
-| **v2.6.0** | Code cleanup: eliminate all inline onclick attributes | Done — current release |
+| **v2.6.0** | Code cleanup: eliminate all inline onclick attributes | Done |
+| **v2.7.0** | Gantt name-column resize + export reminder toast | Done — current release |
