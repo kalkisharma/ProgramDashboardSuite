@@ -6,6 +6,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2.7.0] — 2026-05-15
+
+### Added
+- Gantt name-column resize: `#gantt-name-col-handle` (6px drag zone) on the right edge of the Task Name header cell; dragging sets CSS variable `--gantt-name-col-w` shared by `#gantt-left-header` and `.gantt-row` grid layouts; width clamped 80–400px and persisted to `vh-gantt-name-col-width`; defaults to `1fr` (fills remaining panel width)
+- Export reminder toast: after 15 minutes of continuous unsaved edits (`isDirty === true`), a 10-second toast appears nudging the user to Export to Excel; the timer starts once per dirty session and is not reset by subsequent edits; cleared on export or file import
+
+---
+
+## [2.6.0] — 2026-05-15
+
+### Changed
+- All inline `onclick` HTML attributes eliminated from the codebase — including dynamically-generated HTML
+- `clearGanttFilters()` and `clearSpecsFilters()` extracted as named functions; empty-state "Clear filters" buttons wired via `querySelector` after `innerHTML` is set
+- Calendar nav (‹/›) and close (×) buttons: replaced `onclick` attributes with `data-nav` / `data-close-cal` attributes; wired via `querySelectorAll` after each `cal.innerHTML` rebuild, consistent with the existing `data-date` day-cell pattern
+- Empty-state "Open help guide" buttons: class `empty-help-btn` + `addEventListener('click', toggleHelp)` after `innerHTML`
+- Browser compat dismiss button: rebuilt via `createElement` + `addEventListener` instead of `innerHTML` with inline `onclick`
+
+---
+
 ## [2.5.0] — 2026-05-15
 
 ### Added
