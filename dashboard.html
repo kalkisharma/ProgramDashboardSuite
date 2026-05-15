@@ -1,4 +1,4 @@
-﻿<!-- Program Dashboard Suite v2.6.0 — 2026-05-15 -->
+﻿<!-- Program Dashboard Suite v2.7.0 — 2026-05-15 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -758,8 +758,17 @@ body.light-mode {
 #theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ── GANTT COLUMN GRID (WBS | Name | Team | WD | %) ─────── */
-#gantt-left-header { grid-template-columns: 44px 1fr 68px 40px 44px 18px; }
-.gantt-row         { grid-template-columns: 44px 1fr 68px 40px 44px 18px; }
+:root { --gantt-name-col-w: 1fr; }
+#gantt-left-header { grid-template-columns: 44px var(--gantt-name-col-w) 68px 40px 44px 18px; }
+.gantt-row         { grid-template-columns: 44px var(--gantt-name-col-w) 68px 40px 44px 18px; }
+#gantt-name-col-handle {
+  position: absolute; right: 0; top: 0; bottom: 0; width: 6px;
+  cursor: col-resize; z-index: 2;
+  border-right: 1px solid var(--border);
+}
+#gantt-name-col-handle:hover, #gantt-name-col-handle.resizing {
+  border-right: 2px solid var(--accent);
+}
 
 /* ── WD COLUMN ───────────────────────────────────────────── */
 .g-wd        { font-size: 0.72rem; font-weight: 600; text-align: right; color: var(--muted); }
@@ -1015,7 +1024,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
       <div id="gantt-container">
         <div id="gantt-left">
           <div id="gantt-left-header">
-            <span>WBS</span><span>Task Name</span>
+            <span>WBS</span><span style="position:relative">Task Name<div id="gantt-name-col-handle" aria-hidden="true"></div></span>
             <span style="text-align:right">Team</span>
             <span style="text-align:right" title="Work days remaining until task end date">WD Left</span>
             <span style="text-align:right">%</span>
@@ -1190,7 +1199,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v2.6.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v2.7.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1348,6 +1357,7 @@ function pushUndo(label) {
   redoStack = [];
   isDirty = true;
   scheduleDraftSave();
+  scheduleExportReminder();
   updateUndoRedoBtns();
 }
 
@@ -1362,8 +1372,17 @@ function scheduleDraftSave() {
 
 function clearDraft() {
   clearTimeout(_draftTimer);
+  clearTimeout(_exportReminderTimer);
+  _exportReminderTimer = null;
   isDirty = false;
   localStorage.removeItem('vh-draft');
+}
+function scheduleExportReminder() {
+  if (_exportReminderTimer) return; // already scheduled; don't reset the clock on every edit
+  _exportReminderTimer = setTimeout(() => {
+    _exportReminderTimer = null;
+    if (isDirty) showToast('Heads up: you have unsaved changes. Export to Excel to make a permanent copy.', null, 10000);
+  }, 15 * 60 * 1000);
 }
 /** @param {object} snapshot - Result of fullSnapshot(); restores state and re-renders all tabs. */
 function _restoreSnapshot(snapshot) {
@@ -1840,6 +1859,7 @@ let ganttTeamFilter   = 'all';
 let collapsedPhases   = new Set(); // phase numbers (ints) whose sub-tasks are hidden
 let isDirty      = false;  // true when ProjectData has unsaved edits since last load/export
 let _draftTimer  = null;   // debounce handle for auto-draft save
+let _exportReminderTimer = null; // fires after 15 min of unsaved edits to nudge Export
 let specSortState      = { col: null, dir: 'asc' };
 let specSearchQuery    = '';
 let showCriticalPath   = false;
@@ -2148,6 +2168,41 @@ function initGanttColumnResize() {
   });
 }
 initGanttColumnResize();
+
+function initGanttNameColResize() {
+  const handle = document.getElementById('gantt-name-col-handle');
+  if (!handle) return;
+
+  const saved = localStorage.getItem('vh-gantt-name-col-width');
+  if (saved) document.documentElement.style.setProperty('--gantt-name-col-w', saved);
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    handle.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const startX = e.clientX;
+    const startW = handle.parentElement.getBoundingClientRect().width;
+    let lastW = startW;
+
+    function onMove(e) {
+      lastW = Math.max(80, Math.min(400, startW + e.clientX - startX));
+      document.documentElement.style.setProperty('--gantt-name-col-w', lastW + 'px');
+    }
+    function onUp() {
+      handle.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      safeSetItem('vh-gantt-name-col-width', lastW + 'px');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+initGanttNameColResize();
 
 // Clean up drag ghosts if user alt-tabs or the window loses focus mid-drag
 document.addEventListener('visibilitychange', () => {
