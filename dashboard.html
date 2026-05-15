@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.25.0 — 2026-05-14 -->
+﻿<!-- Program Dashboard Suite v1.26.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -900,17 +900,17 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <div class="tabs" id="tabs" role="tablist" style="display:none">
-      <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="gantt-panel"  data-tab="gantt"   onclick="switchTab(this,'gantt')">Gantt Chart</button>
-      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="specs-panel"  data-tab="specs"   onclick="switchTab(this,'specs')">Vehicle Specifications</button>
-      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="prog-panel"   data-tab="prog"    onclick="switchTab(this,'prog')">Program Dashboard</button>
-      <button class="tab-btn" id="weight-tab-btn" role="tab" aria-selected="false" aria-controls="weight-panel" data-tab="weight" onclick="switchTab(this,'weight')" style="display:none">Weight Budget</button>
-      <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    onclick="switchTab(this,'org')"    style="display:none">Org Chart</button>
+      <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="gantt-panel"  data-tab="gantt">Gantt Chart</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="specs-panel"  data-tab="specs">Vehicle Specifications</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="prog-panel"   data-tab="prog">Program Dashboard</button>
+      <button class="tab-btn" id="weight-tab-btn" role="tab" aria-selected="false" aria-controls="weight-panel" data-tab="weight" style="display:none">Weight Budget</button>
+      <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    style="display:none">Org Chart</button>
     </div>
-    <button class="btn-secondary" id="generate-sample-btn" onclick="generateSampleExcel()" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
-    <button class="btn-secondary" id="save-excel-btn" onclick="saveToExcel()" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
+    <button class="btn-secondary" id="generate-sample-btn" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
+    <button class="btn-secondary" id="save-excel-btn" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
     <span id="app-version-label" style="font-size:0.72rem;color:var(--muted);white-space:nowrap"></span>
-    <button class="btn-secondary" id="help-btn" onclick="toggleHelp()" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
-    <button id="theme-toggle" onclick="toggleTheme()" aria-label="Switch theme" title="Theme: Dark">🌙</button>
+    <button class="btn-secondary" id="help-btn" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
+    <button id="theme-toggle" aria-label="Switch theme" title="Theme: Dark">🌙</button>
   </div>
 </div>
 
@@ -949,32 +949,32 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
     <!-- GANTT TAB -->
     <div class="tab-panel active" id="gantt-panel" role="tabpanel" aria-labelledby="tab-btn-gantt">
       <div id="gantt-toolbar">
-        <button class="zoom-btn" onclick="adjustZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
+        <button class="zoom-btn" id="gantt-zoom-out-btn" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
         <span id="zoom-label">100%</span>
-        <button class="zoom-btn" onclick="adjustZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
+        <button class="zoom-btn" id="gantt-zoom-in-btn" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom</span>
         <div style="width:1px;height:18px;background:var(--border);margin:0 10px;flex-shrink:0"></div>
         <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Phase:</span>
-        <select id="gantt-phase-filter" aria-label="Filter by phase" onchange="setGanttPhaseFilter(this.value)">
+        <select id="gantt-phase-filter" aria-label="Filter by phase">
           <option value="all">All</option>
         </select>
         <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-left:10px">Team:</span>
-        <select id="gantt-team-filter" aria-label="Filter by team" onchange="setGanttTeamFilter(this.value)">
+        <select id="gantt-team-filter" aria-label="Filter by team">
           <option value="all">All</option>
         </select>
         <span style="flex:1"></span>
-        <button class="btn-secondary btn-sm" id="legend-btn" onclick="toggleGanttLegend()" title="Toggle phase color legend" aria-label="Toggle phase color legend" aria-expanded="false">Legend</button>
+        <button class="btn-secondary btn-sm" id="legend-btn" title="Toggle phase color legend" aria-label="Toggle phase color legend" aria-expanded="false">Legend</button>
         <div id="gantt-legend" style="display:none;position:absolute;top:100%;right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap;min-width:180px" role="region" aria-label="Phase color legend"></div>
-        <button class="btn-secondary btn-sm" id="gantt-cp-btn" onclick="toggleCriticalPath()" title="Highlight critical path" aria-label="Toggle critical path highlighting" aria-pressed="false">CP</button>
-        <button class="zoom-btn" id="cal-toggle-btn" onclick="toggleGanttCalendar()" title="Toggle mini calendar" aria-label="Toggle mini calendar" aria-expanded="false">📅</button>
-        <button class="btn-secondary btn-sm" id="workdays-btn" onclick="toggleWorkdaysPicker()" title="Configure work days" aria-label="Configure work days" aria-expanded="false">Mon–Fri ▾</button>
+        <button class="btn-secondary btn-sm" id="gantt-cp-btn" title="Highlight critical path" aria-label="Toggle critical path highlighting" aria-pressed="false">CP</button>
+        <button class="zoom-btn" id="cal-toggle-btn" title="Toggle mini calendar" aria-label="Toggle mini calendar" aria-expanded="false">📅</button>
+        <button class="btn-secondary btn-sm" id="workdays-btn" title="Configure work days" aria-label="Configure work days" aria-expanded="false">Mon–Fri ▾</button>
         <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
-        <button class="btn-secondary" id="gantt-export-svg-btn" onclick="exportGanttSVG()" title="Export Gantt chart as SVG file" disabled>Export SVG</button>
-        <button class="btn-secondary" id="gantt-export-png-btn" onclick="exportGanttPNG()" title="Export Gantt chart as PNG image" disabled>Export PNG</button>
-        <button class="btn-secondary" id="gantt-undo-btn" onclick="applyUndo()" title="Undo last action (Ctrl+Z)" aria-label="Undo" disabled>⟲ Undo</button>
-        <button class="btn-secondary" id="gantt-redo-btn" onclick="applyRedo()" title="Redo last undone action (Ctrl+Shift+Z)" aria-label="Redo" disabled>⟳ Redo</button>
-        <button class="btn-secondary" onclick="addGanttTask()" title="Add a new task">+ Add Task</button>
-        <button class="btn-secondary" onclick="resetGanttToImported()" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
+        <button class="btn-secondary" id="gantt-export-svg-btn" title="Export Gantt chart as SVG file" disabled>Export SVG</button>
+        <button class="btn-secondary" id="gantt-export-png-btn" title="Export Gantt chart as PNG image" disabled>Export PNG</button>
+        <button class="btn-secondary" id="gantt-undo-btn" title="Undo last action (Ctrl+Z)" aria-label="Undo" disabled>⟲ Undo</button>
+        <button class="btn-secondary" id="gantt-redo-btn" title="Redo last undone action (Ctrl+Shift+Z)" aria-label="Redo" disabled>⟳ Redo</button>
+        <button class="btn-secondary" id="gantt-add-task-btn" title="Add a new task">+ Add Task</button>
+        <button class="btn-secondary" id="gantt-reset-btn" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
         <div id="gantt-calendar"></div>
         <div id="workdays-picker" style="display:none;position:absolute;top:100%;right:0;z-index:210;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap"></div>
       </div>
@@ -1005,21 +1005,21 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
     <div class="tab-panel" id="specs-panel" role="tabpanel" aria-labelledby="tab-btn-specs">
       <div id="specs-toolbar">
         <span style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase">Filter:</span>
-        <select id="specs-filter" aria-label="Filter by category" onchange="setSpecsCategoryFilter(this.value)">
+        <select id="specs-filter" aria-label="Filter by category">
           <option value="all">All Categories</option>
         </select>
         <div style="position:relative;display:flex;align-items:center">
           <input id="specs-search" type="text" placeholder="Search…" aria-label="Search specifications"
             style="background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:0.79rem;padding:4px 24px 4px 8px;outline:none;width:160px">
-          <button id="specs-search-clear" onclick="specSearchQuery='';document.getElementById('specs-search').value='';renderSpecTable()" aria-label="Clear search"
+          <button id="specs-search-clear" aria-label="Clear search"
             style="display:none;position:absolute;right:5px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:0;line-height:1">×</button>
         </div>
         <span id="specs-count" style="font-size:0.8rem;color:var(--muted);margin-left:4px"></span>
         <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-          <button class="btn-secondary" onclick="addNewSpec()" title="Create a new specification">+ Add Spec</button>
-          <button class="zoom-btn" onclick="adjustSpecsZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
+          <button class="btn-secondary" id="specs-add-btn" title="Create a new specification">+ Add Spec</button>
+          <button class="zoom-btn" id="specs-zoom-out-btn" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
           <span id="specs-zoom-label" class="zoom-label">100%</span>
-          <button class="zoom-btn" onclick="adjustSpecsZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
+          <button class="zoom-btn" id="specs-zoom-in-btn" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         </div>
       </div>
       <div id="specs-body">
@@ -1040,14 +1040,14 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
     <!-- ORG CHART TAB -->
     <div class="tab-panel" id="org-panel" role="tabpanel" aria-labelledby="tab-btn-org">
       <div id="org-toolbar" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
-        <button class="zoom-btn" onclick="adjustOrgZoom(-1)" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
+        <button class="zoom-btn" id="org-zoom-out-btn" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
         <span id="org-zoom-label" class="zoom-label">100%</span>
-        <button class="zoom-btn" onclick="adjustOrgZoom(1)" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
+        <button class="zoom-btn" id="org-zoom-in-btn" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
         <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom · drag to pan</span>
         <div style="margin-left:auto;position:relative;display:flex;align-items:center">
           <input id="org-search" type="text" placeholder="Search people…" aria-label="Search people"
             style="background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:0.79rem;padding:4px 24px 4px 8px;outline:none;width:150px">
-          <button id="org-search-clear" onclick="orgSearchQuery='';document.getElementById('org-search').value='';renderOrgChart()" aria-label="Clear search"
+          <button id="org-search-clear" aria-label="Clear search"
             style="display:none;position:absolute;right:5px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:0;line-height:1">×</button>
         </div>
       </div>
@@ -1071,7 +1071,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 <div id="side-panel" role="dialog" aria-modal="true" aria-labelledby="sp-title">
   <div id="sp-header">
     <div id="sp-title">Details</div>
-    <button id="sp-close" onclick="closeSidePanel()" aria-label="Close details panel" title="Close">✕</button>
+    <button id="sp-close" aria-label="Close details panel" title="Close">✕</button>
   </div>
   <div id="sp-body"></div>
 </div>
@@ -1085,7 +1085,7 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 <!-- HELP MODAL -->
 <div id="help-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:900;align-items:center;justify-content:center">
   <div id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 16px 48px rgba(0,0,0,0.5)">
-    <button onclick="toggleHelp()" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:2px 6px;border-radius:4px" aria-label="Close" title="Close">✕</button>
+    <button id="help-modal-close-btn" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:2px 6px;border-radius:4px" aria-label="Close" title="Close">✕</button>
     <h2 id="help-modal-title" style="font-size:1rem;font-weight:700;margin-bottom:18px">Program Dashboard — User Guide</h2>
 
     <div style="font-size:0.83rem;line-height:1.65;color:var(--text)">
@@ -1142,8 +1142,8 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 
 <script>
 // ─── App State ────────────────────────────────────────────────────────────────
-const S = { info: {}, tasks: [], specs: [], org: [], weights: [] };
-let S_tasksOriginal = [];          // deep-copy at parse time for reset
+const ProjectData = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+let originalTasks = [];          // deep-copy at parse time for reset
 let ganttWorkDays = [1,2,3,4,5];  // Mon–Fri default; overridden by Project Info or Work Days UI
 let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks which item the side panel is showing
 let spCurrentId   = null; // specId string, taskId number, or person name string
@@ -1151,7 +1151,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.25.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.26.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1238,8 +1238,8 @@ function toggleTheme() {
   btn.textContent = theme === 'dark' ? '🌙' : theme === 'dim' ? '🌓' : '☀';
   btn.title = 'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1);
   btn.setAttribute('aria-label', 'Switch theme (currently ' + theme.charAt(0).toUpperCase() + theme.slice(1) + ')');
-  if (S.tasks.length) renderGantt();
-  if (S.org.length) renderOrgChart();
+  if (ProjectData.tasks.length) renderGantt();
+  if (ProjectData.org.length) renderOrgChart();
 }
 
 function showLoadError(msg) {
@@ -1292,36 +1292,40 @@ function safeRender(fn, label) {
   }
 }
 
+/** @returns {object} Deep copy of all five ProjectData collections for undo/redo. */
 function fullSnapshot() {
   return {
-    tasks:   S.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] })),
-    specs:   S.specs.map(s => ({ ...s, depIds: [...s.depIds] })),
-    org:     S.org.map(p => ({ ...p, reportsTo: [...(p.reportsTo || [])] })),
-    weights: S.weights.map(w => ({ ...w })),
-    info:    { ...S.info }
+    tasks:   ProjectData.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] })),
+    specs:   ProjectData.specs.map(s => ({ ...s, depIds: [...s.depIds] })),
+    org:     ProjectData.org.map(p => ({ ...p, reportsTo: [...(p.reportsTo || [])] })),
+    weights: ProjectData.weights.map(w => ({ ...w })),
+    info:    { ...ProjectData.info }
   };
 }
+/** @param {string} label - Human-readable description shown in undo toast. Clears redo stack. */
 function pushUndo(label) {
   if (undoStack.length >= 50) undoStack.shift();
   undoStack.push({ label, snapshot: fullSnapshot() });
   redoStack = [];
   updateUndoRedoBtns();
 }
+/** @param {object} snapshot - Result of fullSnapshot(); restores state and re-renders all tabs. */
 function _restoreSnapshot(snapshot) {
-  S.tasks   = snapshot.tasks;
-  S.specs   = snapshot.specs;
-  S.org     = snapshot.org     || S.org;
-  S.weights = snapshot.weights || S.weights;
-  if (snapshot.info) S.info = snapshot.info;
-  recalcWBS(S.tasks);
+  ProjectData.tasks   = snapshot.tasks;
+  ProjectData.specs   = snapshot.specs;
+  ProjectData.org     = snapshot.org     || ProjectData.org;
+  ProjectData.weights = snapshot.weights || ProjectData.weights;
+  if (snapshot.info) ProjectData.info = snapshot.info;
+  recalcWBS(ProjectData.tasks);
   safeRender(renderGantt,    'Gantt Chart');
   safeRender(renderSpecs,    'Specifications');
   safeRender(renderProgDash, 'Program Dashboard');
-  if (S.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
-  if (S.org.length)     safeRender(renderOrgChart,     'Org Chart');
+  if (ProjectData.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
+  if (ProjectData.org.length)     safeRender(renderOrgChart,     'Org Chart');
   if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
   else if (spCurrentType === 'spec') { spCurrentType = null; openSpecPanel(spCurrentId); }
 }
+/** Pops the top undo entry, pushes current state to redoStack, and restores previous state. */
 function applyUndo() {
   const entry = undoStack.pop();
   if (!entry) return;
@@ -1331,6 +1335,7 @@ function applyUndo() {
   showToast('Undone: ' + entry.label, null, 3000);
   updateUndoRedoBtns();
 }
+/** Pops the top redo entry, pushes current state back to undoStack, and re-applies the state. */
 function applyRedo() {
   const entry = redoStack.pop();
   if (!entry) return;
@@ -1529,6 +1534,7 @@ const TEAM_COLORS = {
 function teamColor(t) { return TEAM_COLORS[t] || '#58a6ff'; }
 
 // ─── Tab Switching ────────────────────────────────────────────────────────────
+/** @param {HTMLElement} btn - The clicked tab button. @param {string} id - Tab key ('gantt'|'specs'|'prog'|'weight'|'org'). */
 function switchTab(btn, id) {
   document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1580,8 +1586,8 @@ function loadFile(file) {
       const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
       parseWorkbook(wb);
       const missing = [];
-      if (!S.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone, Notes)");
-      if (!S.specs.length)  missing.push("'Specifications' (columns: Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs)");
+      if (!ProjectData.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone, Notes)");
+      if (!ProjectData.specs.length)  missing.push("'Specifications' (columns: Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs)");
       if (missing.length) {
         showLoadError('Required sheets missing:\n\n' + missing.join('\n\n') + '\n\nSheet names are case-sensitive. Check that the names match exactly.');
       }
@@ -1594,15 +1600,16 @@ function loadFile(file) {
 }
 
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
+/** @param {object} wb - SheetJS workbook object. Resets all ProjectData collections and populates from sheets. */
 function parseWorkbook(wb) {
-  S.info = {}; S.tasks = []; S.specs = []; S.org = []; S.weights = [];
+  ProjectData.info = {}; ProjectData.tasks = []; ProjectData.specs = []; ProjectData.org = []; ProjectData.weights = [];
   undoStack = []; redoStack = [];
 
   const ws1 = wb.Sheets['Project Info'];
   if (ws1) {
     XLSX.utils.sheet_to_json(ws1, { header:1 })
-      .forEach(r => { if (r[0] && r[1] != null) S.info[String(r[0]).trim()] = r[1]; });
-    const wd = S.info['Work Days'];
+      .forEach(r => { if (r[0] && r[1] != null) ProjectData.info[String(r[0]).trim()] = r[1]; });
+    const wd = ProjectData.info['Work Days'];
     if (wd) {
       const parsed = parseWorkDays(String(wd));
       if (parsed.length) {
@@ -1617,7 +1624,7 @@ function parseWorkbook(wb) {
   if (ws2) {
     const rows = XLSX.utils.sheet_to_json(ws2, { header:1 });
     const h = rows[0] || [];
-    S.tasks = rows.slice(1).filter(r => r[h.indexOf('Task ID')] != null).map(r => {
+    ProjectData.tasks = rows.slice(1).filter(r => r[h.indexOf('Task ID')] != null).map(r => {
       const g = k => r[h.indexOf(k)];
       return {
         id:        +g('Task ID'),
@@ -1639,7 +1646,7 @@ function parseWorkbook(wb) {
   if (ws3) {
     const rows = XLSX.utils.sheet_to_json(ws3, { header:1 });
     const h = rows[0] || [];
-    S.specs = rows.slice(1).filter(r => r[h.indexOf('Spec ID')] != null).map(r => {
+    ProjectData.specs = rows.slice(1).filter(r => r[h.indexOf('Spec ID')] != null).map(r => {
       const g = k => r[h.indexOf(k)];
       return {
         id:       String(g('Spec ID') || ''),
@@ -1659,7 +1666,7 @@ function parseWorkbook(wb) {
   if (ws4) {
     const rows = XLSX.utils.sheet_to_json(ws4, { header:1 });
     const h = rows[0] || [];
-    S.org = rows.slice(1).filter(r => r[h.indexOf('Name')] != null).map(r => {
+    ProjectData.org = rows.slice(1).filter(r => r[h.indexOf('Name')] != null).map(r => {
       const g = k => r[h.indexOf(k)];
       return {
         name:      String(g('Name') || ''),
@@ -1678,7 +1685,7 @@ function parseWorkbook(wb) {
     // Find weight columns flexibly: exact match first, then any header starting with "Target Weight" / "Estimated Weight"
     const tgtCol = h.find(c => c === 'Target Weight (lb)') || h.find(c => String(c).startsWith('Target Weight')) || 'Target Weight (lb)';
     const estCol = h.find(c => c === 'Estimated Weight (lb)') || h.find(c => String(c).startsWith('Estimated Weight')) || 'Estimated Weight (lb)';
-    S.weights = rows.slice(1).filter(r => r[h.indexOf('Subsystem')] != null).map(r => {
+    ProjectData.weights = rows.slice(1).filter(r => r[h.indexOf('Subsystem')] != null).map(r => {
       const g = k => r[h.indexOf(k)];
       return {
         subsystem: String(g('Subsystem') || ''),
@@ -1692,7 +1699,7 @@ function parseWorkbook(wb) {
   }
 
   // Deep-copy tasks for reset
-  S_tasksOriginal = S.tasks.map(t => ({ ...t, deps: [...t.deps] }));
+  originalTasks = ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
 }
 
 function parseDate(v) {
@@ -1709,10 +1716,11 @@ function parseDeps(v) {
 function fmt(d) { return d ? d.toISOString().slice(0,10) : '—'; }
 
 // ─── Render Dashboard ─────────────────────────────────────────────────────────
+/** Entry point after file load — updates topbar metadata and re-renders all visible tabs. */
 function renderDashboard() {
-  const title    = S.info['Project Title']      || 'Vehicle Design Dashboard';
-  const subtitle = S.info['Project Subtitle']   || '';
-  const admin    = S.info['File Administrator'] || '';
+  const title    = ProjectData.info['Project Title']      || 'Vehicle Design Dashboard';
+  const subtitle = ProjectData.info['Project Subtitle']   || '';
+  const admin    = ProjectData.info['File Administrator'] || '';
   const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
   document.getElementById('project-title').textContent    = title;
   document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
@@ -1720,8 +1728,8 @@ function renderDashboard() {
   document.getElementById('dropzone').style.display = 'none';
   document.getElementById('dashboard').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
-  document.getElementById('org-tab-btn').style.display = S.org.length ? '' : 'none';
-  document.getElementById('weight-tab-btn').style.display = S.weights.length ? '' : 'none';
+  document.getElementById('org-tab-btn').style.display = ProjectData.org.length ? '' : 'none';
+  document.getElementById('weight-tab-btn').style.display = ProjectData.weights.length ? '' : 'none';
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
   dashboardLoaded = true;
@@ -1744,14 +1752,14 @@ function renderDashboard() {
   safeRender(renderWeightBudget, 'Weight Budget');
   safeRender(renderOrgChart,     'Org Chart');
   updateUndoRedoBtns();
-  if (_justLoaded && S.tasks.length) {
-    const badDates   = S.tasks.filter(t => !t.milestone && (!t.start || !t.end));
-    const dupTaskIds = (() => { const seen = new Set(), dups = new Set(); S.tasks.forEach(t => { if (seen.has(t.id)) dups.add(t.id); seen.add(t.id); }); return dups; })();
-    const dupSpecIds = (() => { const seen = new Set(), dups = new Set(); S.specs.forEach(s => { if (seen.has(s.id)) dups.add(s.id); seen.add(s.id); }); return dups; })();
-    const parts = [`${S.tasks.length} task${S.tasks.length !== 1 ? 's' : ''}`];
-    if (S.specs.length)   parts.push(`${S.specs.length} spec${S.specs.length !== 1 ? 's' : ''}`);
-    if (S.org.length)     parts.push(`${S.org.length} ${S.org.length === 1 ? 'person' : 'people'}`);
-    if (S.weights.length) parts.push(`${S.weights.length} weight row${S.weights.length !== 1 ? 's' : ''}`);
+  if (_justLoaded && ProjectData.tasks.length) {
+    const badDates   = ProjectData.tasks.filter(t => !t.milestone && (!t.start || !t.end));
+    const dupTaskIds = (() => { const seen = new Set(), dups = new Set(); ProjectData.tasks.forEach(t => { if (seen.has(t.id)) dups.add(t.id); seen.add(t.id); }); return dups; })();
+    const dupSpecIds = (() => { const seen = new Set(), dups = new Set(); ProjectData.specs.forEach(s => { if (seen.has(s.id)) dups.add(s.id); seen.add(s.id); }); return dups; })();
+    const parts = [`${ProjectData.tasks.length} task${ProjectData.tasks.length !== 1 ? 's' : ''}`];
+    if (ProjectData.specs.length)   parts.push(`${ProjectData.specs.length} spec${ProjectData.specs.length !== 1 ? 's' : ''}`);
+    if (ProjectData.org.length)     parts.push(`${ProjectData.org.length} ${ProjectData.org.length === 1 ? 'person' : 'people'}`);
+    if (ProjectData.weights.length) parts.push(`${ProjectData.weights.length} weight row${ProjectData.weights.length !== 1 ? 's' : ''}`);
     if (badDates.length)  parts.push(`⚠ ${badDates.length} task${badDates.length !== 1 ? 's' : ''} missing dates`);
     if (dupTaskIds.size)  parts.push(`⚠ ${dupTaskIds.size} duplicate task ID${dupTaskIds.size !== 1 ? 's' : ''}`);
     if (dupSpecIds.size)  parts.push(`⚠ ${dupSpecIds.size} duplicate spec ID${dupSpecIds.size !== 1 ? 's' : ''}`);
@@ -1802,7 +1810,7 @@ function getBarZone(svgX, t) {
 
 function startBarDrag(e, taskId) {
   const right = document.getElementById('gantt-right');
-  const t = S.tasks.find(t => t.id === taskId);
+  const t = ProjectData.tasks.find(t => t.id === taskId);
   if (!t || !t.start || !t.end) { startPanDrag(e); return; }
   const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
   const zone = getBarZone(svgX, t);
@@ -1835,7 +1843,7 @@ function updateBarElementsDirect(taskId, newStart, newEnd) {
   if (!els || !ganttMinDateRef) return;
   const x = daysBetween(ganttMinDateRef, newStart) * ganttZoom;
   const w = Math.max(daysBetween(newStart, newEnd) * ganttZoom, ganttZoom);
-  const t = S.tasks.find(t => t.id === taskId);
+  const t = ProjectData.tasks.find(t => t.id === taskId);
   if (!t) return;
   if (t.milestone) {
     if (els.diamond) {
@@ -1883,7 +1891,7 @@ function doBarDragMove(e) {
     if (daysBetween(newStart, newEnd) < 1) newEnd = snapToWorkDay(addDays(newStart, 1), ganttWorkDays, 1);
   }
 
-  const t = S.tasks.find(t => t.id === barDrag.taskId);
+  const t = ProjectData.tasks.find(t => t.id === barDrag.taskId);
   if (t) { t.start = newStart; t.end = newEnd; }
   updateBarElementsDirect(barDrag.taskId, newStart, newEnd);
 
@@ -1905,7 +1913,7 @@ function endBarDrag() {
   document.getElementById('gantt-drag-label').style.display = 'none';
   document.getElementById('gantt-right').style.cursor = '';
   if (wasActive) {
-    const t = S.tasks.find(t => t.id === barDrag.taskId);
+    const t = ProjectData.tasks.find(t => t.id === barDrag.taskId);
     if (t && t.end <= t.start) {
       t.start = barDrag.origStart;
       t.end   = barDrag.origEnd;
@@ -1943,7 +1951,7 @@ function initGanttPan() {
     if (barDrag.active || ganttDragging) return;
     const tid = e.target.dataset && e.target.dataset.taskid ? +e.target.dataset.taskid : null;
     if (tid !== null && ganttMinDateRef) {
-      const t = S.tasks.find(t => t.id === tid);
+      const t = ProjectData.tasks.find(t => t.id === tid);
       if (t) {
         const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
         const zone = getBarZone(svgX, t);
@@ -2081,7 +2089,7 @@ function applyWorkDays(wds) {
   const btn = document.getElementById('workdays-btn');
   if (btn) btn.textContent = workdaysSummary(wds) + ' ▾';
   clearTimeout(_wdRenderTimer);
-  _wdRenderTimer = setTimeout(() => { if (S.tasks.length) renderGantt(); }, 300);
+  _wdRenderTimer = setTimeout(() => { if (ProjectData.tasks.length) renderGantt(); }, 300);
 }
 
 function toggleWorkdaysPicker() {
@@ -2147,7 +2155,7 @@ function renderGanttCalendar() {
   const { year, month } = calDisplayMonth;
 
   const msMap = {};
-  S.tasks.filter(t => t.milestone).forEach(t => {
+  ProjectData.tasks.filter(t => t.milestone).forEach(t => {
     const d = t.end || t.start;
     if (!d) return;
     const key = d.toISOString().slice(0, 10);
@@ -2157,7 +2165,7 @@ function renderGanttCalendar() {
 
   const phStartMap = {};
   const phaseNames = getPhaseNames();
-  S.tasks.filter(t => !t.wbs.includes('.') || t.wbs.endsWith('.0')).forEach(t => {
+  ProjectData.tasks.filter(t => !t.wbs.includes('.') || t.wbs.endsWith('.0')).forEach(t => {
     if (!t.start) return;
     const key = t.start.toISOString().slice(0, 10);
     const phNum = parseInt(t.wbs);
@@ -2397,7 +2405,7 @@ function renderGanttLegend() {
   const panel = document.getElementById('gantt-legend');
   if (!panel) return;
   const phaseNamesMap = getPhaseNames();
-  const allPhases = [...new Set(S.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b) => a-b);
+  const allPhases = [...new Set(ProjectData.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b) => a-b);
   const phaseRows = allPhases.map(ph => {
     const color = phaseColor(ph + '.0');
     const name  = phaseNamesMap[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
@@ -2450,7 +2458,7 @@ function exportGanttSVG() {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `${S.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.svg`;
+  a.download = `${ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.svg`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -2494,7 +2502,7 @@ function exportGanttPNG() {
       const url = URL.createObjectURL(pngBlob);
       const a   = document.createElement('a');
       a.href    = url;
-      a.download = `${S.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.png`;
+      a.download = `${ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.png`;
       a.click();
       URL.revokeObjectURL(url);
       URL.revokeObjectURL(svgUrl);
@@ -2504,6 +2512,7 @@ function exportGanttPNG() {
   img.src = svgUrl;
 }
 
+/** Full re-render of the Gantt chart (left task list + SVG bars + header). Called after every data mutation. */
 function renderGantt() {
   const data = prepareGanttData();
   if (!data) return;
@@ -2512,7 +2521,7 @@ function renderGantt() {
 }
 
 function prepareGanttData() {
-  if (!S.tasks.length) {
+  if (!ProjectData.tasks.length) {
     if (dashboardLoaded) {
       const lb = document.getElementById('gantt-left-body');
       if (lb) lb.innerHTML = `<div role="status" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;gap:10px;color:var(--muted);text-align:center">
@@ -2527,8 +2536,8 @@ function prepareGanttData() {
 
   // ── Populate filter dropdowns ──────────────────────
   const phaseNamesMap = getPhaseNames();
-  const allPhases = [...new Set(S.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b)=>a-b);
-  const allTeams  = [...new Set(S.tasks.map(t => t.team || 'Unassigned'))].sort();
+  const allPhases = [...new Set(ProjectData.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b)=>a-b);
+  const allTeams  = [...new Set(ProjectData.tasks.map(t => t.team || 'Unassigned'))].sort();
 
   const phaseSel  = document.getElementById('gantt-phase-filter');
   if (phaseSel) {
@@ -2556,7 +2565,7 @@ function prepareGanttData() {
   }
 
   // ── Build filtered task list ───────────────────────
-  const visibleTasks = S.tasks.filter(t => {
+  const visibleTasks = ProjectData.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
     if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
     if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
@@ -2572,15 +2581,15 @@ function prepareGanttData() {
   }
 
   // Use full task set for date axis so the time range stays stable when filtering
-  const dates = S.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
+  const dates = ProjectData.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
   const minD = new Date(Math.min(...dates)); minD.setDate(minD.getDate() - 7);
   const maxD = new Date(Math.max(...dates)); maxD.setDate(maxD.getDate() + 21);
   ganttMinDateRef = minD;
   const totalDays = daysBetween(minD, maxD);
   const W = totalDays * ganttZoom;
   const bodyH = visibleTasks.length * RH;
-  const cpSet = showCriticalPath ? computeCriticalPath(S.tasks) : new Set();
-  conflictSet = computeConflicts(S.tasks);
+  const cpSet = showCriticalPath ? computeCriticalPath(ProjectData.tasks) : new Set();
+  conflictSet = computeConflicts(ProjectData.tasks);
   const exportBtn = document.getElementById('gantt-export-svg-btn');
   if (exportBtn) exportBtn.disabled = false;
   const exportPngBtn = document.getElementById('gantt-export-png-btn');
@@ -2641,22 +2650,22 @@ function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const nameEl = div.querySelector('.g-name');
     nameEl.style.cursor = 'text';
     nameEl.setAttribute('tabindex', '0');
-    nameEl.addEventListener('click',   e => { e.stopPropagation(); startNameEdit(nameEl, t); });
-    nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startNameEdit(nameEl, t); } });
+    nameEl.addEventListener('click',   e => { e.stopPropagation(); startTaskNameEdit(nameEl, t); });
+    nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskNameEdit(nameEl, t); } });
 
     // Team inline edit
     const teamEl = div.querySelector('.g-team');
     teamEl.style.cursor = 'pointer';
     teamEl.setAttribute('tabindex', '0');
-    teamEl.addEventListener('click',   e => { e.stopPropagation(); startTeamEdit(teamEl, t); });
-    teamEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTeamEdit(teamEl, t); } });
+    teamEl.addEventListener('click',   e => { e.stopPropagation(); startTaskTeamEdit(teamEl, t); });
+    teamEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskTeamEdit(teamEl, t); } });
 
     // Pct inline edit
     const pctEl = div.querySelector('.g-pct');
     pctEl.style.cursor = 'text';
     pctEl.setAttribute('tabindex', '0');
-    pctEl.addEventListener('click',   e => { e.stopPropagation(); startPctEdit(pctEl, t); });
-    pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startPctEdit(pctEl, t); } });
+    pctEl.addEventListener('click',   e => { e.stopPropagation(); startTaskPctEdit(pctEl, t); });
+    pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskPctEdit(pctEl, t); } });
 
     div.addEventListener('click', () => openTaskPanel(t.id));
     div.addEventListener('mouseenter', e => { if (!barDrag.active && !rowDrag.active) showTooltip(t, e); });
@@ -2864,7 +2873,7 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
       p.setAttribute('marker-end', 'url(#arr)');
       p.setAttribute('tabindex', '0');
       p.setAttribute('role', 'button');
-      const predTask = S.tasks.find(tk => tk.id === did);
+      const predTask = ProjectData.tasks.find(tk => tk.id === did);
       p.setAttribute('aria-label', `Open ${t.name} — depends on ${predTask ? predTask.name : did}`);
       p.style.cursor = 'pointer';
       p.addEventListener('keydown', e => {
@@ -2983,7 +2992,7 @@ function appendLine(svg, NS, x1, x2, y1, y2, stroke, sw, dash='') {
 }
 
 // ─── GANTT INLINE EDITS ──────────────────────────────────────────────────────
-function startNameEdit(span, t) {
+function startTaskNameEdit(span, t) {
   if (span.querySelector('input')) return;
   const orig = t.name;
   const input = document.createElement('input');
@@ -3014,10 +3023,10 @@ function startNameEdit(span, t) {
   input.addEventListener('blur', commit);
 }
 
-function startTeamEdit(span, t) {
+function startTaskTeamEdit(span, t) {
   if (span.querySelector('select')) return;
   const orig = t.team;
-  const teams = [...new Set(S.tasks.map(x => x.team).filter(Boolean))].sort();
+  const teams = [...new Set(ProjectData.tasks.map(x => x.team).filter(Boolean))].sort();
   const sel = document.createElement('select');
   sel.className = 'gantt-cell-select';
   teams.forEach(tm => {
@@ -3045,7 +3054,7 @@ function startTeamEdit(span, t) {
   sel.addEventListener('blur', () => { if (t.team === orig) commit(false); });
 }
 
-function startPctEdit(span, t) {
+function startTaskPctEdit(span, t) {
   if (span.querySelector('input')) return;
   const orig = t.pct;
   const input = document.createElement('input');
@@ -3176,7 +3185,7 @@ function startSpecIdEdit(el, s) {
     const v = input.value.trim();
     if (!v) {
       s.id = orig; _refreshSpecPanel(s); showToast('Spec ID cannot be empty', null, 3500);
-    } else if (v !== orig && S.specs.some(x => x.id === v)) {
+    } else if (v !== orig && ProjectData.specs.some(x => x.id === v)) {
       s.id = orig; _refreshSpecPanel(s); showToast('Spec ID already in use', null, 3500);
     } else if (v !== orig) {
       pushUndo('spec ID change');
@@ -3270,8 +3279,8 @@ function startNotesEdit(el, t) {
 // ─── SIDE PANEL: DEPENDENCY EDITING ──────────────────────────────────────────
 function wouldCreateCycle(taskId, candidateId) {
   const succs = {};
-  S.tasks.forEach(t => { succs[t.id] = []; });
-  S.tasks.forEach(t => { t.deps.forEach(d => { if (succs[d]) succs[d].push(t.id); }); });
+  ProjectData.tasks.forEach(t => { succs[t.id] = []; });
+  ProjectData.tasks.forEach(t => { t.deps.forEach(d => { if (succs[d]) succs[d].push(t.id); }); });
   const visited = new Set([taskId]);
   const q = [...(succs[taskId] || [])];
   while (q.length) {
@@ -3336,7 +3345,7 @@ function wirePicker({ btnId, pickerId, listId, buildFn, ref, itemSelector }) {
 
 function buildDepPickerList(input, t, listEl) {
   const q = input.value.trim().toLowerCase();
-  const candidates = S.tasks.filter(c => c.id !== t.id && !t.deps.includes(c.id));
+  const candidates = ProjectData.tasks.filter(c => c.id !== t.id && !t.deps.includes(c.id));
   const filtered = q ? candidates.filter(c =>
     c.name.toLowerCase().includes(q) || c.wbs.toLowerCase().includes(q) || String(c.id).includes(q)
   ) : candidates;
@@ -3380,7 +3389,7 @@ function addSpecDep(s, taskId) {
 
 function buildSpecDepPickerList(input, s, listEl) {
   const q = input.value.trim().toLowerCase();
-  const candidates = S.tasks.filter(c => !s.depIds.includes(c.id));
+  const candidates = ProjectData.tasks.filter(c => !s.depIds.includes(c.id));
   const filtered = q ? candidates.filter(c =>
     c.name.toLowerCase().includes(q) || c.wbs.toLowerCase().includes(q) || String(c.id).includes(q)
   ) : candidates;
@@ -3421,7 +3430,7 @@ function addSpecLink(s, taskId) {
 
 function buildSpecLinkPickerList(input, t, listEl) {
   const q = input.value.trim().toLowerCase();
-  const candidates = S.specs.filter(s => !s.depIds.includes(t.id));
+  const candidates = ProjectData.specs.filter(s => !s.depIds.includes(t.id));
   const filtered = q ? candidates.filter(s =>
     s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)
   ) : candidates;
@@ -3503,7 +3512,7 @@ function endRowDrag(e) {
 
   if (dropIdx === srcIdx || dropIdx === srcIdx + 1) { renderGantt(); return; }
 
-  const visibleTasks = S.tasks.filter(t => {
+  const visibleTasks = ProjectData.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
     if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
     if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
@@ -3515,20 +3524,20 @@ function endRowDrag(e) {
 
   pushUndo('task reorder');
 
-  const origIdx = S.tasks.indexOf(dragged);
-  S.tasks.splice(origIdx, 1);
+  const origIdx = ProjectData.tasks.indexOf(dragged);
+  ProjectData.tasks.splice(origIdx, 1);
 
   const adjustedDrop  = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
-  const updatedVisible = S.tasks.filter(t => {
+  const updatedVisible = ProjectData.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
     if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
     if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
     return true;
   });
   const targetTask = updatedVisible[adjustedDrop];
-  const targetIdx  = targetTask ? S.tasks.indexOf(targetTask) : S.tasks.length;
-  S.tasks.splice(targetIdx, 0, dragged);
-  recalcWBS(S.tasks);
+  const targetIdx  = targetTask ? ProjectData.tasks.indexOf(targetTask) : ProjectData.tasks.length;
+  ProjectData.tasks.splice(targetIdx, 0, dragged);
+  recalcWBS(ProjectData.tasks);
   renderGantt();
   showToast('Task reordered', applyUndo, 5000);
 }
@@ -3550,14 +3559,15 @@ function recalcWBS(tasks) {
   });
 }
 
-// ─── ADD TASK / RESET ─────────────────────────────────────────────────────────
+// ─── ADD / DELETE TASK & SPEC ─────────────────────────────────────────────────
+/** Appends a new blank spec with auto-generated ID, opens its panel, and auto-focuses the name field. */
 function addNewSpec() {
   const filterEl = document.getElementById('specs-filter');
   const activeCat = (filterEl && filterEl.value !== 'all')
     ? filterEl.value
     : (Object.keys(SPEC_COLORS)[0] || 'General');
   const prefix = activeCat.slice(0, 2).toUpperCase();
-  const existingNums = S.specs
+  const existingNums = ProjectData.specs
     .filter(s => s.id.toUpperCase().startsWith(prefix))
     .map(s => { const m = s.id.match(/(\d+)$/); return m ? parseInt(m[1]) : 0; });
   const nextNum = existingNums.length ? Math.max(...existingNums) + 1 : 1;
@@ -3567,7 +3577,7 @@ function addNewSpec() {
     value: '', units: '—', status: 'TBD', group: '', notes: '', depIds: []
   };
   pushUndo('spec added');
-  S.specs.push(newSpec);
+  ProjectData.specs.push(newSpec);
   renderSpecs();
   openSpecPanel(newId);
   showToast('Specification added', applyUndo, 5000);
@@ -3575,8 +3585,9 @@ function addNewSpec() {
   if (nameEl) startSpecNameEdit(nameEl, newSpec);
 }
 
+/** @param {number} taskId - Two-tap confirm delete; pushes undo, removes task and all dep references. */
 function deleteTask(taskId) {
-  if (!S.tasks.find(t => t.id === taskId)) return;
+  if (!ProjectData.tasks.find(t => t.id === taskId)) return;
   const btn = document.getElementById('sp-delete-task-btn');
   if (btn && btn.dataset.confirming !== '1') {
     btn.dataset.confirming = '1';
@@ -3591,18 +3602,19 @@ function deleteTask(taskId) {
     return;
   }
   pushUndo('task deleted');
-  S.tasks = S.tasks.filter(t => t.id !== taskId);
-  S.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== taskId); });
-  S.specs.forEach(s => { s.depIds = s.depIds.filter(d => d !== taskId); });
-  recalcWBS(S.tasks);
+  ProjectData.tasks = ProjectData.tasks.filter(t => t.id !== taskId);
+  ProjectData.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== taskId); });
+  ProjectData.specs.forEach(s => { s.depIds = s.depIds.filter(d => d !== taskId); });
+  recalcWBS(ProjectData.tasks);
   safeRender(renderGantt, 'Gantt Chart');
   safeRender(renderSpecs, 'Specifications');
   closeSidePanel();
   showToast('Task deleted', applyUndo, 5000);
 }
 
+/** @param {string} specId - Two-tap confirm delete; pushes undo, removes the spec. */
 function deleteSpec(specId) {
-  if (!S.specs.find(s => s.id === specId)) return;
+  if (!ProjectData.specs.find(s => s.id === specId)) return;
   const btn = document.getElementById('sp-delete-spec-btn');
   if (btn && btn.dataset.confirming !== '1') {
     btn.dataset.confirming = '1';
@@ -3617,29 +3629,30 @@ function deleteSpec(specId) {
     return;
   }
   pushUndo('spec deleted');
-  S.specs = S.specs.filter(s => s.id !== specId);
+  ProjectData.specs = ProjectData.specs.filter(s => s.id !== specId);
   safeRender(renderSpecs, 'Specifications');
   closeSidePanel();
   showToast('Specification deleted', applyUndo, 5000);
 }
 
+/** Appends a new blank task to the last WBS phase, selects a team from existing unique teams. */
 function addGanttTask() {
-  if (!S.tasks.length) return;
-  const lastTask = S.tasks[S.tasks.length - 1];
+  if (!ProjectData.tasks.length) return;
+  const lastTask = ProjectData.tasks[ProjectData.tasks.length - 1];
   const lastPhase = parseInt(String(lastTask.wbs).split('.')[0]) || 1;
-  const phaseTasks = S.tasks.filter(t => parseInt(String(t.wbs).split('.')[0]) === lastPhase && t.wbs.includes('.') && !t.wbs.endsWith('.0'));
+  const phaseTasks = ProjectData.tasks.filter(t => parseInt(String(t.wbs).split('.')[0]) === lastPhase && t.wbs.includes('.') && !t.wbs.endsWith('.0'));
   const nextNum = phaseTasks.length + 1;
   const newWbs = lastPhase + '.' + nextNum;
 
-  const teams = [...new Set(S.tasks.map(t => t.team).filter(Boolean))].sort();
+  const teams = [...new Set(ProjectData.tasks.map(t => t.team).filter(Boolean))].sort();
   const team = teams[0] || '';
 
-  const dates = S.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
+  const dates = ProjectData.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
   const progStart = new Date(Math.min(...dates));
   const taskStart = snapToWorkDay(progStart, ganttWorkDays, 1);
   const taskEnd   = snapToWorkDay(addDays(taskStart, 4), ganttWorkDays, 1);
 
-  const newId = Math.max(...S.tasks.map(t => t.id), 0) + 1;
+  const newId = Math.max(...ProjectData.tasks.map(t => t.id), 0) + 1;
   const newTask = {
     id: newId, wbs: newWbs,
     name: 'New Task ' + newId,
@@ -3647,37 +3660,38 @@ function addGanttTask() {
     start: taskStart, end: taskEnd,
     pct: 0, deps: [], team, milestone: false, notes: '',
   };
-  S.tasks.push(newTask);
+  ProjectData.tasks.push(newTask);
   renderGantt();
   const phaseNames = getPhaseNames();
   showToast('Task added to ' + (phaseNames[lastPhase] || ('Phase ' + lastPhase)) + '.');
 }
 
 function resetGanttToImported() {
-  if (!S_tasksOriginal.length) return;
-  const snapshot = S.tasks.map(t => ({ ...t, deps: [...t.deps] }));
-  S.tasks = S_tasksOriginal.map(t => ({ ...t, deps: [...t.deps] }));
+  if (!originalTasks.length) return;
+  const snapshot = ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
+  ProjectData.tasks = originalTasks.map(t => ({ ...t, deps: [...t.deps] }));
   renderGantt();
-  showToast('Schedule reset to imported state.', () => { S.tasks = snapshot; renderGantt(); }, 30000);
+  showToast('Schedule reset to imported state.', () => { ProjectData.tasks = snapshot; renderGantt(); }, 30000);
 }
 
 // ─── SAVE TO EXCEL ────────────────────────────────────────────────────────────
+/** Rebuilds all five sheets from current ProjectData state via SheetJS and triggers browser download. */
 function saveToExcel() {
   const wb = XLSX.utils.book_new();
 
   // Project Info
   const infoRows = [['Field','Value']];
-  Object.entries(S.info).forEach(([k,v]) => infoRows.push([k, v]));
+  Object.entries(ProjectData.info).forEach(([k,v]) => infoRows.push([k, v]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(infoRows), 'Project Info');
 
   // Schedule
   const schRows = [['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes']];
-  S.tasks.forEach(t => {
+  ProjectData.tasks.forEach(t => {
     const fmtD = d => d ? d.toISOString().slice(0,10) : '';
     schRows.push([
       t.id, t.wbs, t.name, t.category,
       fmtD(t.start), fmtD(t.end), t.pct,
-      t.deps.filter(id => S.tasks.some(x => x.id === id)).join(','), t.team,
+      t.deps.filter(id => ProjectData.tasks.some(x => x.id === id)).join(','), t.team,
       t.milestone ? 'Y' : 'N', t.notes
     ]);
   });
@@ -3685,25 +3699,25 @@ function saveToExcel() {
 
   // Specifications
   const spRows = [['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs']];
-  S.specs.forEach(s => spRows.push([s.id, s.category, s.name, s.value, s.units, s.status, s.group, s.notes, s.depIds.filter(id => S.tasks.some(x => x.id === id)).join(',')]));
+  ProjectData.specs.forEach(s => spRows.push([s.id, s.category, s.name, s.value, s.units, s.status, s.group, s.notes, s.depIds.filter(id => ProjectData.tasks.some(x => x.id === id)).join(',')]));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(spRows), 'Specifications');
 
   // Org Chart
-  if (S.org.length) {
+  if (ProjectData.org.length) {
     const ogRows = [['Name','Title','Team','Reports To','Email']];
-    S.org.forEach(p => ogRows.push([p.name, p.title, p.team, p.reportsTo.join(', '), p.email]));
+    ProjectData.org.forEach(p => ogRows.push([p.name, p.title, p.team, p.reportsTo.join(', '), p.email]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ogRows), 'Org Chart');
   }
 
   // Weight Budget
-  if (S.weights.length) {
+  if (ProjectData.weights.length) {
     const wu = getWeightUnit();
     const wRows = [['Subsystem','Group',`Target Weight (${wu})`,`Estimated Weight (${wu})`,'Status','Notes']];
-    S.weights.forEach(w => wRows.push([w.subsystem, w.group, w.target, w.estimated, w.status, w.notes]));
+    ProjectData.weights.forEach(w => wRows.push([w.subsystem, w.group, w.target, w.estimated, w.status, w.notes]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wRows), 'Weight Budget');
   }
 
-  const title = (S.info['Project Title'] || 'Dashboard').replace(/[/\\?%*:|"<>]/g, '-');
+  const title = (ProjectData.info['Project Title'] || 'Dashboard').replace(/[/\\?%*:|"<>]/g, '-');
   const dateStr = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `${title} - ${dateStr}.xlsx`);
 }
@@ -3726,7 +3740,7 @@ document.getElementById('gantt-calendar').addEventListener('mouseleave', () => {
 function showTooltip(t, e) {
   const color = ganttColor(t.category);
   const depNames = t.deps.map(id => {
-    const dep = S.tasks.find(d => d.id === id);
+    const dep = ProjectData.tasks.find(d => d.id === id);
     return dep ? `Task ${id}: ${esc(dep.name)}` : `Task ${id}`;
   });
   tooltip.innerHTML = `
@@ -3764,7 +3778,7 @@ const PHASE_NAMES_FALLBACK = ['Concept','Preliminary Design','Detail Design','Pr
 function getPhaseNames() {
   const names = {};
   for (let i = 1; i <= 20; i++) {
-    const v = S.info['Phase ' + i + ' Name'];
+    const v = ProjectData.info['Phase ' + i + ' Name'];
     if (v) names[i] = String(v);
   }
   return names;
@@ -3796,13 +3810,13 @@ function renderProgDash() {
   const body = document.getElementById('prog-body');
   if (!body) return;
 
-  const totalTasks = S.tasks.length;
+  const totalTasks = ProjectData.tasks.length;
   const overallPct = totalTasks
-    ? Math.round(S.tasks.reduce((s, t) => s + (t.pct || 0), 0) / totalTasks)
+    ? Math.round(ProjectData.tasks.reduce((s, t) => s + (t.pct || 0), 0) / totalTasks)
     : 0;
-  const doneTasks = S.tasks.filter(t => t.pct >= 100).length;
+  const doneTasks = ProjectData.tasks.filter(t => t.pct >= 100).length;
 
-  const milestones = S.tasks.filter(t => t.milestone);
+  const milestones = ProjectData.tasks.filter(t => t.milestone);
   const milestoneDone = milestones.filter(t => t.pct >= 100).length;
   const nextMs = milestones
     .filter(t => t.pct < 100)
@@ -3820,14 +3834,14 @@ function renderProgDash() {
     daysToFinal > 0 ? `${daysToFinal} days remaining` :
     daysToFinal === 0 ? 'Today' : 'Completed';
 
-  const overdueTasks = S.tasks.filter(t => t.end && t.end < TODAY && (t.pct || 0) < 100 && !t.milestone).length;
+  const overdueTasks = ProjectData.tasks.filter(t => t.end && t.end < TODAY && (t.pct || 0) < 100 && !t.milestone).length;
 
-  const specAchieved = S.specs.filter(s => s.status === 'Achieved').length;
-  const specTarget   = S.specs.filter(s => s.status === 'Target').length;
-  const specTBD      = S.specs.filter(s => s.status === 'TBD').length;
+  const specAchieved = ProjectData.specs.filter(s => s.status === 'Achieved').length;
+  const specTarget   = ProjectData.specs.filter(s => s.status === 'Target').length;
+  const specTBD      = ProjectData.specs.filter(s => s.status === 'TBD').length;
 
   const phaseMap = {};
-  S.tasks.forEach(t => {
+  ProjectData.tasks.forEach(t => {
     const ph = parseInt(String(t.wbs).split('.')[0]) || 1;
     if (!phaseMap[ph]) phaseMap[ph] = [];
     phaseMap[ph].push(t);
@@ -3836,7 +3850,7 @@ function renderProgDash() {
 
   // Team workload: track both count and task list
   const teamTaskMap = {};
-  S.tasks.forEach(t => {
+  ProjectData.tasks.forEach(t => {
     const team = t.team || 'Unassigned';
     if (!teamTaskMap[team]) teamTaskMap[team] = [];
     teamTaskMap[team].push(t);
@@ -3930,7 +3944,7 @@ function renderProgDash() {
           <div class="spec-pill target"><div class="pill-count">${specTarget}</div>Target</div>
           <div class="spec-pill tbd"><div class="pill-count">${specTBD}</div>TBD</div>
         </div>
-        <div style="margin-top:14px;font-size:0.8rem;color:var(--muted)">${S.specs.length} specifications total</div>
+        <div style="margin-top:14px;font-size:0.8rem;color:var(--muted)">${ProjectData.specs.length} specifications total</div>
       </div>
     </div>
 
@@ -3945,7 +3959,7 @@ function renderProgDash() {
 }
 
 // ─── WEIGHT BUDGET ────────────────────────────────────────────────────────────
-function getWeightUnit() { return String(S.info['Weight Unit'] || 'lb'); }
+function getWeightUnit() { return String(ProjectData.info['Weight Unit'] || 'lb'); }
 function showWtTooltip(e, el) {
   const est    = Number(el.dataset.est);
   const tgt    = Number(el.dataset.tgt);
@@ -3969,13 +3983,13 @@ function hideWtTooltip() { tooltip.style.display = 'none'; }
 
 function renderWeightBudget() {
   const body = document.getElementById('weight-body');
-  if (!body || !S.weights.length) return;
+  if (!body || !ProjectData.weights.length) return;
 
   const unit        = getWeightUnit();
-  const totalTarget = S.weights.reduce((s, w) => s + w.target, 0);
-  const totalEst    = S.weights.reduce((s, w) => s + w.estimated, 0);
+  const totalTarget = ProjectData.weights.reduce((s, w) => s + w.target, 0);
+  const totalEst    = ProjectData.weights.reduce((s, w) => s + w.estimated, 0);
   const totalMargin = totalTarget - totalEst;
-  const maxVal      = Math.max(...S.weights.map(w => Math.max(w.target, w.estimated)), 1);
+  const maxVal      = Math.max(...ProjectData.weights.map(w => Math.max(w.target, w.estimated)), 1);
   const marginColor = totalMargin >= 0 ? '#3fb950' : '#d29922';
   const marginSign  = totalMargin >= 0 ? '+' : '';
   const marginPct   = Math.round(Math.abs(totalMargin) / totalTarget * 100);
@@ -4008,7 +4022,7 @@ function renderWeightBudget() {
       </div>
       ${(() => {
         const grouped = {};
-        S.weights.forEach(w => {
+        ProjectData.weights.forEach(w => {
           const g = w.group || 'Other';
           if (!grouped[g]) grouped[g] = [];
           grouped[g].push(w);
@@ -4080,10 +4094,11 @@ function renderWeightBudget() {
 }
 
 // ─── SPECS ────────────────────────────────────────────────────────────────────
+/** Rebuilds the Specifications tab: repopulates category filter dropdown, then calls renderSpecTable(). */
 function renderSpecs() {
   const sel = document.getElementById('specs-filter');
   sel.innerHTML = '<option value="all">All Categories</option>';
-  [...new Set(S.specs.map(s => s.category))].forEach(c => {
+  [...new Set(ProjectData.specs.map(s => s.category))].forEach(c => {
     const o = document.createElement('option'); o.value = c; o.textContent = c;
     sel.appendChild(o);
   });
@@ -4094,7 +4109,7 @@ function renderSpecs() {
 
 function specStatusRank(s) {
   if (s.status === 'TBD') {
-    const risk = s.depIds.some(id => { const t = S.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY; });
+    const risk = s.depIds.some(id => { const t = ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY; });
     return risk ? 0 : 1;
   }
   return s.status === 'Target' ? 2 : s.status === 'Achieved' ? 3 : 4;
@@ -4113,7 +4128,7 @@ function setSpecSort(col) {
 
 function renderSpecTable() {
   const cat  = document.getElementById('specs-filter').value;
-  let list = cat === 'all' ? S.specs : S.specs.filter(s => s.category === cat);
+  let list = cat === 'all' ? ProjectData.specs : ProjectData.specs.filter(s => s.category === cat);
   if (specSearchQuery.trim()) {
     const q = specSearchQuery.trim().toLowerCase();
     list = list.filter(s =>
@@ -4139,7 +4154,7 @@ function renderSpecTable() {
   const specRow = (s, col) => {
     const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
     const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
-      const t = S.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY;
+      const t = ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY;
     });
     const riskDesc = hasRisk ? ' — risk: dependent task already started' : '';
     const depText = s.depIds.length
@@ -4232,7 +4247,7 @@ function renderSpecTable() {
 }
 
 function cycleSpecStatus(specId) {
-  const s = S.specs.find(s => s.id === specId);
+  const s = ProjectData.specs.find(s => s.id === specId);
   if (!s) return;
   const cycle = { 'Achieved': 'Target', 'Target': 'TBD', 'TBD': 'Achieved' };
   s.status = cycle[s.status] || 'TBD';
@@ -4241,10 +4256,11 @@ function cycleSpecStatus(specId) {
 }
 
 // ─── SIDE PANEL – SPEC ───────────────────────────────────────────────────────
+/** @param {string} specId - Opens the spec detail panel; second call on same ID toggles it closed. */
 function openSpecPanel(specId) {
   if (spCurrentType === 'spec' && spCurrentId === specId) { closeSidePanel(); return; }
   spOpener = document.activeElement;
-  const s = S.specs.find(s => s.id === specId);
+  const s = ProjectData.specs.find(s => s.id === specId);
   if (!s) return;
   const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
   document.getElementById('sp-title').textContent = s.name;
@@ -4259,7 +4275,7 @@ function openSpecPanel(specId) {
   </div>`;
 
   const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
-    const t = S.tasks.find(t => t.id === id);
+    const t = ProjectData.tasks.find(t => t.id === id);
     return t && t.start && t.start <= TODAY;
   });
   if (hasRisk) html += `<div class="risk-alert">⚠ BLOCKED RISK — Spec is TBD but dependent task(s) have started</div>`;
@@ -4268,7 +4284,7 @@ function openSpecPanel(specId) {
     html += `<div class="no-deps">No task dependencies linked<br>to this specification.</div>`;
   } else {
     s.depIds.forEach(id => {
-      const t = S.tasks.find(t => t.id === id);
+      const t = ProjectData.tasks.find(t => t.id === id);
       if (!t) {
         html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-spec-dep="${id}" aria-label="Remove task ${id}" title="Remove">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found in Schedule</div></div>`;
         return;
@@ -4343,10 +4359,11 @@ function openSpecPanel(specId) {
 }
 
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
+/** @param {number} taskId - Opens the task detail panel; second call on same ID toggles it closed. */
 function openTaskPanel(taskId) {
   if (spCurrentType === 'task' && spCurrentId === taskId) { closeSidePanel(); return; }
   spOpener = document.activeElement;
-  const t = S.tasks.find(t => t.id === taskId);
+  const t = ProjectData.tasks.find(t => t.id === taskId);
   if (!t) return;
   const gc = ganttColor(t.category);
   document.getElementById('sp-title').textContent = t.name;
@@ -4378,7 +4395,7 @@ function openTaskPanel(taskId) {
   // Dependencies (tasks this one depends on)
   html += `<div class="sp-section-label">Depends On${t.deps.length ? ` (${t.deps.length})` : ''}</div>`;
   t.deps.forEach(id => {
-    const dep = S.tasks.find(d => d.id === id);
+    const dep = ProjectData.tasks.find(d => d.id === id);
     if (!dep) {
       html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${id}" aria-label="Remove dependency" title="Remove dependency">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`;
       return;
@@ -4399,7 +4416,7 @@ function openTaskPanel(taskId) {
   </div>`;
 
   // Linked specs
-  const linkedSpecs = S.specs.filter(s => s.depIds.includes(t.id));
+  const linkedSpecs = ProjectData.specs.filter(s => s.depIds.includes(t.id));
   html += `<div class="sp-section-label" style="margin-top:16px">Linked Specifications${linkedSpecs.length ? ` (${linkedSpecs.length})` : ''}</div>`;
   if (!linkedSpecs.length) {
     html += `<div class="no-deps">No specifications linked<br>to this task.</div>`;
@@ -4455,7 +4472,7 @@ function openTaskPanel(taskId) {
   spBody.querySelectorAll('[data-rm-spec-link]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const spec = S.specs.find(s => s.id === btn.dataset.rmSpecLink);
+      const spec = ProjectData.specs.find(s => s.id === btn.dataset.rmSpecLink);
       if (spec) removeSpecLink(spec, t.id);
     });
   });
@@ -4472,10 +4489,11 @@ function openTaskPanel(taskId) {
 }
 
 // ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
+/** @param {string} name - Person's name key; opens their profile panel or toggles it closed. */
 function openOrgPanel(name) {
   if (spCurrentType === 'org' && spCurrentId === name) { closeSidePanel(); return; }
   spOpener = document.activeElement;
-  const person = S.org.find(p => p.name === name);
+  const person = ProjectData.org.find(p => p.name === name);
   if (!person) return;
   const col = teamColor(person.team);
   document.getElementById('sp-title').textContent = person.name;
@@ -4488,7 +4506,7 @@ function openOrgPanel(name) {
   </div>`;
 
   // Direct reports
-  const reports = S.org.filter(p => p.reportsTo.includes(name));
+  const reports = ProjectData.org.filter(p => p.reportsTo.includes(name));
   if (reports.length) {
     html += `<div class="sp-section-label">Direct Reports (${reports.length})</div>`;
     reports.forEach(r => {
@@ -4502,7 +4520,7 @@ function openOrgPanel(name) {
   }
 
   // Tasks owned by this person's team
-  const myTasks = S.tasks.filter(t => t.team === person.team);
+  const myTasks = ProjectData.tasks.filter(t => t.team === person.team);
   if (myTasks.length) {
     html += `<div class="sp-section-label" style="margin-top:16px">Team Tasks (${myTasks.length})</div>`;
     myTasks.forEach(t => {
@@ -4582,7 +4600,7 @@ function renderOrgChart() {
   const empty = document.getElementById('org-empty');
   const container = document.getElementById('org-container');
 
-  if (!S.org.length) {
+  if (!ProjectData.org.length) {
     empty.style.display = 'flex';
     container.style.display = 'none';
     return;
@@ -4592,10 +4610,10 @@ function renderOrgChart() {
 
   // Build tree (filtered by search query when active; ancestors included to preserve hierarchy)
   const q = orgSearchQuery.toLowerCase();
-  let orgData = S.org;
+  let orgData = ProjectData.org;
   const matchedNames = new Set();
   if (q) {
-    const matched = S.org.filter(p =>
+    const matched = ProjectData.org.filter(p =>
       [p.name, p.title, p.team, p.email].some(v => v && v.toLowerCase().includes(q)));
     const ancestorSet = new Set();
     matched.forEach(p => {
@@ -4603,13 +4621,13 @@ function renderOrgChart() {
       ancestorSet.add(p.name);
       let cur = p;
       while (cur.reportsTo && cur.reportsTo[0]) {
-        const parent = S.org.find(x => x.name === cur.reportsTo[0]);
+        const parent = ProjectData.org.find(x => x.name === cur.reportsTo[0]);
         if (!parent || ancestorSet.has(parent.name)) break;
         ancestorSet.add(parent.name);
         cur = parent;
       }
     });
-    orgData = S.org.filter(p => ancestorSet.has(p.name));
+    orgData = ProjectData.org.filter(p => ancestorSet.has(p.name));
   }
   const nodeMap = {};
   orgData.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
@@ -4797,7 +4815,7 @@ function generateSampleExcel() {
     ['Field','Value'],
     ['Project Title',     'TW-2 Hybrid-Electric Tilt-Wing UAM'],
     ['Project Subtitle',  'TW-2'],
-    ['File Administrator','S. Torres'],
+    ['File Administrator','ProjectData. Torres'],
     ['Program Start',     '2025-03-03'],
     ['Program End',       '2027-12-19'],
     ['Work Days',         'Mon,Tue,Wed,Thu,Fri'],
@@ -4893,8 +4911,8 @@ function generateSampleExcel() {
   // Org Chart sheet
   const og = ['Name','Title','Team','Reports To','Email'];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([og,
-    ['S. Torres',    'Program Director',            'All Teams',   '',            'storres@tw2.aero'],
-    ['R. Nakamura',  'Chief Engineer',              'All Teams',   'S. Torres',   'rnakamura@tw2.aero'],
+    ['ProjectData. Torres',    'Program Director',            'All Teams',   '',            'storres@tw2.aero'],
+    ['R. Nakamura',  'Chief Engineer',              'All Teams',   'ProjectData. Torres',   'rnakamura@tw2.aero'],
     ['A. Singh',     'Lead Systems Engineer',       'Systems',     'R. Nakamura', 'asingh@tw2.aero'],
     ['L. Chen',      'Aerodynamics Lead',           'Aerodynamics','R. Nakamura', 'lchen@tw2.aero'],
     ['M. Park',      'CFD Engineer',                'Aerodynamics','L. Chen',     'mpark@tw2.aero'],
@@ -4906,10 +4924,10 @@ function generateSampleExcel() {
     ['P. Nguyen',    'Composite Structures Engineer','Structures',  'K. Johansson','pnguyen@tw2.aero'],
     ['H. Okonkwo',   'Avionics Lead',               'Avionics',    'R. Nakamura', 'hokonkwo@tw2.aero'],
     ['D. Lee',       'Flight Control Engineer',     'Avionics',    'H. Okonkwo',  'dlee@tw2.aero'],
-    ['C. Martinez',  'Flight Test Director',        'Flight Test', 'S. Torres',   'cmartinez@tw2.aero'],
+    ['C. Martinez',  'Flight Test Director',        'Flight Test', 'ProjectData. Torres',   'cmartinez@tw2.aero'],
     ['J. Erikson',   'Chief Test Pilot',            'Flight Test', 'C. Martinez', 'jerikson@tw2.aero'],
-    ['Y. Zhang',     'Certification Manager',       'Certification','S. Torres',  'yzhang@tw2.aero'],
-    ['O. Brown',     'Manufacturing Lead',          'Manufacturing','S. Torres',  'obrown@tw2.aero'],
+    ['Y. Zhang',     'Certification Manager',       'Certification','ProjectData. Torres',  'yzhang@tw2.aero'],
+    ['O. Brown',     'Manufacturing Lead',          'Manufacturing','ProjectData. Torres',  'obrown@tw2.aero'],
   ]), 'Org Chart');
 
   // Weight Budget sheet
@@ -5008,6 +5026,62 @@ function generateSampleExcel() {
   const _savedTeam = localStorage.getItem('vh-filter-team');
   if (_savedTeam) ganttTeamFilter = _savedTeam;
 })();
+
+// ─── WIRE STATIC UI EVENT HANDLERS ──────────────────────────────────────────
+// (replaces inline onclick/onchange attributes removed from HTML in v1.26.0)
+
+// Tab buttons — wire all at once via data-tab attribute
+document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn, btn.dataset.tab));
+});
+
+// Topbar buttons
+document.getElementById('generate-sample-btn').addEventListener('click', generateSampleExcel);
+document.getElementById('save-excel-btn').addEventListener('click', saveToExcel);
+document.getElementById('help-btn').addEventListener('click', toggleHelp);
+document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+
+// Gantt filters
+document.getElementById('gantt-phase-filter').addEventListener('change', e => setGanttPhaseFilter(e.target.value));
+document.getElementById('gantt-team-filter').addEventListener('change', e => setGanttTeamFilter(e.target.value));
+
+// Gantt toolbar buttons
+document.getElementById('gantt-zoom-out-btn').addEventListener('click', () => adjustZoom(-1));
+document.getElementById('gantt-zoom-in-btn').addEventListener('click', () => adjustZoom(1));
+document.getElementById('legend-btn').addEventListener('click', toggleGanttLegend);
+document.getElementById('gantt-cp-btn').addEventListener('click', toggleCriticalPath);
+document.getElementById('cal-toggle-btn').addEventListener('click', toggleGanttCalendar);
+document.getElementById('workdays-btn').addEventListener('click', toggleWorkdaysPicker);
+document.getElementById('gantt-export-svg-btn').addEventListener('click', exportGanttSVG);
+document.getElementById('gantt-export-png-btn').addEventListener('click', exportGanttPNG);
+document.getElementById('gantt-undo-btn').addEventListener('click', applyUndo);
+document.getElementById('gantt-redo-btn').addEventListener('click', applyRedo);
+document.getElementById('gantt-add-task-btn').addEventListener('click', addGanttTask);
+document.getElementById('gantt-reset-btn').addEventListener('click', resetGanttToImported);
+
+// Specs toolbar
+document.getElementById('specs-filter').addEventListener('change', e => setSpecsCategoryFilter(e.target.value));
+document.getElementById('specs-search-clear').addEventListener('click', () => {
+  specSearchQuery = '';
+  document.getElementById('specs-search').value = '';
+  renderSpecTable();
+});
+document.getElementById('specs-add-btn').addEventListener('click', addNewSpec);
+document.getElementById('specs-zoom-out-btn').addEventListener('click', () => adjustSpecsZoom(-1));
+document.getElementById('specs-zoom-in-btn').addEventListener('click', () => adjustSpecsZoom(1));
+
+// Org toolbar
+document.getElementById('org-zoom-out-btn').addEventListener('click', () => adjustOrgZoom(-1));
+document.getElementById('org-zoom-in-btn').addEventListener('click', () => adjustOrgZoom(1));
+document.getElementById('org-search-clear').addEventListener('click', () => {
+  orgSearchQuery = '';
+  document.getElementById('org-search').value = '';
+  renderOrgChart();
+});
+
+// Side panel and modals
+document.getElementById('sp-close').addEventListener('click', closeSidePanel);
+document.getElementById('help-modal-close-btn').addEventListener('click', toggleHelp);
 
 // Focus trap for side panel — keeps Tab/Shift+Tab within the panel while it is open
 document.getElementById('side-panel').addEventListener('keydown', e => {
