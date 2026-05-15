@@ -1,4 +1,4 @@
-﻿<!-- Program Dashboard Suite v2.1.0 — 2026-05-15 -->
+﻿<!-- Program Dashboard Suite v2.2.0 — 2026-05-15 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -802,6 +802,12 @@ body.light-mode {
 .gantt-row:hover .gantt-drag-handle { display: block; }
 .gantt-row:hover .g-wbs-wrap.g-wbs-draggable .g-wbs-text { opacity: 0.35; }
 .gantt-row:hover .g-wbs-wrap.g-wbs-draggable { cursor: grab; }
+.gantt-collapse-btn {
+  background: none; border: none; color: inherit; cursor: pointer;
+  font-size: 0.6rem; padding: 0 2px 0 0; line-height: 1; opacity: 0.55; flex-shrink: 0;
+}
+.gantt-collapse-btn:hover { opacity: 1; }
+.gantt-row.phase-collapsed { opacity: 0.75; }
 .gantt-row-ghost {
   position: fixed; pointer-events: none; z-index: 800;
   background: var(--surface); border: 1px solid var(--accent);
@@ -1164,7 +1170,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v2.1.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v2.2.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1753,7 +1759,8 @@ function renderDashboard() {
   ganttPhaseFilter = 'all';
   ganttTeamFilter  = 'all';
   specSearchQuery  = '';
-  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search']
+  collapsedPhases.clear();
+  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases']
     .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';
@@ -1790,8 +1797,9 @@ let zoomIdx = 3;                                 // default: 4px/day = 100%
 let ganttZoom = ZOOM_STEPS[zoomIdx];
 let ganttMinDateRef = null;                      // set during renderGantt for adjustZoom scroll math
 let ganttTodayX    = null;                       // px offset of Today line; null when Today is out of range
-let ganttPhaseFilter = 'all';
-let ganttTeamFilter  = 'all';
+let ganttPhaseFilter  = 'all';
+let ganttTeamFilter   = 'all';
+let collapsedPhases   = new Set(); // phase numbers (ints) whose sub-tasks are hidden
 let specSortState      = { col: null, dir: 'asc' };
 let specSearchQuery    = '';
 let showCriticalPath   = false;
@@ -1802,6 +1810,11 @@ let calDisplayMonth  = null; // { year, month } currently visible in the mini ca
 let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
 function setGanttPhaseFilter(val) { ganttPhaseFilter = val; safeSetItem('vh-filter-phase', val); renderGantt(); }
 function setGanttTeamFilter(val)  { ganttTeamFilter  = val; safeSetItem('vh-filter-team', val);  renderGantt(); }
+function togglePhaseCollapse(phaseNum) {
+  if (collapsedPhases.has(phaseNum)) collapsedPhases.delete(phaseNum); else collapsedPhases.add(phaseNum);
+  safeSetItem('vh-collapsed-phases', JSON.stringify([...collapsedPhases]));
+  renderGantt();
+}
 const RH = 36;
 const HH = 60;
 
@@ -2582,9 +2595,14 @@ function prepareGanttData() {
 
   // ── Build filtered task list ───────────────────────
   const visibleTasks = ProjectData.tasks.filter(t => {
-    const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
+    const phNum = parseInt(String(t.wbs).split('.')[0]) || 1;
+    const ph    = String(phNum);
     if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
     if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
+    if (ganttPhaseFilter === 'all' && collapsedPhases.has(phNum)) {
+      const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
+      if (!isPhaseHeader) return false;
+    }
     return true;
   });
 
@@ -2628,19 +2646,23 @@ function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const depth = (t.wbs.match(/\./g) || []).length;
     const wd = wdDisplay(t);
     const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
+    const phaseNum = parseInt(t.wbs.split('.')[0]) || 1;
+    const isCollapsed = isPhaseHeader && collapsedPhases.has(phaseNum);
     const showHandle = !isFiltered && !isPhaseHeader;
+    const showCollapseBtn = isPhaseHeader && ganttPhaseFilter === 'all';
     const div = document.createElement('div');
-    div.className = 'gantt-row';
+    div.className = 'gantt-row' + (isCollapsed ? ' phase-collapsed' : '');
     div.dataset.taskid = t.id;
     div.setAttribute('role', 'row');
     div.setAttribute('tabindex', '-1');
     div.setAttribute('aria-selected', 'false');
     const _rowStart = t.start ? t.start.toISOString().split('T')[0] : 'no date';
     const _rowEnd   = t.end   ? t.end.toISOString().split('T')[0]   : 'no date';
-    div.setAttribute('aria-label', `${t.wbs}: ${t.name}, ${t.team} team, ${t.pct}% complete, ${_rowStart} to ${_rowEnd}${conflictSet.has(t.id) ? ', scheduling conflict' : ''}`);
+    div.setAttribute('aria-label', `${t.wbs}: ${t.name}, ${t.team} team, ${t.pct}% complete, ${_rowStart} to ${_rowEnd}${conflictSet.has(t.id) ? ', scheduling conflict' : ''}${isCollapsed ? ', collapsed' : ''}`);
     div.innerHTML = `
       <div class="g-wbs-wrap" style="color:${color}">
         ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
+        ${showCollapseBtn ? `<button class="gantt-collapse-btn" aria-label="${isCollapsed ? 'Expand phase' : 'Collapse phase'}" title="${isCollapsed ? 'Expand phase' : 'Collapse phase'}">${isCollapsed ? '▶' : '▼'}</button>` : ''}
         <span class="g-wbs-text">${esc(t.wbs)}</span>
       </div>
       <span class="g-name" style="padding-left:${depth*10}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
@@ -2660,6 +2682,12 @@ function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
           startRowDrag(e, i, t, div);
         });
       }
+    }
+
+    // Phase collapse toggle
+    if (showCollapseBtn) {
+      const colBtn = div.querySelector('.gantt-collapse-btn');
+      if (colBtn) colBtn.addEventListener('click', e => { e.stopPropagation(); togglePhaseCollapse(phaseNum); });
     }
 
     // Task name inline edit
