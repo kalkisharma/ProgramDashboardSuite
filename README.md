@@ -57,7 +57,7 @@ Sheet names are **case-sensitive**. The tool silently skips unrecognized sheets 
 | `File Administrator` | Shown next to the subtitle |
 | `Program Start` | Informational |
 | `Program End` | Informational |
-| `Work Days` | Comma-separated work days (e.g. `Mon,Tue,Wed,Thu`). Default: Mon–Thu |
+| `Work Days` | Comma-separated work days (e.g. `Mon,Tue,Wed,Thu,Fri`). Default: Mon–Fri |
 | `Phase 1 Name` … `Phase 20 Name` | Overrides built-in phase labels in the Gantt filter and Program Dashboard |
 
 ---
@@ -82,20 +82,25 @@ Changes are made directly in the browser and saved back to Excel with **💾 Sav
 
 | Action | How |
 |---|---|
-| Move a task bar | Drag the center of the bar |
+| Move a task bar | Drag the center of the bar (hold 300 ms to activate) |
 | Resize a task | Drag the left or right edge of the bar |
+| Edit task dates | Double-click any bar or milestone diamond to open the date picker |
 | Reorder tasks | Hover the WBS column to reveal the drag handle; drag to new position |
 | Edit task name | Click the name cell |
 | Change team | Click the team cell |
 | Edit % complete | Click the % cell |
 | Edit task notes | Open a task in the side panel → click the notes area; `Ctrl+Enter` saves, `Esc` cancels |
 | Add a dependency | Open a task in the side panel → click **+ Add dependency**; search by name, WBS, or ID |
-| Remove a dependency | Open a task in the side panel → hover a "Depends On" card → click `×` |
+| Remove a dependency | Open a task in the side panel → click `×` on a "Depends On" card |
 | Add a task | Click **+ Add Task** in the toolbar |
+| Delete a task | Open a task in the side panel → click **Delete Task** (two-tap confirm) |
 | Reset all edits | Click **↺ Reset** — reverts to the last imported state |
-| Save to Excel | Click **💾 Save to Excel** — exports a dated `.xlsx` re-importable into this tool |
+| Undo / Redo | Click ⟲/⟳ in the toolbar or use Ctrl+Z / Ctrl+Y |
+| Export to Excel | Click **Export to Excel** — saves a dated `.xlsx` re-importable into this tool |
 
 Bar drags snap to configured work days. Dependency arrows redraw automatically on drop. The dependency picker prevents cycles — tasks that would create a circular dependency are shown greyed out.
+
+All edits are tracked in an undo/redo stack (max 50 entries). An auto-save draft is written to `localStorage` every 3 seconds after any edit; if you close and reopen the page without exporting, a banner offers to restore the draft.
 
 ---
 

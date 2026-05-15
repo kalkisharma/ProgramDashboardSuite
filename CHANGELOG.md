@@ -6,12 +6,193 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2.5.0] — 2026-05-15
+
+### Added
+- Inline date picker: double-clicking any Gantt bar or milestone diamond opens a floating `#gantt-date-picker` panel near the cursor; milestones show a single date field, tasks show Start + End; Apply snaps dates to configured work days and calls `pushUndo('edit dates')`; Enter applies, Escape or clicking outside dismisses
+
+### Fixed *(v2.4.0, bundled)*
+- **Critical:** `safeSetItem()` was calling itself recursively instead of `localStorage.setItem()` — every preference write (theme, zoom, filters, work days, collapse state, column width) had silently no-op'd since v1.23.0; the fix is a single-character correction
+- Auto-save draft: `isDirty` flag set by `pushUndo()`, cleared by `parseWorkbook()` and `saveToExcel()`; `scheduleDraftSave()` debounces 3 s then writes `fullSnapshot()` + project title + timestamp to `vh-draft`
+- Draft restore banner (`#draft-banner`) shown on page load when `vh-draft` exists: displays project title and save time; "Restore" re-parses Date strings and calls `renderDashboard()`; "Dismiss" removes the draft
+- `window.beforeunload` fires when `isDirty === true` to warn before navigating away
+- Draft cleared on Excel export and on file import
+
+---
+
+## [2.3.0] — 2026-05-15
+
+### Added
+- Draggable resize handle (`#gantt-resize-handle`) between the Gantt task list (`#gantt-left`) and the timeline (`#gantt-right-col`); mousedown drag clamps list width 150–700 px; width persisted to `vh-gantt-left-width`; no re-render needed — the `1fr` name column reflows automatically
+
+---
+
+## [2.2.0] — 2026-05-15
+
+### Added
+- Phase collapse/expand on Gantt: each phase header row shows a ▼/▶ toggle; `togglePhaseCollapse(phaseNum)` adds/removes the phase number from `collapsedPhases` (a `Set`) and re-renders; collapsed sub-tasks are hidden from `visibleTasks` and the header row gets `.phase-collapsed` opacity styling; only active when `ganttPhaseFilter === 'all'`; state persisted to `vh-collapsed-phases`; resets on file load
+
+---
+
+## [2.1.0] — 2026-05-15
+
+### Added
+- Weight Budget rows are now click-to-edit: clicking any row opens a side panel form (`openWeightPanel(idx)`) with all fields editable; `saveWeightRow(idx)` and `deleteWeightRow(idx)` (two-tap confirm) push undo; `addWeightRow()` appended to array and panel opens immediately
+- Org Chart persons are now click-to-edit: person card shows an "Edit Person" button opening `openOrgEditPanel(name)`; `saveOrgPerson(oldName)` cascades renames to all `reportsTo` arrays; `deleteOrgPerson(name)` uses two-tap confirm; `openOrgEditPanel(null)` creates a new person via `+ Add Person` toolbar button
+- Project Info is now editable: `#proj-info-btn` in topbar opens `openInfoPanel()`; all key/value fields are editable; `saveInfoPanel()` updates title, subtitle, work days, and re-renders Gantt + Program Dashboard
+
+---
+
+## [2.0.0] — 2026-05-14
+
+### Changed
+- Milestone gate release; all v1.22.0–v1.26.0 gate items verified:
+  - Undo/redo works for all five data collections
+  - All panels keyboard-navigable; side panel traps focus
+  - No XSS gaps; import validation catches duplicate IDs and bad dates
+  - Delete task and delete spec both work with undo
+  - Browser compatibility warning for old browsers
+  - localStorage failure handled; render errors show inline error card
+  - Print stylesheet renders active tab legibly
+- `APP_VERSION` and HTML comment set to `v2.0.0`; tagged in git
+
+---
+
+## [1.26.0] — 2026-05-14
+
+### Changed
+- Code quality pass: all remaining inline `onclick` attributes in static HTML replaced with `addEventListener` calls wired in the "WIRE STATIC UI EVENT HANDLERS" block
+- Global state object renamed `S` → `ProjectData` throughout; all call sites updated; CLAUDE.md updated
+- Function naming audit: Gantt render helpers consistently prefixed `renderGantt*`; side panel helpers consistently prefixed `sp*`
+- JSDoc one-liners added to all public functions called from HTML or from more than two other functions
+
+---
+
+## [1.25.0] — 2026-05-14
+
+### Added
+- Focus trap in side panel: Tab/Shift+Tab cycle within the open panel; focus returns to the opener element on close (`spOpener`)
+- Keyboard navigation for spec table rows: ↑/↓ move focus, Enter opens spec side panel
+- ARIA: `role="grid"` on spec table; `role="row"` + `aria-selected` + `aria-label` on Gantt left-panel rows; descriptive `aria-label` on SVG bar elements
+- Non-color status indicators: "DONE / ACTIVE / FUTURE" text labels alongside color-coded task card colors in side panel
+- `@media print` stylesheet: hides sidebar, topbar, and toolbars; expands active tab to full width; scales Gantt SVG to fit page
+- Mobile-responsive topbar: collapses to hamburger menu at viewport < 768 px
+
+### Fixed
+- Side panel `showSidePanel()` auto-focuses first focusable element via `requestAnimationFrame`; `closeSidePanel()` restores focus to `spOpener`
+
+---
+
+## [1.24.0] — 2026-05-14
+
+### Added
+- Delete Task: "Delete Task" button in task side panel uses two-tap confirm (`btn.dataset.confirming` + 3 s auto-revert); `pushUndo('task deleted')` before removal; dangling `deps[]` references in all other tasks and specs cleaned up; `recalcWBS()` + `renderGantt()` called; panel closes
+- Delete Spec: "Delete Spec" button in spec side panel; same two-tap confirm pattern; `pushUndo('spec deleted')` before removal; `renderSpecs()` called
+
+---
+
+## [1.23.0] — 2026-05-14
+
+### Added
+- Import validation: after `parseWorkbook()`, a validation pass checks for duplicate task IDs, duplicate spec IDs, swapped/missing date columns, and missing required column headers; a summary toast shows row counts and any warnings
+- Browser compatibility check: IIFE on page load shows a dismissible banner on IE or very-old browsers that lack `Promise`
+- Conflict detection at mutation time: `endBarDrag()`, name-edit commit, and pct-edit commit run a lightweight conflict check immediately after the change and flash a warning inline on the affected task
+
+### Fixed
+- Error handling around renders: `renderGantt()`, `renderSpecs()`, `renderOrgChart()`, `renderProgDash()`, `renderWeightBudget()` wrapped in `safeRender()` — on error an inline error card is shown rather than a blank panel
+- `safeSetItem(key, val)` wraps all `localStorage.setItem()` calls; on `QuotaExceededError` shows a persistent warning toast
+- XSS audit: all `innerHTML =` injection points audited; every user-controlled field (task name, spec name, team, notes, group, org name, title) verified to be wrapped in `esc()`
+
+---
+
+## [1.22.0] — 2026-05-14
+
+### Added
+- Redo stack (`redoStack[]`, max 50): `applyUndo()` pushes current state to `redoStack`; new `applyRedo()` pops from it and pushes to `undoStack`; redo stack cleared whenever a new edit is pushed
+- `fullSnapshot()` replaces `taskSnapshot()`: captures all five collections (`tasks`, `specs`, `org`, `weights`, `info`); undo/redo now cover org chart, weight budget, and project info edits in addition to tasks/specs
+- Undo (`⟲`) and Redo (`⟳`) toolbar buttons always visible in Gantt toolbar; greyed out when respective stack is empty; keyboard shortcuts Ctrl+Z / Ctrl+Y wired globally
+- Undo stack limit raised from 20 to 50 entries
+
+---
+
+## [1.21.2] — 2026-05-14
+
+### Changed
+- Spec panel: spec name now appears as an editable field in the panel body (above the ID line), not just in the header; `startSpecNameEdit()` fires automatically when a new spec is created via `addNewSpec()`
+- Value field shows "Add value…" placeholder italics when empty, consistent with the notes field
+
+---
+
+## [1.21.1] — 2026-05-14
+
+### Added
+- Spec ID is now click-to-edit (`startSpecIdEdit()`): validates non-empty and uniqueness; duplicate ID shows an error toast and reverts
+- Spec notes field now click-to-edit (`startSpecNotesEdit()`): same textarea + Ctrl/Cmd+Enter / Esc pattern as task notes
+
+---
+
+## [1.21.0] — 2026-05-14
+
+### Added
+- `+ Add Spec` button in Specifications toolbar: auto-generates an ID from the active category prefix, appends to `ProjectData.specs`, and immediately opens the spec side panel for editing
+- Spec side panel is now fully inline-editable: name (title area), category (dropdown), value, units, responsible group — same click-to-swap-with-input pattern as Gantt row edits
+- Undo snapshot extended from tasks-only to cover `specs`; `applyUndo()` restores both arrays and re-renders both panels; all spec field edits push to `undoStack` with 5 s undo toast
+
+---
+
+## [1.20.0] — 2026-05-14
+
+### Added
+- Snapshot-based undo (max 20 entries) for task name, team, pct edits, bar drag, and row reorder; toast `[Undo]` button (5 s for inline edits, 12 s for bar drags)
+- Input validation toasts: empty task name, pct out of range, bar drag with end ≤ start
+- `computeConflicts()`: dependency conflict detection (successor starts before predecessor ends); ⚠ badge in Gantt row and dep card warning in task panel
+- Gantt left-panel expanded to 6 columns (adds 18 px conflict icon column)
+
+---
+
+## [1.19.0] — 2026-05-14
+
+### Changed
+- Internal refactor only — no user-visible changes
+- Extracted `wirePicker()` helper: three 145-line picker wiring blocks reduced to three one-liner calls
+- Split 381-line `renderGantt()` into `prepareGanttData()`, `renderGanttLeft()`, `renderGanttSVG()`, and a coordinator function
+
+---
+
+## [1.18.0] — 2026-05-13
+
+### Added
+- Version label: `APP_VERSION` constant rendered as a small label in the topbar right cluster
+- Spec side panel — dependent task dep add/remove: `×` button on each dep task card removes it; `+ Link task` button opens an inline searchable picker (`buildSpecDepPickerList` / `addSpecDep`)
+- Task side panel — spec link add/remove: `×` button on each linked spec card unlinks it; `+ Link specification` opens a searchable picker (`buildSpecLinkPickerList` / `addSpecLink`); "Linked Specifications" section always visible even when empty
+- Always-visible `×` remove buttons on dep/link cards (previously opacity 0 until hover)
+
+---
+
+## [1.17.0] — 2026-05-13
+
+### Added
+- `visibilitychange` + `window.blur` guards: clean up `rowDrag` and `barDrag` ghost elements when the window loses focus, preventing stuck drag states
+- `saveToExcel` strips orphaned dependency IDs from both Schedule and Specifications sheets before writing
+
+### Changed
+- ARIA: `aria-label` on Gantt phase/team filter selects and Specs category filter; `role="status"` on toast
+- Keyboard focus outline strengthened from 1 px semi-transparent to 2 px solid accent color
+- CSS variables added: `--surface-overlay`, `--radius-sm/md/lg/xl`; tooltip and drag label use variables; four stale per-element overrides removed
+- `.btn-sm` class added; inline style overrides removed from Legend, CP, and Work Days buttons
+- Toolbar padding unified to `8px 16px`; toolbar select `font-size` and padding unified; scrollbar width standardized to 4 px; side panel header padding symmetrized
+
+---
+
 ## [1.16.0] — 2026-05-12
 
 ### Added
 - Task notes editing: the Notes area in the task side panel is now a click-to-edit field; clicking (or pressing Enter/Space) opens an inline textarea pre-filled with the current notes; `Ctrl+Enter` or clicking away saves; `Esc` cancels and restores the original text; empty-state shows "Click to add notes…" placeholder; changes are reflected in Gantt state and round-trip through Save to Excel
 - Dependency editing in the task side panel: each "Depends On" card now shows a `×` removal button (hover-reveal) that removes that dependency link immediately; a `+ Add dependency` button below the list opens an inline searchable picker listing all other tasks, filterable by name, WBS, or task ID; tasks that would create a dependency cycle are shown greyed out with a `— cycle` label and cannot be selected; adding or removing a dependency redraws Gantt arrows instantly
 - `wouldCreateCycle(taskId, candidateId)` — BFS successor traversal used to detect forward-chain cycles before allowing a new dependency to be added; prevents the CPM from encountering unresolvable graphs
+
+### Fixed
+- Notes textarea: Space and Enter keys now work inside the textarea without triggering Gantt keyboard shortcuts; Mac Cmd+Enter saves (in addition to Ctrl+Enter)
 
 ---
 
@@ -136,7 +317,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Eight icon-only toolbar buttons now have `aria-label` (zoom in/out ×3 tabs, calendar toggle, side panel close, help button, theme toggle)
 - Calendar toggle button: `aria-expanded` toggled by `toggleGanttCalendar()`
 - Theme toggle button: `aria-label` updated on every theme cycle to reflect the current theme
-- All CSS transitions (`.tab-btn`, `.btn-secondary`, `.zoom-btn`, `#dropzone`, `.drop-box`, `#side-panel`, `.prog-bar-fill`, `.team-row-arrow`, `#theme-toggle`) moved inside `@media (prefers-reduced-motion: no-preference)` blocks — the existing toast and theme-change transitions were already guarded
+- All CSS transitions moved inside `@media (prefers-reduced-motion: no-preference)` blocks
 
 ---
 
@@ -165,76 +346,66 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Specifications table: click any column header to sort — flat sorted view replaces category grouping when a sort is active; Status column uses domain-natural order (At Risk → TBD → Target → Achieved); click again to reverse; active column shows ↑/↓ indicator, inactive columns show ↕
 
 ### Changed
-- "💾 Save to Excel" renamed to "Export to Excel" (topbar button + help modal reference) — removes the anachronistic floppy disk emoji and uses standard terminology
-- Gantt toolbar action-zone divider margin balanced (`0 2px 0 6px` → `0 8px`) — clearer separation between view controls and action controls
-- Help modal Gantt Chart description updated: "click any task name, team, or % to edit inline" — surfaces the inline-edit interaction model that was previously undiscoverable
-- Light mode palette reverted to v1.4.3 values (`--bg #edecea`) — v1.4.4 darkening reversed per user decision
+- "Save to Excel" renamed to "Export to Excel" (topbar button + help modal reference)
+- Gantt toolbar action-zone divider margin balanced — clearer separation between view controls and action controls
+- Help modal Gantt Chart description updated to surface the inline-edit interaction model
+- Light mode palette reverted to v1.4.3 values (`--bg #edecea`)
 
 ---
 
 ## [1.4.4] — 2026-05-04
 
 ### Changed
-- Light mode background darkened to L\*84 warm stone gray: `--bg #d8d5cf`, `--surface #cec9c3`, `--border #b5b0aa` — previous value (#edecea, L\*92) was still perceived as near-white; this commit commits to a specific ergonomic target rather than nudging
-- Light mode `--muted` darkened: `#5a6370` → `#4e5760` — maintains ≥5.2:1 contrast ratio against the new darker background
-- Gantt header month labels and org chart node title text updated to the new muted value in light mode
+- Light mode background darkened to L\*84 warm stone gray: `--bg #d8d5cf`, `--surface #cec9c3`, `--border #b5b0aa`
+- Light mode `--muted` darkened: `#5a6370` → `#4e5760`
 
 ---
 
 ## [1.4.3] — 2026-05-04
 
 ### Added
-- Dim mode — a third theme between dark and light: `--bg #22272e`, `--surface #2d333b`, `--border #444c56`, `--text #adbac7` — targets ~35% luminance for comfortable sustained-focus work in mixed-light environments; SVG renders with dark-mode colors
-- Theme now cycles dark → dim → light → dark; button icon reflects current state (`🌙` dark · `🌓` dim · `☀` light); tooltip reads "Theme: Dark / Dim / Light"
+- Dim mode — a third theme between dark and light: `--bg #22272e`, `--surface #2d333b`, `--border #444c56`, `--text #adbac7`; theme now cycles dark → dim → light → dark; button icon reflects current state
 
 ### Fixed
-- Mini calendar no longer closes when clicking the theme toggle button — the click-outside-to-dismiss listener now correctly excludes the theme toggle
+- Mini calendar no longer closes when clicking the theme toggle button
 
 ### Changed
-- Theme transition CSS wrapped in `@media (prefers-reduced-motion: no-preference)` — users with reduced-motion OS preference no longer receive the background-color transition
+- Theme transition CSS wrapped in `@media (prefers-reduced-motion: no-preference)`
 
 ---
 
 ## [1.4.2] — 2026-05-04
 
 ### Changed
-- Light mode palette shifted to a warmer, softer neutral: `--bg #edecea`, `--surface #e2e0dc`, `--border #cac7c2` — reduces eye strain vs. the previous near-white; surfaces now clearly distinct from the background
-- Light mode `--muted` darkened: `#636c76` → `#5a6370` — improves small-text contrast from ~5.1:1 to ~5.8:1
-- Org chart node cards in light mode: fill changed from pure `#ffffff` to `#f4f2ef` — warm elevated tone, no longer a harsh white hole against the soft page background
-- Theme toggle now re-renders the org chart (same pattern as Gantt) so node card colors update immediately without a tab switch
-- Dark ↔ light transition smoothed: a `theme-changing` class applies a 220ms `background-color`/`color`/`border-color` transition on key structural elements during the toggle only — hover states are unaffected
-- Reset button renamed "Reset to Imported" for clarity; now requires confirmation: *"Reset to imported state? All edits will be lost."*
-- Gantt bar drag: minimum 4px movement threshold before drag activates — prevents accidental bar moves when clicking a bar to inspect it; click-only interactions no longer trigger a re-render
+- Light mode palette shifted to a warmer, softer neutral: `--bg #edecea`, `--surface #e2e0dc`, `--border #cac7c2`
+- Org chart node cards in light mode: fill changed from `#ffffff` to `#f4f2ef`
+- Theme toggle now re-renders the org chart so node card colors update immediately
+- Reset button renamed "Reset to Imported"; requires confirmation dialog
 
 ### Fixed
-- Calendar badge font size raised from `0.65rem` (10.4px) to `0.72rem` (11.5px) — was below the 11px accessibility minimum
-- Calendar day cells converted from `<div onclick>` to `<button type="button">` — keyboard-focusable and correctly announced as interactive by screen readers (WCAG 2.1 Level A)
+- Calendar badge font size raised from `0.65rem` to `0.72rem` — was below the 11px accessibility minimum
+- Calendar day cells converted from `<div onclick>` to `<button type="button">` — keyboard-focusable and announced as interactive by screen readers
 
 ---
 
 ## [1.4.1] — 2026-05-03
 
 ### Security
-- Apply `esc()` to task WBS, name (×2: `title` attribute + text), and team (×2: `title` attribute + text) in Gantt row `innerHTML` — same pattern as the v1.2.1 XSS sweep; these five injection points were missed in that pass
+- Apply `esc()` to task WBS, name (×2: `title` attribute + text), and team (×2: `title` attribute + text) in Gantt row `innerHTML` — these five injection points were missed in the v1.2.1 XSS sweep
 
 ### Fixed
-- Org chart drag-pan: `mousemove`/`mouseup` document listeners were re-added on every `renderOrgChart()` call, causing ghost-drag stutter after loading multiple files; listeners are now guarded with a module-level flag and attached once only
+- Org chart drag-pan: `mousemove`/`mouseup` document listeners were re-added on every `renderOrgChart()` call; now guarded with a module-level flag and attached once only
 
 ---
 
 ## [1.4] — 2026-05-03
 
 ### Added
-- Mini calendar widget in Gantt toolbar (📅 toggle button): shows current month with colored diamond markers for milestones and 2px phase-color top-borders on phase-start days; count badge when multiple milestones fall on the same date. Click any date to scroll the Gantt to that date and auto-collapse the calendar. Navigate with ‹/› arrows; empty months display with no filler markers.
+- Mini calendar widget in Gantt toolbar (📅 toggle button): shows current month with colored diamond markers for milestones and 2px phase-color top-borders on phase-start days; count badge when multiple milestones fall on the same date; click any date to scroll the Gantt to that date; navigate with ‹/› arrows
 
 ### Changed
-- Program Dashboard team workload rows: click handler converted from inline `onclick` to `addEventListener` — consistent with the rest of the event model
-- Weight Budget hover tooltip: `onmouseenter`/`onmousemove`/`onmouseleave` attributes removed from bar template; replaced with `addEventListener` after DOM insertion
-- Calendar widget converted from in-flow layout to `position: absolute` overlay — no longer displaces the Gantt chart when opened; floats over it with a drop shadow and rounded corners; click outside to dismiss
-- Calendar typography increased: day numbers `0.82rem`, day headers `0.72rem`, legend and badge `0.72rem`/`0.65rem`; width fixed at `308px`
-- Calendar day columns shaded by work-day status: non-work-day headers and cells are visually muted, matching the project's configured work days
-- Calendar hover tooltip: hovering a milestone or phase-start day shows a tooltip with the task name(s) or phase name — reuses the shared `#tooltip` element
-- Calendar row height normalized: every day cell always renders the marker slot so rows are uniform height regardless of whether a milestone or phase marker is present
+- Calendar widget converted to `position: absolute` overlay — no longer displaces the Gantt chart when opened
+- Program Dashboard team workload rows and Weight Budget hover tooltip: `onclick`/`onmouseenter` attributes replaced with `addEventListener`
 
 ### Fixed
 - Browse for File: file input value now reset after each load so the same file can be re-selected without reloading the page
@@ -244,48 +415,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [1.3] — 2026-05-03
 
 ### Added
-- Org chart matrix reporting: `Reports To` column now accepts comma-separated names (`Primary, Secondary`). The first name determines tree position; additional names render as dashed lines. Existing single-manager files are unaffected.
+- Org chart matrix reporting: `Reports To` column now accepts comma-separated names (`Primary, Secondary`); the first name determines tree position; additional names render as dashed lines
 
 ### Fixed
-- Org chart node cards in light mode now have a drop shadow for visual depth; hover state changed from flat grey to a team-color tint (correct interaction feedback direction)
-- Weight budget target line (│) now renders as a dark line in light mode — was white-on-light and nearly invisible
+- Org chart node cards in light mode now have a drop shadow; hover state changed from flat grey to a team-color tint
+- Weight budget target line (│) now renders as a dark line in light mode
 
 ---
 
 ## [1.2.1] — 2026-05-03
 
 ### Security
-- Apply `esc()` to phase name labels in Gantt phase filter dropdown — values come from `S.info` (Excel)
-- Apply `esc()` to team names in Gantt team filter dropdown (both `value` attribute and display text) — values come from `S.tasks[].team` (Excel)
-- Apply `esc()` to subsystem name in weight budget tooltip `innerHTML` — value comes from `w.subsystem` (Excel)
-- Apply `esc()` to `w.subsystem` and `w.group` in weight budget bar `title` and `data-name` HTML attributes — unescaped `"` in either could break the surrounding attribute
+- Apply `esc()` to phase name labels in Gantt phase filter dropdown
+- Apply `esc()` to team names in Gantt team filter dropdown
+- Apply `esc()` to subsystem name in weight budget tooltip `innerHTML`
+- Apply `esc()` to `w.subsystem` and `w.group` in weight budget bar `title` and `data-name` attributes
 
 ---
 
 ## [1.2] — 2026-05-03
 
 ### Changed
-- Light mode background softened: `--bg` changed from pure white `#ffffff` to `#f0f2f5`; `--surface` from `#f6f8fa` to `#e8eaed` — reduces glare for long reading sessions
-- Gantt timeline split into a sticky header SVG (month/week labels, Today marker) and a scrollable body SVG — header remains visible while scrolling through long task lists
-- Theme toggle now immediately re-renders the Gantt SVG so header colors update without requiring a page reload
-- Non-work-day column shading removed — visual noise reduction; work-day snap and WD column counts are unaffected
-- Vertical week sub-lines extended into the task body area at zoom ≥ 5 (previously header-only); month boundary lines remain the primary full-height grid
+- Light mode background softened: `--bg #f0f2f5`, `--surface #e8eaed`
+- Gantt timeline split into a sticky header SVG (month/week labels, Today marker) and a scrollable body SVG
+- Theme toggle now immediately re-renders the Gantt SVG
+- Non-work-day column shading removed
+- Vertical week sub-lines extended into the task body area at zoom ≥ 5
 
 ---
 
 ## [1.1] — 2026-05-03
 
 ### Security
-- Vendor SheetJS 0.20.3 locally as `xlsx.full.min.js` — eliminates CDN dependency, enables fully offline use, and removes trust in a remote script host
-- Add `esc()` HTML-escaping helper applied at every `innerHTML` injection point — prevents XSS from malicious Excel cell content
-- Replace all inline `onclick` handlers in side panels with `data-attribute` + `addEventListener` delegation — removes script injection surface in dynamically generated HTML
+- Vendor SheetJS 0.20.3 locally as `xlsx.full.min.js` — eliminates CDN dependency, enables fully offline use
+- Add `esc()` HTML-escaping helper applied at every `innerHTML` injection point
+- Replace all inline `onclick` handlers in side panels with `data-attribute` + `addEventListener` delegation
 
 ### Fixed
-- Gantt scroll position no longer resets to today on every edit or drag — auto-scroll fires once per file load only
+- Gantt scroll position no longer resets to today on every edit or drag
 - Side panel no longer covers Gantt bars — timeline viewport adjusts when panel opens
-- Light mode: org chart cards, hover states, and text now use theme-aware colors (previously rendered dark cards on white background)
+- Light mode: org chart cards, hover states, and text now use theme-aware colors
 - Light mode: Gantt header month/week labels now readable
-- Phase header rows no longer fade WBS text on hover (no drag handle is ever shown for phase headers)
+- Phase header rows no longer fade WBS text on hover
 - `nextMs` (Next Milestone KPI) now sorts by `end || start`, consistent with the Final Milestone card
 - Phantom `depIds: []` property no longer added to tasks in the reset snapshot
 - `Duration` column removed from sample Excel — it was never parsed and caused column misalignment on re-import
@@ -295,7 +466,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Warning shown when Schedule or Specifications sheets are absent or empty
 - Browser tab title updates to the loaded project name
 - `WD` column header renamed to `WD Left` with tooltip
-- Version comment at top of file (`v1.1, 2026-05-03`)
+- Version comment at top of file
 
 ---
 
@@ -304,8 +475,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - Drag-and-drop Excel file loading (`.xlsx`)
 - Gantt Chart tab: SVG timeline with WBS phases, dependency arrows, today line, milestones, zoom, pan, phase/team filters
-- Interactive Gantt editing: bar drag (resize/move), row reorder, inline name/team/% edits, Add Task, Reset, Save to Excel
-- Work-day awareness: configurable work days, WD column, non-work-day shading, drag snapping
+- Interactive Gantt editing: bar drag (resize/move), row reorder, inline name/team/% edits, Add Task, Reset, Export to Excel
+- Work-day awareness: configurable work days, WD column, drag snapping
 - Vehicle Specifications tab: filterable table with status badges and risk detection
 - Program Dashboard tab: KPI cards, phase progress bars, spec status pills, team workload with collapsible rows
 - Weight Budget tab: subsystem bar chart with target lines and hover tooltips (optional sheet)
