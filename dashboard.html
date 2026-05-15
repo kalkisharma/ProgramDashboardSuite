@@ -1,4 +1,4 @@
-﻿<!-- Program Dashboard Suite v1.26.0 — 2026-05-14 -->
+﻿<!-- Program Dashboard Suite v2.0.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1151,7 +1151,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.26.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v2.0.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -4719,7 +4719,11 @@ function renderOrgChart() {
     // Card
     const card = document.createElementNS(NS, 'g');
     card.style.cursor = 'pointer';
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', `${node.name}${node.title ? ', ' + node.title : ''}${node.team ? ', ' + node.team + ' team' : ''}`);
     card.addEventListener('click', () => openOrgPanel(node.name));
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openOrgPanel(node.name); } });
 
     const rect = document.createElementNS(NS, 'rect');
     rect.setAttribute('x', nx); rect.setAttribute('y', ny);

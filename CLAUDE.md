@@ -220,4 +220,4 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v1.24.0** | Delete Operations | Done |
 | **v1.25.0** | Keyboard Accessibility | Done |
 | **v1.26.0** | Code Quality Pass | Done |
-| **v2.0.0** | Milestone Gate | Next |
+| **v2.0.0** | Milestone Gate | Done — current release |
