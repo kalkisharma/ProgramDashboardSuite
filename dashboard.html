@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v1.22.0 — 2026-05-14 -->
+<!-- Program Dashboard Suite v1.23.0 — 2026-05-14 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1135,7 +1135,7 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v1.22.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v1.23.0'; // also update the HTML comment on line 1
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
 // Escape user-supplied strings before inserting into innerHTML (XSS prevention)
@@ -1217,7 +1217,7 @@ function toggleTheme() {
   let theme = 'dark';
   if (!wasDim && !wasLight)   { document.body.classList.add('dim-mode');   theme = 'dim';   }
   else if (wasDim)            { document.body.classList.add('light-mode'); theme = 'light'; }
-  localStorage.setItem('vh-theme', theme);
+  safeSetItem('vh-theme', theme);
   const btn = document.getElementById('theme-toggle');
   btn.textContent = theme === 'dark' ? '🌙' : theme === 'dim' ? '🌓' : '☀';
   btn.title = 'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1);
@@ -1261,6 +1261,21 @@ function showToast(msg, undoFn, duration) {
   toastTimer = setTimeout(() => { toast.classList.remove('visible'); toastHasUndo = false; }, duration);
 }
 
+function safeSetItem(key, val) {
+  try { safeSetItem(key, val); } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22) {
+      showToast('⚠ Browser storage is full — preferences not saved. Export your project to preserve data.', null, 8000);
+    }
+  }
+}
+
+function safeRender(fn, label) {
+  try { fn(); } catch (e) {
+    console.error('Render error [' + label + ']:', e);
+    showToast('⚠ Error rendering ' + label + ' — try reloading the file', null, 6000);
+  }
+}
+
 function fullSnapshot() {
   return {
     tasks:   S.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] })),
@@ -1283,11 +1298,11 @@ function _restoreSnapshot(snapshot) {
   S.weights = snapshot.weights || S.weights;
   if (snapshot.info) S.info = snapshot.info;
   recalcWBS(S.tasks);
-  renderGantt();
-  renderSpecs();
-  renderProgDash();
-  if (S.weights.length) renderWeightBudget();
-  if (S.org.length)     renderOrgChart();
+  safeRender(renderGantt,    'Gantt Chart');
+  safeRender(renderSpecs,    'Specifications');
+  safeRender(renderProgDash, 'Program Dashboard');
+  if (S.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
+  if (S.org.length)     safeRender(renderOrgChart,     'Org Chart');
   if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
   else if (spCurrentType === 'spec') { spCurrentType = null; openSpecPanel(spCurrentId); }
 }
@@ -1696,20 +1711,25 @@ function renderDashboard() {
   orgSearchQuery = '';
   const osInput2 = document.getElementById('org-search');
   if (osInput2) { osInput2.value = ''; const osClear2 = document.getElementById('org-search-clear'); if (osClear2) osClear2.style.display = 'none'; }
-  renderGantt();
-  renderSpecs();
-  renderProgDash();
-  renderWeightBudget();
-  renderOrgChart();
+  safeRender(renderGantt,        'Gantt Chart');
+  safeRender(renderSpecs,        'Specifications');
+  safeRender(renderProgDash,     'Program Dashboard');
+  safeRender(renderWeightBudget, 'Weight Budget');
+  safeRender(renderOrgChart,     'Org Chart');
   updateUndoRedoBtns();
   if (_justLoaded && S.tasks.length) {
-    const badDates = S.tasks.filter(t => !t.milestone && (!t.start || !t.end));
+    const badDates   = S.tasks.filter(t => !t.milestone && (!t.start || !t.end));
+    const dupTaskIds = (() => { const seen = new Set(), dups = new Set(); S.tasks.forEach(t => { if (seen.has(t.id)) dups.add(t.id); seen.add(t.id); }); return dups; })();
+    const dupSpecIds = (() => { const seen = new Set(), dups = new Set(); S.specs.forEach(s => { if (seen.has(s.id)) dups.add(s.id); seen.add(s.id); }); return dups; })();
     const parts = [`${S.tasks.length} task${S.tasks.length !== 1 ? 's' : ''}`];
     if (S.specs.length)   parts.push(`${S.specs.length} spec${S.specs.length !== 1 ? 's' : ''}`);
     if (S.org.length)     parts.push(`${S.org.length} ${S.org.length === 1 ? 'person' : 'people'}`);
     if (S.weights.length) parts.push(`${S.weights.length} weight row${S.weights.length !== 1 ? 's' : ''}`);
     if (badDates.length)  parts.push(`⚠ ${badDates.length} task${badDates.length !== 1 ? 's' : ''} missing dates`);
-    showToast('Loaded: ' + parts.join(' · '), null, badDates.length ? 10000 : 6000);
+    if (dupTaskIds.size)  parts.push(`⚠ ${dupTaskIds.size} duplicate task ID${dupTaskIds.size !== 1 ? 's' : ''}`);
+    if (dupSpecIds.size)  parts.push(`⚠ ${dupSpecIds.size} duplicate spec ID${dupSpecIds.size !== 1 ? 's' : ''}`);
+    const hasWarnings = badDates.length || dupTaskIds.size || dupSpecIds.size;
+    showToast('Loaded: ' + parts.join(' · '), null, hasWarnings ? 10000 : 6000);
   }
 }
 
@@ -1729,8 +1749,8 @@ let _justLoaded        = false; // gates load toast: true only during file parse
 let orgSearchQuery     = '';
 let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
 let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
-function setGanttPhaseFilter(val) { ganttPhaseFilter = val; localStorage.setItem('vh-filter-phase', val); renderGantt(); }
-function setGanttTeamFilter(val)  { ganttTeamFilter  = val; localStorage.setItem('vh-filter-team', val);  renderGantt(); }
+function setGanttPhaseFilter(val) { ganttPhaseFilter = val; safeSetItem('vh-filter-phase', val); renderGantt(); }
+function setGanttTeamFilter(val)  { ganttTeamFilter  = val; safeSetItem('vh-filter-team', val);  renderGantt(); }
 const RH = 36;
 const HH = 60;
 
@@ -1873,8 +1893,13 @@ function endBarDrag() {
         updateUndoRedoBtns();
       }
       barDragPreSnapshot = null;
+      const _movedId = barDrag.taskId;
       renderGantt();
-      showToast('Date adjusted', applyUndo, 12000);
+      if (conflictSet.has(_movedId)) {
+        showToast('⚠ Conflict: task now starts before a predecessor ends', applyUndo, 12000);
+      } else {
+        showToast('Date adjusted', applyUndo, 12000);
+      }
     }
   }
 }
@@ -1987,7 +2012,7 @@ function adjustZoom(dir) {
   // Scale scroll position proportionally so the view stays anchored to the same date
   right.scrollLeft = Math.round(oldScroll * (ganttZoom / oldPx));
   clearTimeout(_zoomSaveTimer);
-  _zoomSaveTimer = setTimeout(() => localStorage.setItem('vh-zoom-gantt', zoomIdx), 500);
+  _zoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-gantt', zoomIdx), 500);
 }
 
 document.getElementById('gantt-right').addEventListener('wheel', e => {
@@ -2023,7 +2048,7 @@ function workdaysSummary(wds) {
 let _wdRenderTimer = null;
 function applyWorkDays(wds) {
   ganttWorkDays = wds;
-  localStorage.setItem('vh-workdays', JSON.stringify(wds));
+  safeSetItem('vh-workdays', JSON.stringify(wds));
   const btn = document.getElementById('workdays-btn');
   if (btn) btn.textContent = workdaysSummary(wds) + ' ▾';
   clearTimeout(_wdRenderTimer);
@@ -2195,7 +2220,7 @@ function adjustSpecsZoom(dir) {
   const tbl = document.querySelector('.specs-table');
   if (tbl) tbl.style.fontSize = scale + 'rem';
   clearTimeout(_specsZoomSaveTimer);
-  _specsZoomSaveTimer = setTimeout(() => localStorage.setItem('vh-zoom-specs', specsZoomIdx), 500);
+  _specsZoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-specs', specsZoomIdx), 500);
 }
 document.getElementById('specs-body').addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
@@ -2220,7 +2245,7 @@ function adjustOrgZoom(dir) {
   wrap.style.width  = Math.round(parseFloat(svg.getAttribute('width'))  * scale) + 'px';
   wrap.style.height = Math.round(parseFloat(svg.getAttribute('height')) * scale) + 'px';
   clearTimeout(_orgZoomSaveTimer);
-  _orgZoomSaveTimer = setTimeout(() => localStorage.setItem('vh-zoom-org', orgZoomIdx), 500);
+  _orgZoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-org', orgZoomIdx), 500);
 }
 document.getElementById('org-container').addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
@@ -2323,7 +2348,7 @@ function computeConflicts(tasks) {
 
 function toggleCriticalPath() {
   showCriticalPath = !showCriticalPath;
-  localStorage.setItem('vh-show-cp', showCriticalPath ? '1' : '');
+  safeSetItem('vh-show-cp', showCriticalPath ? '1' : '');
   const btn = document.getElementById('gantt-cp-btn');
   if (btn) btn.setAttribute('aria-pressed', showCriticalPath ? 'true' : 'false');
   renderGantt();
@@ -3669,7 +3694,7 @@ function toggleWtGroup(el) {
   if (grpName) {
     let collapsed = JSON.parse(localStorage.getItem('vh-wt-collapsed') || '[]');
     collapsed = open ? [...new Set([...collapsed, grpName])] : collapsed.filter(g => g !== grpName);
-    localStorage.setItem('vh-wt-collapsed', JSON.stringify(collapsed));
+    safeSetItem('vh-wt-collapsed', JSON.stringify(collapsed));
   }
 }
 function toggleTeamRow(el) {
@@ -3804,7 +3829,7 @@ function renderProgDash() {
           const name = phaseNames[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
           const color = phaseColor(ph + '.0');
           return `<div class="prog-bar-row">
-            <div class="prog-bar-label" title="${ph}. ${name}">${ph}. ${name}</div>
+            <div class="prog-bar-label" title="${ph}. ${esc(name)}">${ph}. ${esc(name)}</div>
             <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${avg}%;background:${color}"></div></div>
             <div class="prog-bar-pct">${avg}%</div>
           </div>`;
@@ -3989,7 +4014,7 @@ function specStatusRank(s) {
 }
 
 function setSpecsCategoryFilter(val) {
-  localStorage.setItem('vh-filter-specs-cat', val);
+  safeSetItem('vh-filter-specs-cat', val);
   renderSpecTable();
 }
 
@@ -4853,7 +4878,7 @@ function generateSampleExcel() {
   if (ssInput) {
     ssInput.addEventListener('input', () => {
       specSearchQuery = ssInput.value;
-      localStorage.setItem('vh-filter-specs-search', specSearchQuery);
+      safeSetItem('vh-filter-specs-search', specSearchQuery);
       if (ssClear) ssClear.style.display = specSearchQuery ? 'block' : 'none';
       clearTimeout(_specSearchTimer);
       _specSearchTimer = setTimeout(renderSpecTable, 200);
@@ -4875,6 +4900,18 @@ function generateSampleExcel() {
   if (_savedPhase) ganttPhaseFilter = _savedPhase;
   const _savedTeam = localStorage.getItem('vh-filter-team');
   if (_savedTeam) ganttTeamFilter = _savedTeam;
+})();
+
+// Browser compatibility check
+(function() {
+  const supported = typeof Promise !== 'undefined' && !!window.CSS && !!Array.prototype.includes && typeof fetch !== 'undefined';
+  if (!supported) {
+    const b = document.createElement('div');
+    b.setAttribute('role', 'alert');
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#d29922;color:#000;padding:10px 16px;font-size:0.88rem;display:flex;align-items:center;justify-content:space-between;gap:12px';
+    b.innerHTML = '<span>&#9888; <strong>Unsupported browser.</strong> This tool requires Chrome 90+, Firefox 88+, Safari 14+, or Edge 90+. Some features may not work correctly.</span><button onclick="this.parentElement.remove()" style="background:rgba(0,0,0,0.15);border:none;border-radius:4px;padding:3px 10px;cursor:pointer;font-size:0.82rem;flex-shrink:0">Dismiss</button>';
+    document.body.appendChild(b);
+  }
 })();
 </script>
 <div id="app-toast" role="status" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
