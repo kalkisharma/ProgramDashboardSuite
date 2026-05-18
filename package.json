@@ -1,0 +1,32 @@
+{
+  "name": "program-dashboard-suite",
+  "version": "3.0.0-dev",
+  "description": "A client-side program dashboard for aerospace and vehicle development programs.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kalkisharma/ProgramDashboardSuite.git"
+  },
+  "keywords": [],
+  "author": "Kalki",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/kalkisharma/ProgramDashboardSuite/issues"
+  },
+  "homepage": "https://github.com/kalkisharma/ProgramDashboardSuite#readme",
+  "devDependencies": {
+    "vite": "^8.0.13",
+    "vite-plugin-singlefile": "^2.3.3",
+    "vitest": "^4.1.6"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

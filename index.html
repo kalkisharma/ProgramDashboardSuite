@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Program Dashboard</title>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div>
+    <div id="project-title">Vehicle Design Dashboard</div>
+    <div id="project-subtitle">Drop an Excel file to load your project</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <div class="tabs" id="tabs" role="tablist" style="display:none">
+      <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="gantt-panel"  data-tab="gantt">Gantt Chart</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="specs-panel"  data-tab="specs">Vehicle Specifications</button>
+      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="prog-panel"   data-tab="prog">Program Dashboard</button>
+      <button class="tab-btn" id="weight-tab-btn" role="tab" aria-selected="false" aria-controls="weight-panel" data-tab="weight" style="display:none">Weight Budget</button>
+      <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    style="display:none">Org Chart</button>
+    </div>
+    <button class="btn-secondary" id="generate-sample-btn" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
+    <button class="btn-secondary" id="save-excel-btn" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
+    <button class="btn-secondary btn-sm" id="proj-info-btn" title="Edit project information" style="display:none">Edit Project Info</button>
+    <span id="app-version-label" style="font-size:0.72rem;color:var(--muted);white-space:nowrap"></span>
+    <button class="btn-secondary" id="help-btn" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
+    <button id="theme-toggle" aria-label="Switch theme" title="Theme: Dark">🌙</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- DROP ZONE -->
+  <div id="dropzone">
+    <div id="draft-banner" style="display:none" role="alert">
+      <span>📝 Unsaved draft: <strong id="draft-title"></strong> <span style="color:var(--muted)" id="draft-time"></span></span>
+      <button class="btn-primary btn-sm" id="draft-restore-btn">Restore Draft</button>
+      <button class="btn-secondary btn-sm" id="draft-dismiss-btn">Dismiss</button>
+    </div>
+    <div class="drop-box" id="drop-box">
+      <div class="drop-icon">📊</div>
+      <div class="drop-title">Drop your Excel file here</div>
+      <div class="drop-sub">
+        Accepts any .xlsx file with <strong>Project Info</strong>, <strong>Schedule</strong>, and <strong>Specifications</strong> sheets<br>
+        <em style="font-size:0.82em">Optional: <strong>Org Chart</strong> sheet (org view) · <strong>Weight Budget</strong> sheet (mass tracking) · <strong>Phase N Name</strong> rows in Project Info to name each phase</em><br><br>
+        — or click below to generate a sample file first —
+      </div>
+      <div id="load-error" role="alert" aria-live="assertive"
+           style="display:none;background:var(--danger-bg,#3d1a1a);color:var(--danger,#f85149);
+                  border:1px solid var(--danger,#f85149);border-radius:6px;padding:10px 14px;
+                  font-size:0.85rem;line-height:1.5;text-align:left;margin-top:8px;
+                  white-space:pre-wrap;max-width:480px"></div>
+      <label for="file-input" class="btn-primary">Browse for File</label>
+    </div>
+    <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none">
+  </div>
+
+  <!-- DASHBOARD DROP OVERLAY (shown when dragging over loaded dashboard) -->
+  <div id="dashboard-drop-overlay">
+    <div style="font-size:2rem">📂</div>
+    <div>Drop to reload dashboard</div>
+  </div>
+
+  <!-- DASHBOARD (shown after load) -->
+  <div id="dashboard">
+
+    <!-- GANTT TAB -->
+    <div class="tab-panel active" id="gantt-panel" role="tabpanel" aria-labelledby="tab-btn-gantt">
+      <div id="gantt-toolbar">
+        <button class="zoom-btn" id="gantt-zoom-out-btn" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
+        <span id="zoom-label">100%</span>
+        <button class="zoom-btn" id="gantt-zoom-in-btn" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
+        <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom</span>
+        <div style="width:1px;height:18px;background:var(--border);margin:0 10px;flex-shrink:0"></div>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">Phase:</span>
+        <select id="gantt-phase-filter" aria-label="Filter by phase">
+          <option value="all">All</option>
+        </select>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-left:10px">Team:</span>
+        <select id="gantt-team-filter" aria-label="Filter by team">
+          <option value="all">All</option>
+        </select>
+        <span style="flex:1"></span>
+        <button class="btn-secondary btn-sm" id="legend-btn" title="Toggle phase color legend" aria-label="Toggle phase color legend" aria-expanded="false">Legend</button>
+        <div id="gantt-legend" style="display:none;position:absolute;top:100%;right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap;min-width:180px" role="region" aria-label="Phase color legend"></div>
+        <button class="btn-secondary btn-sm" id="gantt-cp-btn" title="Highlight critical path" aria-label="Toggle critical path highlighting" aria-pressed="false">CP</button>
+        <button class="zoom-btn" id="cal-toggle-btn" title="Toggle mini calendar" aria-label="Toggle mini calendar" aria-expanded="false">📅</button>
+        <button class="btn-secondary btn-sm" id="workdays-btn" title="Configure work days" aria-label="Configure work days" aria-expanded="false">Mon–Fri ▾</button>
+        <div style="width:1px;height:18px;background:var(--border);margin:0 8px;flex-shrink:0"></div>
+        <button class="btn-secondary" id="gantt-export-svg-btn" title="Export Gantt chart as SVG file" disabled>Export SVG</button>
+        <button class="btn-secondary" id="gantt-export-png-btn" title="Export Gantt chart as PNG image" disabled>Export PNG</button>
+        <button class="btn-secondary" id="gantt-undo-btn" title="Undo last action (Ctrl+Z)" aria-label="Undo" disabled>⟲ Undo</button>
+        <button class="btn-secondary" id="gantt-redo-btn" title="Redo last undone action (Ctrl+Shift+Z)" aria-label="Redo" disabled>⟳ Redo</button>
+        <button class="btn-secondary" id="gantt-add-task-btn" title="Add a new task">+ Add Task</button>
+        <button class="btn-secondary" id="gantt-reset-btn" title="Discard all edits and restore the imported state">↺ Reset to Imported</button>
+        <div id="gantt-calendar"></div>
+        <div id="workdays-picker" style="display:none;position:absolute;top:100%;right:0;z-index:210;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap"></div>
+      </div>
+      <div id="gantt-container">
+        <div id="gantt-left">
+          <div id="gantt-left-header">
+            <span>WBS</span><span style="position:relative">Task Name<div id="gantt-name-col-handle" aria-hidden="true"></div></span>
+            <span style="text-align:right">Team</span>
+            <span style="text-align:right" title="Work days remaining until task end date">WD Left</span>
+            <span style="text-align:right">%</span>
+            <span></span>
+          </div>
+          <div id="gantt-left-body" role="grid" aria-label="Task list"></div>
+        </div>
+        <div id="gantt-resize-handle" title="Drag to resize task list" aria-hidden="true"></div>
+        <div id="gantt-right-col" style="position:relative">
+          <div id="gantt-today-float">Today</div>
+          <div id="gantt-header-wrap">
+            <div id="gantt-header-svg-wrap"></div>
+          </div>
+          <div id="gantt-right">
+            <div id="gantt-svg-wrap"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPECS TAB -->
+    <div class="tab-panel" id="specs-panel" role="tabpanel" aria-labelledby="tab-btn-specs">
+      <div id="specs-toolbar">
+        <span style="font-size:0.78rem;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase">Filter:</span>
+        <select id="specs-filter" aria-label="Filter by category">
+          <option value="all">All Categories</option>
+        </select>
+        <div style="position:relative;display:flex;align-items:center">
+          <input id="specs-search" type="text" placeholder="Search…" aria-label="Search specifications"
+            style="background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:0.79rem;padding:4px 24px 4px 8px;outline:none;width:160px">
+          <button id="specs-search-clear" aria-label="Clear search"
+            style="display:none;position:absolute;right:5px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:0;line-height:1">×</button>
+        </div>
+        <span id="specs-count" style="font-size:0.8rem;color:var(--muted);margin-left:4px"></span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <button class="btn-secondary" id="specs-add-btn" title="Create a new specification">+ Add Spec</button>
+          <button class="zoom-btn" id="specs-zoom-out-btn" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
+          <span id="specs-zoom-label" class="zoom-label">100%</span>
+          <button class="zoom-btn" id="specs-zoom-in-btn" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+      <div id="specs-body">
+        <div id="specs-table-wrap"></div>
+      </div>
+    </div>
+
+    <!-- PROGRAM DASHBOARD TAB -->
+    <div class="tab-panel" id="prog-panel" role="tabpanel" aria-labelledby="tab-btn-prog">
+      <div id="prog-body"></div>
+    </div>
+
+    <!-- WEIGHT BUDGET TAB -->
+    <div class="tab-panel" id="weight-panel" role="tabpanel" aria-labelledby="tab-btn-weight">
+      <div id="wt-toolbar" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <button class="btn-secondary btn-sm" id="weight-add-btn">+ Add Row</button>
+      </div>
+      <div id="weight-body"></div>
+    </div>
+
+    <!-- ORG CHART TAB -->
+    <div class="tab-panel" id="org-panel" role="tabpanel" aria-labelledby="tab-btn-org">
+      <div id="org-toolbar" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0">
+        <button class="zoom-btn" id="org-zoom-out-btn" title="Zoom out (Ctrl+scroll)" aria-label="Zoom out">−</button>
+        <span id="org-zoom-label" class="zoom-label">100%</span>
+        <button class="zoom-btn" id="org-zoom-in-btn" title="Zoom in (Ctrl+scroll)" aria-label="Zoom in">+</button>
+        <span style="color:var(--muted);font-size:0.72rem;margin-left:4px">Ctrl+scroll to zoom · drag to pan</span>
+        <button class="btn-secondary btn-sm" id="org-add-btn" style="margin-left:12px">+ Add Person</button>
+        <div style="margin-left:auto;position:relative;display:flex;align-items:center">
+          <input id="org-search" type="text" placeholder="Search people…" aria-label="Search people"
+            style="background:var(--surface);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:0.79rem;padding:4px 24px 4px 8px;outline:none;width:150px">
+          <button id="org-search-clear" aria-label="Clear search"
+            style="display:none;position:absolute;right:5px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.85rem;padding:0;line-height:1">×</button>
+        </div>
+      </div>
+      <div id="org-empty" style="display:none">
+        <div style="font-size:2rem">👥</div>
+        <div>No org chart data found.</div>
+        <div>Add an <code>Org Chart</code> sheet to your Excel file with columns:<br>
+          <code>Name</code>, <code>Title</code>, <code>Team</code>, <code>Reports To</code>, <code>Email</code><br>
+          <span style="font-size:0.82em;color:var(--muted)"><em>Reports To</em> accepts a single name or comma-separated names for matrix reporting.</span>
+        </div>
+      </div>
+      <div id="org-container">
+        <div id="org-svg-wrap"></div>
+      </div>
+    </div>
+
+  </div><!-- /dashboard -->
+</div><!-- /main -->
+
+<!-- SIDE PANEL -->
+<div id="side-panel" role="dialog" aria-modal="true" aria-labelledby="sp-title">
+  <div id="sp-header">
+    <div id="sp-title">Details</div>
+    <button id="sp-close" aria-label="Close details panel" title="Close">✕</button>
+  </div>
+  <div id="sp-body"></div>
+</div>
+
+<!-- GANTT DRAG LABEL -->
+<div id="gantt-drag-label"></div>
+
+<!-- TOOLTIP -->
+<div id="tooltip"></div>
+
+<!-- HELP MODAL -->
+<div id="help-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:900;align-items:center;justify-content:center">
+  <div id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;position:relative;box-shadow:0 16px 48px rgba(0,0,0,0.5)">
+    <button id="help-modal-close-btn" style="position:absolute;top:14px;right:16px;background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:2px 6px;border-radius:4px" aria-label="Close" title="Close">✕</button>
+    <h2 id="help-modal-title" style="font-size:1rem;font-weight:700;margin-bottom:18px">Program Dashboard — User Guide</h2>
+
+    <div style="font-size:0.83rem;line-height:1.65;color:var(--text)">
+
+    <p style="margin-bottom:14px"><strong>Getting started:</strong> Drop your <code style="background:var(--bg);padding:1px 5px;border-radius:3px">.xlsx</code> file anywhere on this page. The dashboard auto-populates from the data in your file. You can drop a new file at any time to reload.</p>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Tabs</p>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:0.82rem">
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Gantt Chart</td><td style="padding:6px 8px;color:var(--muted)">Full program schedule with WBS, dependency arrows, today line, and work-day tracking. Best for: <strong>engineers and PMs</strong>. Drag bars to adjust dates; click any task name, team, or % to edit inline.</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Specifications</td><td style="padding:6px 8px;color:var(--muted)">All vehicle/system performance specs with status (Achieved / Target / TBD). Best for: <strong>engineers</strong>. Click any row for dependencies and risk flags.</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Program Dashboard</td><td style="padding:6px 8px;color:var(--muted)">KPI summary: overall completion, milestones, phase progress, spec status, team workload. Best for: <strong>leadership and PMs</strong>.</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Weight Budget</td><td style="padding:6px 8px;color:var(--muted)">Mass budget bar chart by subsystem. Shown only if your Excel includes a <em>Weight Budget</em> sheet. Best for: <strong>engineers</strong>.</td></tr>
+      <tr><td style="padding:6px 8px;font-weight:700;white-space:nowrap">Org Chart</td><td style="padding:6px 8px;color:var(--muted)">Reporting hierarchy. Shown only if your Excel includes an <em>Org Chart</em> sheet. Click any person card for their team tasks. Best for: <strong>PMs and leadership</strong>.</td></tr>
+    </table>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Required Excel sheets</p>
+    <p style="margin-bottom:6px;color:var(--muted)">Sheet names are case-sensitive. Required sheets:</p>
+    <ul style="margin:0 0 14px 18px;color:var(--muted)">
+      <li style="margin-bottom:4px"><strong style="color:var(--text)">Project Info</strong> — Field / Value pairs (Project Title, Project Subtitle, Program Start, Program End, Work Days, Phase N Name…)</li>
+      <li style="margin-bottom:4px"><strong style="color:var(--text)">Schedule</strong> — Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone (Y/N), Notes</li>
+      <li><strong style="color:var(--text)">Specifications</strong> — Spec ID, Category, Specification Name, Value, Units, Status (Achieved/Target/TBD), Responsible Group, Notes, Dependent Task IDs</li>
+    </ul>
+    <p style="margin-bottom:14px;color:var(--muted)">Optional: <strong style="color:var(--text)">Org Chart</strong> (Name, Title, Team, Reports To, Email) · <strong style="color:var(--text)">Weight Budget</strong> (Subsystem, Group, Target Weight (lb), Estimated Weight (lb), Status, Notes)</p>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">If something looks wrong</p>
+    <ul style="margin:0 0 14px 18px;color:var(--muted)">
+      <li style="margin-bottom:4px">A tab is blank → check that the sheet name in your Excel matches exactly (including capitalisation).</li>
+      <li style="margin-bottom:4px">Gantt bars are missing → check that Start Date and End Date columns contain valid dates, not text.</li>
+      <li style="margin-bottom:4px">Weight Budget or Org Chart tab is not showing → those tabs only appear when the matching Excel sheet has data.</li>
+      <li>Work days look wrong → use the <strong>Work Days</strong> button in the Gantt toolbar, or add a <em>Work Days</em> row to Project Info (e.g. <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Mon,Tue,Wed,Thu,Fri</code>). Default is Mon–Fri.</li>
+    </ul>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px">Saving your edits</p>
+    <p style="color:var(--muted)">Use <strong style="color:var(--text)">Export to Excel</strong> in the top-right to export your current dashboard back to a dated .xlsx file. The exported file can be re-imported into this tool.</p>
+
+    <p style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:16px;margin-bottom:8px">Keyboard shortcuts</p>
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">↑ / ↓</kbd></td><td style="padding:5px 8px;color:var(--muted)">Move focus between Gantt task rows</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd></td><td style="padding:5px 8px;color:var(--muted)">Open side panel for focused Gantt row</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">+</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">−</kbd></td><td style="padding:5px 8px;color:var(--muted)">Zoom in / out on the Gantt chart</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+scroll</kbd></td><td style="padding:5px 8px;color:var(--muted)">Zoom Gantt, Specs, or Org chart (cursor over panel)</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> on cell</td><td style="padding:5px 8px;color:var(--muted)">Edit Gantt task name, team, or % inline</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Space</kbd> on row</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for a Specifications row</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Esc</kbd></td><td style="padding:5px 8px;color:var(--muted)">Cancel an inline edit without saving</td></tr>
+      <tr style="border-bottom:1px solid var(--border)"><td style="padding:5px 8px;font-weight:700;white-space:nowrap">Click / Tab+Enter on arrow</td><td style="padding:5px 8px;color:var(--muted)">Open side panel for the dependent task</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Z</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Cmd+Z</kbd></td><td style="padding:5px 8px;color:var(--muted)">Undo last action (global — works across all tabs)</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Shift+Z</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Y</kbd></td><td style="padding:5px 8px;color:var(--muted)">Redo last undone action</td></tr>
+      <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Cmd+Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Enter</kbd></td><td style="padding:5px 8px;color:var(--muted)">Save notes in the task side panel (Mac / Win)</td></tr>
+    </table>
+
+    </div>
+  </div>
+</div>
+
+<div id="app-toast" role="status" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
+<div id="gantt-date-picker" style="display:none;position:fixed;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.35);min-width:200px">
+  <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+    <span id="gdp-label">Edit Dates</span>
+    <button id="gdp-close" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:0;line-height:1">✕</button>
+  </div>
+  <div id="gdp-fields" style="display:flex;flex-direction:column;gap:8px"></div>
+  <button id="gdp-apply" class="btn-primary btn-sm" style="width:100%;margin-top:10px">Apply</button>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
