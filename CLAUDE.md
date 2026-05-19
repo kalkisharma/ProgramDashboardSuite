@@ -16,7 +16,7 @@ npm test         # Vitest unit tests
 
 ## Architecture
 
-**Vite + ES Modules** (`src/main.js`, ~4045 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
+**Vite + ES Modules** (`src/main.js`, ~4000 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
 
 ### Source Module Layout
 
@@ -30,6 +30,7 @@ npm test         # Vitest unit tests
 | `src/compute/wbs.js` | `recalcWBS(tasks)`, `wouldCreateCycle(tasks, taskId, candidateId)` |
 | `src/parse.js` | `parseInfoSheet`, `parseScheduleSheet`, `parseSpecsSheet`, `parseOrgSheet`, `parseWeightSheet`, `extractWorkDays` |
 | `src/excel.js` | `buildWorkbook(projectData, weightUnit)`, `generateSampleExcel()` |
+| `src/state.js` | `state` — single exported mutable object holding all cross-module app state |
 | `src/styles.css` | All CSS |
 | `src/main.js` | All app logic (state, rendering, event wiring) — function index comment at top maps sections to line numbers |
 
@@ -45,23 +46,34 @@ Tests live in `src/__tests__/`. All pure-function modules have test coverage:
 
 ### Global State
 
+All cross-module mutable state lives in `src/state.js` and is accessed via the single exported `state` object. Import it with `import { state } from './state.js'`.
+
 ```javascript
-const ProjectData = { info: {}, tasks: [], specs: [], org: [], weights: [] };
-let originalTasks = [];            // deep-copy at parse time; used by resetGanttToImported()
-let ganttWorkDays = [1,2,3,4,5];  // Mon–Fri default; overridden by Work Days UI or Project Info "Work Days" key
-let spCurrentType = null; // 'spec' | 'task' | 'org' | 'weight' | 'info' — tracks what the side panel is showing
-let spCurrentId   = null; // specId string, taskId number, person name string, weight array index, or null (info)
-let spOpener      = null; // element that opened the side panel (focus restored on close)
-let undoStack = []; // max 50 entries, LIFO; each: { label, snapshot }
-let redoStack = []; // max 50 entries; populated by applyUndo(), cleared by pushUndo()
-let barDrag = { active: false, taskId: null, mode: null, ... }; // Gantt bar drag state
-let barEls  = {};    // taskId → { bgRect, progRect, outlineRect, midY } (or { diamond, midY })
-let rowDrag = { active: false, srcIdx: null, dropIdx: null, rowCount: 0, lb: null, ghost: null, indicator: null };
-let calDisplayMonth = null; // { year, month } — month shown in the mini calendar; null when calendar was never opened
-let collapsedPhases = new Set(); // phase numbers (ints) whose sub-tasks are hidden in the Gantt; reset on file load
-let isDirty      = false;  // true when ProjectData has unsaved edits since last load/export
-let _draftTimer  = null;   // debounce handle for scheduleDraftSave()
+// src/state.js — abridged
+export const state = {
+  ProjectData:      { info: {}, tasks: [], specs: [], org: [], weights: [] },
+  originalTasks:    [],            // deep-copy at parse time; used by resetGanttToImported()
+  ganttWorkDays:    [1,2,3,4,5],  // Mon–Fri default; overridden by Work Days UI or Project Info key
+  spCurrentType:    null, // 'spec' | 'task' | 'org' | 'weight' | 'info'
+  spCurrentId:      null, // specId string, taskId number, person name, weight index, or null (info)
+  spOpener:         null, // element that opened the side panel (focus restored on close)
+  undoStack:        [], // max 50 entries, LIFO; each: { label, snapshot }
+  redoStack:        [], // max 50 entries; populated by applyUndo(), cleared by pushUndo()
+  isDirty:          false,
+  barDrag:          { active: false, taskId: null, mode: null, ... },
+  barEls:           {},  // taskId → { bgRect, progRect, outlineRect, midY }
+  rowDrag:          { active: false, srcIdx: null, dropIdx: null, ghost: null, indicator: null },
+  calDisplayMonth:  null,
+  collapsedPhases:  new Set(),
+  zoomIdx:          3, ganttZoom: 4,
+  ganttPhaseFilter: 'all', ganttTeamFilter: 'all',
+  showCriticalPath: false, showGanttLegend: false, ganttKeyFocusIdx: -1,
+  specsZoomIdx: 2, specSortState: { col: null, dir: 'asc' }, specSearchQuery: '',
+  orgZoomIdx: 4, orgSearchQuery: '',
+};
 ```
+
+Implementation-local state that stays in `src/main.js`: `_draftTimer`, `_exportReminderTimer`, `_justLoaded`, `ganttMinDateRef`, `ganttTodayX`, `conflictSet`, `depArrowEls`, org/Gantt pan state, toast timers, help modal state, zoom debounce timers.
 
 - `ProjectData.info` — key/value pairs from the "Project Info" sheet
 - `ProjectData.tasks[]` — `{ id, wbs, name, category, start, end, pct, deps, team, milestone, notes }`
@@ -294,5 +306,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v2.7.0** | Gantt name-column resize + export reminder toast | Done |
 | **v3.0.0** | Vite build, ES module extraction, Vitest test suite | Done |
 | **v3.1.0** | `src/excel.js` extraction; function index in `src/main.js` | Done |
-| **v3.2.0** | `state.js` singleton — all mutable globals injectable | Planned |
+| **v3.2.0** | `state.js` singleton — all mutable globals injectable | Done — current |
 | **v4.0.0** | Milestone Gate: full module split, 150+ tests, ARIA announcements | Planned |

@@ -8,9 +8,10 @@ import { computeConflicts } from './compute/conflicts.js';
 import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
 import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, extractWorkDays } from './parse.js';
 import { buildWorkbook, generateSampleExcel } from './excel.js';
+import { state } from './state.js';
 
 // ─── Function Index ───────────────────────────────────────────────────────────
-// L12   App State          — ProjectData, ganttWorkDays, undo/redo stacks, drag state
+// L12   App State          — state.ProjectData, state.ganttWorkDays, undo/redo stacks, drag state
 // L48   Work Day Utilities — workdaysSummary, toggleWorkdaysPicker
 // L51   Theme              — toggleTheme, applyTheme
 // L305  Tab Switching      — switchTab, renderDashboard, safeRender
@@ -44,16 +45,13 @@ import { buildWorkbook, generateSampleExcel } from './excel.js';
 // L3875 Event Handlers     — all static addEventListener wiring
 
 // ─── App State ────────────────────────────────────────────────────────────────
-const ProjectData = { info: {}, tasks: [], specs: [], org: [], weights: [] };
-let originalTasks = [];          // deep-copy at parse time for reset
-let ganttWorkDays = [1,2,3,4,5];  // Mon–Fri default; overridden by Project Info or Work Days UI
-let spCurrentType = null; // 'spec' | 'task' | 'org' — tracks which item the side panel is showing
-let spCurrentId   = null; // specId string, taskId number, or person name string
-let spOpener      = null; // element that triggered the side panel open (focus restored on close)
+// state.ProjectData, state.originalTasks, state.ganttWorkDays, spCurrent*, state.undoStack, state.redoStack,
+// state.isDirty, state.barDrag, state.barEls, state.rowDrag, zoom indices, filters, and view state
+// are all in src/state.js — import { state } from './state.js'
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v3.1.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v3.2.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('app-version-label').textContent = APP_VERSION;
 });
@@ -62,18 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // Gantt scroll-to-today guard: only auto-scroll once per file load
 let ganttScrolledToday = false;
 
-// Bar drag state
-let barDrag = { active: false, pending: false, taskId: null, mode: null, startClientX: 0,
-                origStart: null, origEnd: null, startScrollLeft: 0 };
-let barEls      = {}; // taskId -> { bgRect, progRect, outlineRect, diamond, midY }
 let depArrowEls = []; // { el, predId, succId } — rebuilt each renderGantt()
-
-// Row reorder state
-let rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
-let undoStack = [];            // max 50 entries, LIFO; each: { label, snapshot }
-let redoStack = [];            // max 50 entries; populated by applyUndo(), cleared by pushUndo()
 let conflictSet = new Set();   // task IDs with scheduling conflicts; recomputed on each render
-let barDragPreSnapshot = null; // full snapshot captured at bar drag start
 
 // Org chart drag-pan state (module-level so guarded listeners share one copy)
 let orgPanListenersAttached = false;
@@ -98,8 +86,8 @@ function toggleTheme() {
   btn.textContent = theme === 'dark' ? '🌙' : theme === 'dim' ? '🌓' : '☀';
   btn.title = 'Theme: ' + theme.charAt(0).toUpperCase() + theme.slice(1);
   btn.setAttribute('aria-label', 'Switch theme (currently ' + theme.charAt(0).toUpperCase() + theme.slice(1) + ')');
-  if (ProjectData.tasks.length) renderGantt();
-  if (ProjectData.org.length) renderOrgChart();
+  if (state.ProjectData.tasks.length) renderGantt();
+  if (state.ProjectData.org.length) renderOrgChart();
 }
 
 function showLoadError(msg) {
@@ -152,22 +140,22 @@ function safeRender(fn, label) {
   }
 }
 
-/** @returns {object} Deep copy of all five ProjectData collections for undo/redo. */
+/** @returns {object} Deep copy of all five state.ProjectData collections for undo/redo. */
 function fullSnapshot() {
   return {
-    tasks:   ProjectData.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] })),
-    specs:   ProjectData.specs.map(s => ({ ...s, depIds: [...s.depIds] })),
-    org:     ProjectData.org.map(p => ({ ...p, reportsTo: [...(p.reportsTo || [])] })),
-    weights: ProjectData.weights.map(w => ({ ...w })),
-    info:    { ...ProjectData.info }
+    tasks:   state.ProjectData.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] })),
+    specs:   state.ProjectData.specs.map(s => ({ ...s, depIds: [...s.depIds] })),
+    org:     state.ProjectData.org.map(p => ({ ...p, reportsTo: [...(p.reportsTo || [])] })),
+    weights: state.ProjectData.weights.map(w => ({ ...w })),
+    info:    { ...state.ProjectData.info }
   };
 }
 /** @param {string} label - Human-readable description shown in undo toast. Clears redo stack. */
 function pushUndo(label) {
-  if (undoStack.length >= 50) undoStack.shift();
-  undoStack.push({ label, snapshot: fullSnapshot() });
-  redoStack = [];
-  isDirty = true;
+  if (state.undoStack.length >= 50) state.undoStack.shift();
+  state.undoStack.push({ label, snapshot: fullSnapshot() });
+  state.redoStack = [];
+  state.isDirty = true;
   scheduleDraftSave();
   scheduleExportReminder();
   updateUndoRedoBtns();
@@ -176,8 +164,8 @@ function pushUndo(label) {
 function scheduleDraftSave() {
   clearTimeout(_draftTimer);
   _draftTimer = setTimeout(() => {
-    if (!isDirty || !ProjectData.tasks.length) return;
-    const draft = { snapshot: fullSnapshot(), title: ProjectData.info['Project Title'] || 'Untitled', savedAt: Date.now() };
+    if (!state.isDirty || !state.ProjectData.tasks.length) return;
+    const draft = { snapshot: fullSnapshot(), title: state.ProjectData.info['Project Title'] || 'Untitled', savedAt: Date.now() };
     safeSetItem('vh-draft', JSON.stringify(draft));
   }, 3000);
 }
@@ -186,50 +174,50 @@ function clearDraft() {
   clearTimeout(_draftTimer);
   clearTimeout(_exportReminderTimer);
   _exportReminderTimer = null;
-  isDirty = false;
+  state.isDirty = false;
   localStorage.removeItem('vh-draft');
 }
 function scheduleExportReminder() {
   if (_exportReminderTimer) return; // already scheduled; don't reset the clock on every edit
   _exportReminderTimer = setTimeout(() => {
     _exportReminderTimer = null;
-    if (isDirty) showToast('Heads up: you have unsaved changes. Export to Excel to make a permanent copy.', null, 10000);
+    if (state.isDirty) showToast('Heads up: you have unsaved changes. Export to Excel to make a permanent copy.', null, 10000);
   }, 15 * 60 * 1000);
 }
 /** @param {object} snapshot - Result of fullSnapshot(); restores state and re-renders all tabs. */
 function _restoreSnapshot(snapshot) {
-  ProjectData.tasks   = snapshot.tasks;
-  ProjectData.specs   = snapshot.specs;
-  ProjectData.org     = snapshot.org     || ProjectData.org;
-  ProjectData.weights = snapshot.weights || ProjectData.weights;
-  if (snapshot.info) ProjectData.info = snapshot.info;
-  recalcWBS(ProjectData.tasks);
+  state.ProjectData.tasks   = snapshot.tasks;
+  state.ProjectData.specs   = snapshot.specs;
+  state.ProjectData.org     = snapshot.org     || state.ProjectData.org;
+  state.ProjectData.weights = snapshot.weights || state.ProjectData.weights;
+  if (snapshot.info) state.ProjectData.info = snapshot.info;
+  recalcWBS(state.ProjectData.tasks);
   safeRender(renderGantt,    'Gantt Chart');
   safeRender(renderSpecs,    'Specifications');
   safeRender(renderProgDash, 'Program Dashboard');
-  if (ProjectData.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
-  if (ProjectData.org.length)     safeRender(renderOrgChart,     'Org Chart');
-  if (spCurrentType === 'task') { spCurrentType = null; openTaskPanel(spCurrentId); }
-  else if (spCurrentType === 'spec') { spCurrentType = null; openSpecPanel(spCurrentId); }
-  else if (spCurrentType === 'org') { const n = spCurrentId; spCurrentType = null; if (ProjectData.org.find(p => p.name === n)) openOrgPanel(n); else closeSidePanel(); }
-  else if (spCurrentType === 'weight' || spCurrentType === 'info') closeSidePanel();
+  if (state.ProjectData.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
+  if (state.ProjectData.org.length)     safeRender(renderOrgChart,     'Org Chart');
+  if (state.spCurrentType === 'task') { state.spCurrentType = null; openTaskPanel(state.spCurrentId); }
+  else if (state.spCurrentType === 'spec') { state.spCurrentType = null; openSpecPanel(state.spCurrentId); }
+  else if (state.spCurrentType === 'org') { const n = state.spCurrentId; state.spCurrentType = null; if (state.ProjectData.org.find(p => p.name === n)) openOrgPanel(n); else closeSidePanel(); }
+  else if (state.spCurrentType === 'weight' || state.spCurrentType === 'info') closeSidePanel();
 }
-/** Pops the top undo entry, pushes current state to redoStack, and restores previous state. */
+/** Pops the top undo entry, pushes current state to state.redoStack, and restores previous state. */
 function applyUndo() {
-  const entry = undoStack.pop();
+  const entry = state.undoStack.pop();
   if (!entry) return;
-  if (redoStack.length >= 50) redoStack.shift();
-  redoStack.push({ label: entry.label, snapshot: fullSnapshot() });
+  if (state.redoStack.length >= 50) state.redoStack.shift();
+  state.redoStack.push({ label: entry.label, snapshot: fullSnapshot() });
   _restoreSnapshot(entry.snapshot);
   showToast('Undone: ' + entry.label, null, 3000);
   updateUndoRedoBtns();
 }
-/** Pops the top redo entry, pushes current state back to undoStack, and re-applies the state. */
+/** Pops the top redo entry, pushes current state back to state.undoStack, and re-applies the state. */
 function applyRedo() {
-  const entry = redoStack.pop();
+  const entry = state.redoStack.pop();
   if (!entry) return;
-  if (undoStack.length >= 50) undoStack.shift();
-  undoStack.push({ label: entry.label, snapshot: fullSnapshot() });
+  if (state.undoStack.length >= 50) state.undoStack.shift();
+  state.undoStack.push({ label: entry.label, snapshot: fullSnapshot() });
   _restoreSnapshot(entry.snapshot);
   showToast('Redone: ' + entry.label, null, 3000);
   updateUndoRedoBtns();
@@ -237,8 +225,8 @@ function applyRedo() {
 function updateUndoRedoBtns() {
   const u = document.getElementById('gantt-undo-btn');
   const r = document.getElementById('gantt-redo-btn');
-  if (u) u.disabled = undoStack.length === 0;
-  if (r) r.disabled = redoStack.length === 0;
+  if (u) u.disabled = state.undoStack.length === 0;
+  if (r) r.disabled = state.redoStack.length === 0;
 }
 
 let _helpOpener = null;
@@ -285,10 +273,10 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); applyRedo(); return;
   }
   if ((e.key === 'Delete' || e.key === 'Backspace') && !e.target.matches('input, select, textarea')) {
-    if (spCurrentType === 'task') {
+    if (state.spCurrentType === 'task') {
       const btn = document.getElementById('sp-delete-task-btn');
       if (btn) { e.preventDefault(); btn.click(); }
-    } else if (spCurrentType === 'spec') {
+    } else if (state.spCurrentType === 'spec') {
       const btn = document.getElementById('sp-delete-spec-btn');
       if (btn) { e.preventDefault(); btn.click(); }
     }
@@ -305,11 +293,11 @@ document.addEventListener('keydown', e => {
     const legend = document.getElementById('gantt-legend');
     const legendBtn = document.getElementById('legend-btn');
     if (legend && legend.style.display !== 'none') {
-      showGanttLegend = false;
+      state.showGanttLegend = false;
       legend.style.display = 'none';
       if (legendBtn) { legendBtn.setAttribute('aria-expanded', 'false'); legendBtn.focus(); }
     }
-    if (spCurrentType && !e.target.matches('input, select, textarea')) { closeSidePanel(); return; }
+    if (state.spCurrentType && !e.target.matches('input, select, textarea')) { closeSidePanel(); return; }
   }
 });
 document.getElementById('help-overlay').addEventListener('click', e => {
@@ -328,7 +316,7 @@ document.getElementById('help-overlay').addEventListener('click', e => {
     try {
       const parsed = JSON.parse(savedWd);
       const valid  = Array.isArray(parsed) ? parsed.filter(n => Number.isInteger(n) && n >= 0 && n <= 6) : [];
-      if (valid.length > 0) ganttWorkDays = valid;
+      if (valid.length > 0) state.ganttWorkDays = valid;
     } catch(e) {}
   }
 })();
@@ -389,8 +377,8 @@ function loadFile(file) {
       const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
       parseWorkbook(wb);
       const missing = [];
-      if (!ProjectData.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone, Notes)");
-      if (!ProjectData.specs.length)  missing.push("'Specifications' (columns: Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs)");
+      if (!state.ProjectData.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone, Notes)");
+      if (!state.ProjectData.specs.length)  missing.push("'Specifications' (columns: Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs)");
       if (missing.length) {
         showLoadError('Required sheets missing:\n\n' + missing.join('\n\n') + '\n\nSheet names are case-sensitive. Check that the names match exactly.');
       }
@@ -403,27 +391,27 @@ function loadFile(file) {
 }
 
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
-/** @param {object} wb - SheetJS workbook object. Resets all ProjectData collections and populates from sheets. */
+/** @param {object} wb - SheetJS workbook object. Resets all state.ProjectData collections and populates from sheets. */
 function parseWorkbook(wb) {
-  ProjectData.info = {}; ProjectData.tasks = []; ProjectData.specs = []; ProjectData.org = []; ProjectData.weights = [];
-  undoStack = []; redoStack = [];
+  state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = [];
+  state.undoStack = []; state.redoStack = [];
   clearColorCache();
 
-  ProjectData.info    = parseInfoSheet(wb.Sheets['Project Info']);
-  ProjectData.tasks   = parseScheduleSheet(wb.Sheets['Schedule']);
-  ProjectData.specs   = parseSpecsSheet(wb.Sheets['Specifications']);
-  ProjectData.org     = parseOrgSheet(wb.Sheets['Org Chart']);
-  ProjectData.weights = parseWeightSheet(wb.Sheets['Weight Budget']);
+  state.ProjectData.info    = parseInfoSheet(wb.Sheets['Project Info']);
+  state.ProjectData.tasks   = parseScheduleSheet(wb.Sheets['Schedule']);
+  state.ProjectData.specs   = parseSpecsSheet(wb.Sheets['Specifications']);
+  state.ProjectData.org     = parseOrgSheet(wb.Sheets['Org Chart']);
+  state.ProjectData.weights = parseWeightSheet(wb.Sheets['Weight Budget']);
 
-  const wds = extractWorkDays(ProjectData.info);
+  const wds = extractWorkDays(state.ProjectData.info);
   if (wds) {
-    ganttWorkDays = wds;
+    state.ganttWorkDays = wds;
     const wdBtn = document.getElementById('workdays-btn');
     if (wdBtn) wdBtn.textContent = workdaysSummary(wds) + ' ▾';
   }
 
   // Deep-copy tasks for reset
-  originalTasks = ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
+  state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
   clearDraft();
 }
 
@@ -431,9 +419,9 @@ function parseWorkbook(wb) {
 // ─── Render Dashboard ─────────────────────────────────────────────────────────
 /** Entry point after file load — updates topbar metadata and re-renders all visible tabs. */
 function renderDashboard() {
-  const title    = ProjectData.info['Project Title']      || 'Vehicle Design Dashboard';
-  const subtitle = ProjectData.info['Project Subtitle']   || '';
-  const admin    = ProjectData.info['File Administrator'] || '';
+  const title    = state.ProjectData.info['Project Title']      || 'Vehicle Design Dashboard';
+  const subtitle = state.ProjectData.info['Project Subtitle']   || '';
+  const admin    = state.ProjectData.info['File Administrator'] || '';
   const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
   document.getElementById('project-title').textContent    = title;
   document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
@@ -441,24 +429,24 @@ function renderDashboard() {
   document.getElementById('dropzone').style.display = 'none';
   document.getElementById('dashboard').style.display = 'flex';
   document.getElementById('tabs').style.display = 'flex';
-  document.getElementById('org-tab-btn').style.display = ProjectData.org.length ? '' : 'none';
-  document.getElementById('weight-tab-btn').style.display = ProjectData.weights.length ? '' : 'none';
+  document.getElementById('org-tab-btn').style.display = state.ProjectData.org.length ? '' : 'none';
+  document.getElementById('weight-tab-btn').style.display = state.ProjectData.weights.length ? '' : 'none';
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
   document.getElementById('proj-info-btn').style.display = '';
   dashboardLoaded = true;
   ganttScrolledToday = false;
-  ganttPhaseFilter = 'all';
-  ganttTeamFilter  = 'all';
-  specSearchQuery  = '';
-  collapsedPhases.clear();
+  state.ganttPhaseFilter = 'all';
+  state.ganttTeamFilter  = 'all';
+  state.specSearchQuery  = '';
+  state.collapsedPhases.clear();
   ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases']
     .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';
   const ssClearFile = document.getElementById('specs-search-clear');
   if (ssClearFile) ssClearFile.style.display = 'none';
-  orgSearchQuery = '';
+  state.orgSearchQuery = '';
   const osInput2 = document.getElementById('org-search');
   if (osInput2) { osInput2.value = ''; const osClear2 = document.getElementById('org-search-clear'); if (osClear2) osClear2.style.display = 'none'; }
   safeRender(renderGantt,        'Gantt Chart');
@@ -467,14 +455,14 @@ function renderDashboard() {
   safeRender(renderWeightBudget, 'Weight Budget');
   safeRender(renderOrgChart,     'Org Chart');
   updateUndoRedoBtns();
-  if (_justLoaded && ProjectData.tasks.length) {
-    const badDates   = ProjectData.tasks.filter(t => !t.milestone && (!t.start || !t.end));
-    const dupTaskIds = (() => { const seen = new Set(), dups = new Set(); ProjectData.tasks.forEach(t => { if (seen.has(t.id)) dups.add(t.id); seen.add(t.id); }); return dups; })();
-    const dupSpecIds = (() => { const seen = new Set(), dups = new Set(); ProjectData.specs.forEach(s => { if (seen.has(s.id)) dups.add(s.id); seen.add(s.id); }); return dups; })();
-    const parts = [`${ProjectData.tasks.length} task${ProjectData.tasks.length !== 1 ? 's' : ''}`];
-    if (ProjectData.specs.length)   parts.push(`${ProjectData.specs.length} spec${ProjectData.specs.length !== 1 ? 's' : ''}`);
-    if (ProjectData.org.length)     parts.push(`${ProjectData.org.length} ${ProjectData.org.length === 1 ? 'person' : 'people'}`);
-    if (ProjectData.weights.length) parts.push(`${ProjectData.weights.length} weight row${ProjectData.weights.length !== 1 ? 's' : ''}`);
+  if (_justLoaded && state.ProjectData.tasks.length) {
+    const badDates   = state.ProjectData.tasks.filter(t => !t.milestone && (!t.start || !t.end));
+    const dupTaskIds = (() => { const seen = new Set(), dups = new Set(); state.ProjectData.tasks.forEach(t => { if (seen.has(t.id)) dups.add(t.id); seen.add(t.id); }); return dups; })();
+    const dupSpecIds = (() => { const seen = new Set(), dups = new Set(); state.ProjectData.specs.forEach(s => { if (seen.has(s.id)) dups.add(s.id); seen.add(s.id); }); return dups; })();
+    const parts = [`${state.ProjectData.tasks.length} task${state.ProjectData.tasks.length !== 1 ? 's' : ''}`];
+    if (state.ProjectData.specs.length)   parts.push(`${state.ProjectData.specs.length} spec${state.ProjectData.specs.length !== 1 ? 's' : ''}`);
+    if (state.ProjectData.org.length)     parts.push(`${state.ProjectData.org.length} ${state.ProjectData.org.length === 1 ? 'person' : 'people'}`);
+    if (state.ProjectData.weights.length) parts.push(`${state.ProjectData.weights.length} weight row${state.ProjectData.weights.length !== 1 ? 's' : ''}`);
     if (badDates.length)  parts.push(`⚠ ${badDates.length} task${badDates.length !== 1 ? 's' : ''} missing dates`);
     if (dupTaskIds.size)  parts.push(`⚠ ${dupTaskIds.size} duplicate task ID${dupTaskIds.size !== 1 ? 's' : ''}`);
     if (dupSpecIds.size)  parts.push(`⚠ ${dupSpecIds.size} duplicate spec ID${dupSpecIds.size !== 1 ? 's' : ''}`);
@@ -485,35 +473,22 @@ function renderDashboard() {
 
 // ─── GANTT ────────────────────────────────────────────────────────────────────
 // ZOOM_STEPS, RH, HH imported from ./constants.js
-let zoomIdx = 3;                                 // default: 4px/day = 100%
-let ganttZoom = ZOOM_STEPS[zoomIdx];
 let ganttMinDateRef = null;                      // set during renderGantt for adjustZoom scroll math
 let ganttTodayX    = null;                       // px offset of Today line; null when Today is out of range
-let ganttPhaseFilter  = 'all';
-let ganttTeamFilter   = 'all';
-let collapsedPhases   = new Set(); // phase numbers (ints) whose sub-tasks are hidden
-let isDirty      = false;  // true when ProjectData has unsaved edits since last load/export
 let _draftTimer  = null;   // debounce handle for auto-draft save
 let _exportReminderTimer = null; // fires after 15 min of unsaved edits to nudge Export
-let specSortState      = { col: null, dir: 'asc' };
-let specSearchQuery    = '';
-let showCriticalPath   = false;
-let showGanttLegend    = false;
 let _justLoaded        = false; // gates load toast: true only during file parse → renderDashboard()
-let orgSearchQuery     = '';
-let calDisplayMonth  = null; // { year, month } currently visible in the mini calendar
-let ganttKeyFocusIdx = -1;   // keyboard-focused row index in the current visible task list (-1 = none)
-function setGanttPhaseFilter(val) { ganttPhaseFilter = val; safeSetItem('vh-filter-phase', val); renderGantt(); }
-function setGanttTeamFilter(val)  { ganttTeamFilter  = val; safeSetItem('vh-filter-team', val);  renderGantt(); }
+function setGanttPhaseFilter(val) { state.ganttPhaseFilter = val; safeSetItem('vh-filter-phase', val); renderGantt(); }
+function setGanttTeamFilter(val)  { state.ganttTeamFilter  = val; safeSetItem('vh-filter-team', val);  renderGantt(); }
 function clearGanttFilters() {
   document.getElementById('gantt-phase-filter').value = 'all';
   document.getElementById('gantt-team-filter').value  = 'all';
-  ganttPhaseFilter = 'all'; ganttTeamFilter = 'all';
+  state.ganttPhaseFilter = 'all'; state.ganttTeamFilter = 'all';
   renderGantt();
 }
 function togglePhaseCollapse(phaseNum) {
-  if (collapsedPhases.has(phaseNum)) collapsedPhases.delete(phaseNum); else collapsedPhases.add(phaseNum);
-  safeSetItem('vh-collapsed-phases', JSON.stringify([...collapsedPhases]));
+  if (state.collapsedPhases.has(phaseNum)) state.collapsedPhases.delete(phaseNum); else state.collapsedPhases.add(phaseNum);
+  safeSetItem('vh-collapsed-phases', JSON.stringify([...state.collapsedPhases]));
   renderGantt();
 }
 
@@ -521,8 +496,8 @@ function togglePhaseCollapse(phaseNum) {
 let ganttDragging = false, ganttDragDidMove = false, ganttDragStartX, ganttDragScrollLeft;
 
 function getBarZone(svgX, t) {
-  const barX = daysBetween(ganttMinDateRef, t.start) * ganttZoom;
-  const barW = Math.max(daysBetween(t.start, t.end) * ganttZoom, ganttZoom);
+  const barX = daysBetween(ganttMinDateRef, t.start) * state.ganttZoom;
+  const barW = Math.max(daysBetween(t.start, t.end) * state.ganttZoom, state.ganttZoom);
   if (t.milestone) {
     const mx = barX + barW, sz = 7;
     return (svgX >= mx - sz - 8 && svgX <= mx + sz + 8) ? 'milestone' : null;
@@ -536,21 +511,21 @@ function getBarZone(svgX, t) {
 
 function startBarDrag(e, taskId) {
   const right = document.getElementById('gantt-right');
-  const t = ProjectData.tasks.find(t => t.id === taskId);
+  const t = state.ProjectData.tasks.find(t => t.id === taskId);
   if (!t || !t.start || !t.end) { startPanDrag(e); return; }
   const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
   const zone = getBarZone(svgX, t);
   if (!zone) { startPanDrag(e); return; }
-  barDragPreSnapshot = fullSnapshot();
-  barDrag.pending = true; barDrag.taskId = taskId; barDrag.mode = zone;
-  barDrag.startClientX = e.clientX; barDrag.startScrollLeft = right.scrollLeft;
-  barDrag.origStart = new Date(t.start); barDrag.origEnd = new Date(t.end);
-  barDrag.downTime = Date.now();
+  state.barDragPreSnapshot = fullSnapshot();
+  state.barDrag.pending = true; state.barDrag.taskId = taskId; state.barDrag.mode = zone;
+  state.barDrag.startClientX = e.clientX; state.barDrag.startScrollLeft = right.scrollLeft;
+  state.barDrag.origStart = new Date(t.start); state.barDrag.origEnd = new Date(t.end);
+  state.barDrag.downTime = Date.now();
   const isMoveZone = zone === 'move' || zone === 'milestone';
-  barDrag.holdReady = !isMoveZone; // resize zones activate on movement; move requires a hold first
+  state.barDrag.holdReady = !isMoveZone; // resize zones activate on movement; move requires a hold first
   if (isMoveZone) {
-    barDrag.holdTimer = setTimeout(() => {
-      barDrag.holdReady = true;
+    state.barDrag.holdTimer = setTimeout(() => {
+      state.barDrag.holdReady = true;
       document.getElementById('gantt-right').style.cursor = 'grabbing';
     }, 300);
   }
@@ -565,11 +540,11 @@ function startPanDrag(e) {
 }
 
 function updateBarElementsDirect(taskId, newStart, newEnd) {
-  const els = barEls[taskId];
+  const els = state.barEls[taskId];
   if (!els || !ganttMinDateRef) return;
-  const x = daysBetween(ganttMinDateRef, newStart) * ganttZoom;
-  const w = Math.max(daysBetween(newStart, newEnd) * ganttZoom, ganttZoom);
-  const t = ProjectData.tasks.find(t => t.id === taskId);
+  const x = daysBetween(ganttMinDateRef, newStart) * state.ganttZoom;
+  const w = Math.max(daysBetween(newStart, newEnd) * state.ganttZoom, state.ganttZoom);
+  const t = state.ProjectData.tasks.find(t => t.id === taskId);
   if (!t) return;
   if (t.milestone) {
     if (els.diamond) {
@@ -584,46 +559,46 @@ function updateBarElementsDirect(taskId, newStart, newEnd) {
 }
 
 function doBarDragMove(e) {
-  if (barDrag.pending) {
-    const isMoveZone = barDrag.mode === 'move' || barDrag.mode === 'milestone';
-    const spatialOk  = Math.abs(e.clientX - barDrag.startClientX) > (isMoveZone ? 4 : 8);
-    const temporalOk = isMoveZone ? barDrag.holdReady : (Date.now() - barDrag.downTime) > 80;
+  if (state.barDrag.pending) {
+    const isMoveZone = state.barDrag.mode === 'move' || state.barDrag.mode === 'milestone';
+    const spatialOk  = Math.abs(e.clientX - state.barDrag.startClientX) > (isMoveZone ? 4 : 8);
+    const temporalOk = isMoveZone ? state.barDrag.holdReady : (Date.now() - state.barDrag.downTime) > 80;
     if (spatialOk && temporalOk) {
-      barDrag.pending = false; barDrag.active = true;
+      state.barDrag.pending = false; state.barDrag.active = true;
       const right = document.getElementById('gantt-right');
       right.style.cursor = isMoveZone ? 'grabbing' : 'ew-resize';
     }
   }
-  if (!barDrag.active) return;
+  if (!state.barDrag.active) return;
   const right = document.getElementById('gantt-right');
-  const scrollDelta = right.scrollLeft - barDrag.startScrollLeft;
-  const pixelDelta  = (e.clientX - barDrag.startClientX) + scrollDelta;
-  const rawDays     = pixelDelta / ganttZoom;
+  const scrollDelta = right.scrollLeft - state.barDrag.startScrollLeft;
+  const pixelDelta  = (e.clientX - state.barDrag.startClientX) + scrollDelta;
+  const rawDays     = pixelDelta / state.ganttZoom;
 
-  let newStart = new Date(barDrag.origStart);
-  let newEnd   = new Date(barDrag.origEnd);
+  let newStart = new Date(state.barDrag.origStart);
+  let newEnd   = new Date(state.barDrag.origEnd);
 
-  if (barDrag.mode === 'move' || barDrag.mode === 'milestone') {
-    const dur = daysBetween(barDrag.origStart, barDrag.origEnd);
-    newStart = snapToWorkDay(addDays(barDrag.origStart, Math.round(rawDays)), ganttWorkDays, 1);
+  if (state.barDrag.mode === 'move' || state.barDrag.mode === 'milestone') {
+    const dur = daysBetween(state.barDrag.origStart, state.barDrag.origEnd);
+    newStart = snapToWorkDay(addDays(state.barDrag.origStart, Math.round(rawDays)), state.ganttWorkDays, 1);
     newEnd   = addDays(newStart, dur);
-    if (!isWorkDay(newEnd, ganttWorkDays)) newEnd = snapToWorkDay(newEnd, ganttWorkDays, 1);
-  } else if (barDrag.mode === 'resize-left') {
-    newStart = snapToWorkDay(addDays(barDrag.origStart, Math.round(rawDays)), ganttWorkDays, 1);
+    if (!isWorkDay(newEnd, state.ganttWorkDays)) newEnd = snapToWorkDay(newEnd, state.ganttWorkDays, 1);
+  } else if (state.barDrag.mode === 'resize-left') {
+    newStart = snapToWorkDay(addDays(state.barDrag.origStart, Math.round(rawDays)), state.ganttWorkDays, 1);
     // Enforce min 1 work-day gap
-    if (daysBetween(newStart, newEnd) < 1) newStart = snapToWorkDay(addDays(newEnd, -1), ganttWorkDays, -1);
-  } else if (barDrag.mode === 'resize-right') {
-    newEnd = snapToWorkDay(addDays(barDrag.origEnd, Math.round(rawDays)), ganttWorkDays, 1);
-    if (daysBetween(newStart, newEnd) < 1) newEnd = snapToWorkDay(addDays(newStart, 1), ganttWorkDays, 1);
+    if (daysBetween(newStart, newEnd) < 1) newStart = snapToWorkDay(addDays(newEnd, -1), state.ganttWorkDays, -1);
+  } else if (state.barDrag.mode === 'resize-right') {
+    newEnd = snapToWorkDay(addDays(state.barDrag.origEnd, Math.round(rawDays)), state.ganttWorkDays, 1);
+    if (daysBetween(newStart, newEnd) < 1) newEnd = snapToWorkDay(addDays(newStart, 1), state.ganttWorkDays, 1);
   }
 
-  const t = ProjectData.tasks.find(t => t.id === barDrag.taskId);
+  const t = state.ProjectData.tasks.find(t => t.id === state.barDrag.taskId);
   if (t) { t.start = newStart; t.end = newEnd; }
-  updateBarElementsDirect(barDrag.taskId, newStart, newEnd);
+  updateBarElementsDirect(state.barDrag.taskId, newStart, newEnd);
 
   const label = document.getElementById('gantt-drag-label');
-  const total = countWorkDays(newStart, newEnd, ganttWorkDays);
-  const rem   = workDaysRemaining(newEnd, ganttWorkDays, TODAY);
+  const total = countWorkDays(newStart, newEnd, state.ganttWorkDays);
+  const rem   = workDaysRemaining(newEnd, state.ganttWorkDays, TODAY);
   label.textContent = `${fmt(newStart)} → ${fmt(newEnd)}  ·  ${total} wd total  ·  ${rem} wd left`;
   label.style.display = 'block';
   label.style.left = Math.min(e.clientX + 16, window.innerWidth - label.offsetWidth - 10) + 'px';
@@ -631,30 +606,30 @@ function doBarDragMove(e) {
 }
 
 function endBarDrag() {
-  if (!barDrag.active && !barDrag.pending) return;
-  if (barDrag.holdTimer) { clearTimeout(barDrag.holdTimer); barDrag.holdTimer = null; }
-  barDrag.holdReady = false;
-  const wasActive = barDrag.active;
-  barDrag.active = false; barDrag.pending = false;
+  if (!state.barDrag.active && !state.barDrag.pending) return;
+  if (state.barDrag.holdTimer) { clearTimeout(state.barDrag.holdTimer); state.barDrag.holdTimer = null; }
+  state.barDrag.holdReady = false;
+  const wasActive = state.barDrag.active;
+  state.barDrag.active = false; state.barDrag.pending = false;
   document.getElementById('gantt-drag-label').style.display = 'none';
   document.getElementById('gantt-right').style.cursor = '';
   if (wasActive) {
-    const t = ProjectData.tasks.find(t => t.id === barDrag.taskId);
+    const t = state.ProjectData.tasks.find(t => t.id === state.barDrag.taskId);
     if (t && t.end <= t.start) {
-      t.start = barDrag.origStart;
-      t.end   = barDrag.origEnd;
-      barDragPreSnapshot = null;
+      t.start = state.barDrag.origStart;
+      t.end   = state.barDrag.origEnd;
+      state.barDragPreSnapshot = null;
       renderGantt();
       showToast('End date cannot be before start date', null, 3500);
     } else {
-      if (barDragPreSnapshot) {
-        undoStack.push({ label: 'date adjusted', snapshot: barDragPreSnapshot });
-        if (undoStack.length > 50) undoStack.shift();
-        redoStack = [];
+      if (state.barDragPreSnapshot) {
+        state.undoStack.push({ label: 'date adjusted', snapshot: state.barDragPreSnapshot });
+        if (state.undoStack.length > 50) state.undoStack.shift();
+        state.redoStack = [];
         updateUndoRedoBtns();
       }
-      barDragPreSnapshot = null;
-      const _movedId = barDrag.taskId;
+      state.barDragPreSnapshot = null;
+      const _movedId = state.barDrag.taskId;
       renderGantt();
       if (conflictSet.has(_movedId)) {
         showToast('⚠ Conflict: task now starts before a predecessor ends', applyUndo, 12000);
@@ -674,10 +649,10 @@ function initGanttPan() {
     startPanDrag(e);
   });
   right.addEventListener('mousemove', e => {
-    if (barDrag.active || ganttDragging) return;
+    if (state.barDrag.active || ganttDragging) return;
     const tid = e.target.dataset && e.target.dataset.taskid ? +e.target.dataset.taskid : null;
     if (tid !== null && ganttMinDateRef) {
-      const t = ProjectData.tasks.find(t => t.id === tid);
+      const t = state.ProjectData.tasks.find(t => t.id === tid);
       if (t) {
         const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
         const zone = getBarZone(svgX, t);
@@ -693,8 +668,8 @@ function initGanttPan() {
       if (Math.abs(dx) > 4) ganttDragDidMove = true;
       right.scrollLeft = ganttDragScrollLeft - dx;
     }
-    if (barDrag.active || barDrag.pending) doBarDragMove(e);
-    if (rowDrag.active) doRowDragMove(e);
+    if (state.barDrag.active || state.barDrag.pending) doBarDragMove(e);
+    if (state.rowDrag.active) doRowDragMove(e);
   });
   document.addEventListener('mouseup', e => {
     if (ganttDragging) {
@@ -702,8 +677,8 @@ function initGanttPan() {
       right.classList.remove('dragging');
       document.getElementById('gantt-header-wrap').classList.remove('dragging');
     }
-    if (barDrag.active || barDrag.pending) endBarDrag();
-    if (rowDrag.active) endRowDrag(e);
+    if (state.barDrag.active || state.barDrag.pending) endBarDrag();
+    if (state.rowDrag.active) endRowDrag(e);
   });
 
   document.getElementById('gantt-header-wrap').addEventListener('mousedown', e => {
@@ -747,8 +722,8 @@ function openGanttDatePicker(t, clientX, clientY) {
     const newEnd   = endEl   ? new Date(endEl.value)   : newStart;
     if (!newStart || isNaN(newStart)) { picker.style.display = 'none'; return; }
     pushUndo('edit dates');
-    t.start = snapToWorkDay(newStart, ganttWorkDays, 1);
-    t.end   = t.milestone ? t.start : (newEnd && !isNaN(newEnd) && newEnd >= t.start ? snapToWorkDay(newEnd, ganttWorkDays, -1) : t.start);
+    t.start = snapToWorkDay(newStart, state.ganttWorkDays, 1);
+    t.end   = t.milestone ? t.start : (newEnd && !isNaN(newEnd) && newEnd >= t.start ? snapToWorkDay(newEnd, state.ganttWorkDays, -1) : t.start);
     if (!t.milestone && t.end < t.start) t.end = t.start;
     picker.style.display = 'none';
     renderGantt();
@@ -838,13 +813,13 @@ initGanttNameColResize();
 // Clean up drag ghosts if user alt-tabs or the window loses focus mid-drag
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
-    if (rowDrag.active) endRowDrag();
-    if (barDrag.active || barDrag.pending) endBarDrag();
+    if (state.rowDrag.active) endRowDrag();
+    if (state.barDrag.active || state.barDrag.pending) endBarDrag();
   }
 });
 window.addEventListener('blur', () => {
-  if (rowDrag.active) endRowDrag();
-  if (barDrag.active || barDrag.pending) endBarDrag();
+  if (state.rowDrag.active) endRowDrag();
+  if (state.barDrag.active || state.barDrag.pending) endBarDrag();
 });
 
 function updateGanttKeyFocus(delta) {
@@ -853,11 +828,11 @@ function updateGanttKeyFocus(delta) {
   const rows = lb.querySelectorAll('.gantt-row');
   if (!rows.length) return;
   lb.querySelectorAll('.gantt-row.kb-focus').forEach(r => { r.classList.remove('kb-focus'); r.setAttribute('aria-selected', 'false'); });
-  ganttKeyFocusIdx = Math.max(0, Math.min(rows.length - 1, ganttKeyFocusIdx + delta));
-  rows[ganttKeyFocusIdx].classList.add('kb-focus');
-  rows[ganttKeyFocusIdx].setAttribute('aria-selected', 'true');
-  rows[ganttKeyFocusIdx].focus();
-  rows[ganttKeyFocusIdx].scrollIntoView({ block: 'nearest' });
+  state.ganttKeyFocusIdx = Math.max(0, Math.min(rows.length - 1, state.ganttKeyFocusIdx + delta));
+  rows[state.ganttKeyFocusIdx].classList.add('kb-focus');
+  rows[state.ganttKeyFocusIdx].setAttribute('aria-selected', 'true');
+  rows[state.ganttKeyFocusIdx].focus();
+  rows[state.ganttKeyFocusIdx].scrollIntoView({ block: 'nearest' });
 }
 
 document.addEventListener('keydown', e => {
@@ -865,16 +840,16 @@ document.addEventListener('keydown', e => {
   if (e.target.matches('input, select, textarea')) return;
   if (e.key === 'ArrowDown') {
     e.preventDefault();
-    if (ganttKeyFocusIdx < 0) ganttKeyFocusIdx = -1;
+    if (state.ganttKeyFocusIdx < 0) state.ganttKeyFocusIdx = -1;
     updateGanttKeyFocus(1);
   } else if (e.key === 'ArrowUp') {
     e.preventDefault();
     updateGanttKeyFocus(-1);
-  } else if (e.key === 'Enter' && ganttKeyFocusIdx >= 0) {
+  } else if (e.key === 'Enter' && state.ganttKeyFocusIdx >= 0) {
     const lb = document.getElementById('gantt-left-body');
     const rows = lb ? lb.querySelectorAll('.gantt-row') : [];
-    if (rows[ganttKeyFocusIdx]) {
-      const tid = +rows[ganttKeyFocusIdx].dataset.taskid;
+    if (rows[state.ganttKeyFocusIdx]) {
+      const tid = +rows[state.ganttKeyFocusIdx].dataset.taskid;
       if (tid) openTaskPanel(tid);
     }
   } else if (e.key === '+' || e.key === '=') {
@@ -887,16 +862,16 @@ document.addEventListener('keydown', e => {
 let _zoomSaveTimer = null;
 function adjustZoom(dir) {
   const right = document.getElementById('gantt-right');
-  const oldPx = ganttZoom;
+  const oldPx = state.ganttZoom;
   const oldScroll = right.scrollLeft;
-  zoomIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, zoomIdx + dir));
-  ganttZoom = ZOOM_STEPS[zoomIdx];
-  document.getElementById('zoom-label').textContent = Math.round((ganttZoom / 4) * 100) + '%';
+  state.zoomIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, state.zoomIdx + dir));
+  state.ganttZoom = ZOOM_STEPS[state.zoomIdx];
+  document.getElementById('zoom-label').textContent = Math.round((state.ganttZoom / 4) * 100) + '%';
   renderGantt();
   // Scale scroll position proportionally so the view stays anchored to the same date
-  right.scrollLeft = Math.round(oldScroll * (ganttZoom / oldPx));
+  right.scrollLeft = Math.round(oldScroll * (state.ganttZoom / oldPx));
   clearTimeout(_zoomSaveTimer);
-  _zoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-gantt', zoomIdx), 500);
+  _zoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-gantt', state.zoomIdx), 500);
 }
 
 document.getElementById('gantt-right').addEventListener('wheel', e => {
@@ -913,7 +888,7 @@ function toggleGanttCalendar() {
   if (btn) btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
   if (isOpen) {
     const today = new Date();
-    calDisplayMonth = { year: today.getFullYear(), month: today.getMonth() };
+    state.calDisplayMonth = { year: today.getFullYear(), month: today.getMonth() };
     renderGanttCalendar();
   }
 }
@@ -931,12 +906,12 @@ function workdaysSummary(wds) {
 
 let _wdRenderTimer = null;
 function applyWorkDays(wds) {
-  ganttWorkDays = wds;
+  state.ganttWorkDays = wds;
   safeSetItem('vh-workdays', JSON.stringify(wds));
   const btn = document.getElementById('workdays-btn');
   if (btn) btn.textContent = workdaysSummary(wds) + ' ▾';
   clearTimeout(_wdRenderTimer);
-  _wdRenderTimer = setTimeout(() => { if (ProjectData.tasks.length) renderGantt(); }, 300);
+  _wdRenderTimer = setTimeout(() => { if (state.ProjectData.tasks.length) renderGantt(); }, 300);
 }
 
 function toggleWorkdaysPicker() {
@@ -955,7 +930,7 @@ function toggleWorkdaysPicker() {
     <legend style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:8px;padding:0">Work Days</legend>` +
     dayOrder.map(d => `
       <label style="display:flex;align-items:center;gap:8px;font-size:0.82rem;cursor:pointer;margin-bottom:6px">
-        <input type="checkbox" data-dow="${d}" ${ganttWorkDays.includes(d) ? 'checked' : ''} style="accent-color:var(--accent)">
+        <input type="checkbox" data-dow="${d}" ${state.ganttWorkDays.includes(d) ? 'checked' : ''} style="accent-color:var(--accent)">
         ${WD_LABELS[d]}
       </label>`).join('') +
     `</fieldset>`;
@@ -966,7 +941,7 @@ function toggleWorkdaysPicker() {
       const checked = Array.from(picker.querySelectorAll('input[type="checkbox"]:checked')).map(c => +c.dataset.dow);
       if (checked.length === 0) { cb.checked = true; return; } // require at least 1
       applyWorkDays(checked);
-      if (btn) btn.textContent = workdaysSummary(ganttWorkDays) + ' ▾';
+      if (btn) btn.textContent = workdaysSummary(state.ganttWorkDays) + ' ▾';
     });
   });
 }
@@ -982,27 +957,27 @@ document.addEventListener('click', e => {
   const legend    = document.getElementById('gantt-legend');
   const legendBtn = document.getElementById('legend-btn');
   if (legend && legend.style.display !== 'none' && !legend.contains(e.target) && legendBtn && !legendBtn.contains(e.target)) {
-    showGanttLegend = false;
+    state.showGanttLegend = false;
     legend.style.display = 'none';
     legendBtn.setAttribute('aria-expanded', 'false');
   }
 });
 
 function navigateCalendar(delta) {
-  if (!calDisplayMonth) return;
-  calDisplayMonth.month += delta;
-  if (calDisplayMonth.month > 11) { calDisplayMonth.month = 0; calDisplayMonth.year++; }
-  if (calDisplayMonth.month < 0)  { calDisplayMonth.month = 11; calDisplayMonth.year--; }
+  if (!state.calDisplayMonth) return;
+  state.calDisplayMonth.month += delta;
+  if (state.calDisplayMonth.month > 11) { state.calDisplayMonth.month = 0; state.calDisplayMonth.year++; }
+  if (state.calDisplayMonth.month < 0)  { state.calDisplayMonth.month = 11; state.calDisplayMonth.year--; }
   renderGanttCalendar();
 }
 
 function renderGanttCalendar() {
   const cal = document.getElementById('gantt-calendar');
-  if (!cal || !calDisplayMonth) return;
-  const { year, month } = calDisplayMonth;
+  if (!cal || !state.calDisplayMonth) return;
+  const { year, month } = state.calDisplayMonth;
 
   const msMap = {};
-  ProjectData.tasks.filter(t => t.milestone).forEach(t => {
+  state.ProjectData.tasks.filter(t => t.milestone).forEach(t => {
     const d = t.end || t.start;
     if (!d) return;
     const key = d.toISOString().slice(0, 10);
@@ -1012,7 +987,7 @@ function renderGanttCalendar() {
 
   const phStartMap = {};
   const phaseNames = getPhaseNames();
-  ProjectData.tasks.filter(t => !t.wbs.includes('.') || t.wbs.endsWith('.0')).forEach(t => {
+  state.ProjectData.tasks.filter(t => !t.wbs.includes('.') || t.wbs.endsWith('.0')).forEach(t => {
     if (!t.start) return;
     const key = t.start.toISOString().slice(0, 10);
     const phNum = parseInt(t.wbs);
@@ -1036,7 +1011,7 @@ function renderGanttCalendar() {
   </div><div class="cal-grid">`;
 
   DAYS.forEach((d, i) => {
-    const off = !ganttWorkDays.includes(i);
+    const off = !state.ganttWorkDays.includes(i);
     html += `<div class="cal-dh${off ? ' cal-dh-off' : ''}">${d}</div>`;
   });
   for (let i = 0; i < startDow; i++) html += `<div class="cal-d cal-empty"></div>`;
@@ -1044,7 +1019,7 @@ function renderGanttCalendar() {
   for (let d = 1; d <= daysInMonth; d++) {
     const ds      = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dow     = new Date(year, month, d).getDay();
-    const isOff   = !ganttWorkDays.includes(dow);
+    const isOff   = !state.ganttWorkDays.includes(dow);
     const isToday = today.getFullYear() === year && today.getMonth() === month && today.getDate() === d;
     const entries = msMap[ds] || [];
     const phEntry = phStartMap[ds];
@@ -1097,21 +1072,20 @@ function jumpToGanttDate(dateStr) {
   const dayOffset = (target - ganttMinDateRef) / msPerDay;
   const right = document.getElementById('gantt-right');
   if (!right) return;
-  right.scrollLeft = Math.max(0, dayOffset * ganttZoom - right.clientWidth / 2);
+  right.scrollLeft = Math.max(0, dayOffset * state.ganttZoom - right.clientWidth / 2);
 }
 
 // ── Specs zoom ────────────────────────────────────────────────────────────────
 // SPECS_ZOOM_STEPS imported from ./constants.js
-let specsZoomIdx = 2; // default 0.84rem = 100%
 let _specsZoomSaveTimer = null;
 function adjustSpecsZoom(dir) {
-  specsZoomIdx = Math.max(0, Math.min(SPECS_ZOOM_STEPS.length - 1, specsZoomIdx + dir));
-  const scale = SPECS_ZOOM_STEPS[specsZoomIdx];
+  state.specsZoomIdx = Math.max(0, Math.min(SPECS_ZOOM_STEPS.length - 1, state.specsZoomIdx + dir));
+  const scale = SPECS_ZOOM_STEPS[state.specsZoomIdx];
   document.getElementById('specs-zoom-label').textContent = Math.round((scale / 0.84) * 100) + '%';
   const tbl = document.querySelector('.specs-table');
   if (tbl) tbl.style.fontSize = scale + 'rem';
   clearTimeout(_specsZoomSaveTimer);
-  _specsZoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-specs', specsZoomIdx), 500);
+  _specsZoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-specs', state.specsZoomIdx), 500);
 }
 document.getElementById('specs-body').addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
@@ -1121,11 +1095,10 @@ document.getElementById('specs-body').addEventListener('wheel', e => {
 
 // ── Org zoom ──────────────────────────────────────────────────────────────────
 // ORG_ZOOM_STEPS imported from ./constants.js
-let orgZoomIdx = 4; // default 1.0 = 100%
 let _orgZoomSaveTimer = null;
 function adjustOrgZoom(dir) {
-  orgZoomIdx = Math.max(0, Math.min(ORG_ZOOM_STEPS.length - 1, orgZoomIdx + dir));
-  const scale = ORG_ZOOM_STEPS[orgZoomIdx];
+  state.orgZoomIdx = Math.max(0, Math.min(ORG_ZOOM_STEPS.length - 1, state.orgZoomIdx + dir));
+  const scale = ORG_ZOOM_STEPS[state.orgZoomIdx];
   document.getElementById('org-zoom-label').textContent = Math.round(scale * 100) + '%';
   const wrap = document.getElementById('org-svg-wrap');
   const svg = wrap.querySelector('svg');
@@ -1136,7 +1109,7 @@ function adjustOrgZoom(dir) {
   wrap.style.width  = Math.round(parseFloat(svg.getAttribute('width'))  * scale) + 'px';
   wrap.style.height = Math.round(parseFloat(svg.getAttribute('height')) * scale) + 'px';
   clearTimeout(_orgZoomSaveTimer);
-  _orgZoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-org', orgZoomIdx), 500);
+  _orgZoomSaveTimer = setTimeout(() => safeSetItem('vh-zoom-org', state.orgZoomIdx), 500);
 }
 document.getElementById('org-container').addEventListener('wheel', e => {
   if (!e.ctrlKey) return;
@@ -1178,28 +1151,28 @@ function updateTodayFloat() {
 // computeCriticalPath, computeConflicts imported from ./compute/
 
 function toggleCriticalPath() {
-  showCriticalPath = !showCriticalPath;
-  safeSetItem('vh-show-cp', showCriticalPath ? '1' : '');
+  state.showCriticalPath = !state.showCriticalPath;
+  safeSetItem('vh-show-cp', state.showCriticalPath ? '1' : '');
   const btn = document.getElementById('gantt-cp-btn');
-  if (btn) btn.setAttribute('aria-pressed', showCriticalPath ? 'true' : 'false');
+  if (btn) btn.setAttribute('aria-pressed', state.showCriticalPath ? 'true' : 'false');
   renderGantt();
 }
 
 function toggleGanttLegend() {
-  showGanttLegend = !showGanttLegend;
+  state.showGanttLegend = !state.showGanttLegend;
   const btn = document.getElementById('legend-btn');
   const panel = document.getElementById('gantt-legend');
   if (!btn || !panel) return;
-  btn.setAttribute('aria-expanded', showGanttLegend ? 'true' : 'false');
-  panel.style.display = showGanttLegend ? 'block' : 'none';
-  if (showGanttLegend) renderGanttLegend();
+  btn.setAttribute('aria-expanded', state.showGanttLegend ? 'true' : 'false');
+  panel.style.display = state.showGanttLegend ? 'block' : 'none';
+  if (state.showGanttLegend) renderGanttLegend();
 }
 
 function renderGanttLegend() {
   const panel = document.getElementById('gantt-legend');
   if (!panel) return;
   const phaseNamesMap = getPhaseNames();
-  const allPhases = [...new Set(ProjectData.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b) => a-b);
+  const allPhases = [...new Set(state.ProjectData.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b) => a-b);
   const phaseRows = allPhases.map(ph => {
     const color = phaseColor(ph + '.0');
     const name  = phaseNamesMap[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
@@ -1252,7 +1225,7 @@ function exportGanttSVG() {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `${ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.svg`;
+  a.download = `${state.ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.svg`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -1296,7 +1269,7 @@ function exportGanttPNG() {
       const url = URL.createObjectURL(pngBlob);
       const a   = document.createElement('a');
       a.href    = url;
-      a.download = `${ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.png`;
+      a.download = `${state.ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.png`;
       a.click();
       URL.revokeObjectURL(url);
       URL.revokeObjectURL(svgUrl);
@@ -1315,7 +1288,7 @@ function renderGantt() {
 }
 
 function prepareGanttData() {
-  if (!ProjectData.tasks.length) {
+  if (!state.ProjectData.tasks.length) {
     if (dashboardLoaded) {
       const lb = document.getElementById('gantt-left-body');
       if (lb) {
@@ -1333,8 +1306,8 @@ function prepareGanttData() {
 
   // ── Populate filter dropdowns ──────────────────────
   const phaseNamesMap = getPhaseNames();
-  const allPhases = [...new Set(ProjectData.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b)=>a-b);
-  const allTeams  = [...new Set(ProjectData.tasks.map(t => t.team || 'Unassigned'))].sort();
+  const allPhases = [...new Set(state.ProjectData.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b)=>a-b);
+  const allTeams  = [...new Set(state.ProjectData.tasks.map(t => t.team || 'Unassigned'))].sort();
 
   const phaseSel  = document.getElementById('gantt-phase-filter');
   if (phaseSel) {
@@ -1343,31 +1316,31 @@ function prepareGanttData() {
       const label = phaseNamesMap[ph] || PHASE_NAMES_FALLBACK[ph-1] || 'Phase ' + ph;
       phaseSel.innerHTML += `<option value="${ph}">${ph}. ${esc(label)}</option>`;
     });
-    if (!allPhases.map(String).includes(ganttPhaseFilter)) {
-      ganttPhaseFilter = 'all';
+    if (!allPhases.map(String).includes(state.ganttPhaseFilter)) {
+      state.ganttPhaseFilter = 'all';
       localStorage.removeItem('vh-filter-phase');
     }
-    phaseSel.value = ganttPhaseFilter;
+    phaseSel.value = state.ganttPhaseFilter;
   }
 
   const teamSel   = document.getElementById('gantt-team-filter');
   if (teamSel) {
     teamSel.innerHTML = '<option value="all">All</option>';
     allTeams.forEach(tm => { teamSel.innerHTML += `<option value="${esc(tm)}">${esc(tm)}</option>`; });
-    if (!allTeams.includes(ganttTeamFilter) && ganttTeamFilter !== 'all') {
-      ganttTeamFilter = 'all';
+    if (!allTeams.includes(state.ganttTeamFilter) && state.ganttTeamFilter !== 'all') {
+      state.ganttTeamFilter = 'all';
       localStorage.removeItem('vh-filter-team');
     }
-    teamSel.value = ganttTeamFilter;
+    teamSel.value = state.ganttTeamFilter;
   }
 
   // ── Build filtered task list ───────────────────────
-  const visibleTasks = ProjectData.tasks.filter(t => {
+  const visibleTasks = state.ProjectData.tasks.filter(t => {
     const phNum = parseInt(String(t.wbs).split('.')[0]) || 1;
     const ph    = String(phNum);
-    if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
-    if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
-    if (ganttPhaseFilter === 'all' && collapsedPhases.has(phNum)) {
+    if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
+    if (state.ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== state.ganttTeamFilter) return false;
+    if (state.ganttPhaseFilter === 'all' && state.collapsedPhases.has(phNum)) {
       const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
       if (!isPhaseHeader) return false;
     }
@@ -1384,24 +1357,24 @@ function prepareGanttData() {
   }
 
   // Use full task set for date axis so the time range stays stable when filtering
-  const dates = ProjectData.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
+  const dates = state.ProjectData.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
   const minD = new Date(Math.min(...dates)); minD.setDate(minD.getDate() - 7);
   const maxD = new Date(Math.max(...dates)); maxD.setDate(maxD.getDate() + 21);
   ganttMinDateRef = minD;
   const totalDays = daysBetween(minD, maxD);
-  const W = totalDays * ganttZoom;
+  const W = totalDays * state.ganttZoom;
   const bodyH = visibleTasks.length * RH;
-  const cpSet = showCriticalPath ? computeCriticalPath(ProjectData.tasks) : new Set();
-  conflictSet = computeConflicts(ProjectData.tasks);
+  const cpSet = state.showCriticalPath ? computeCriticalPath(state.ProjectData.tasks) : new Set();
+  conflictSet = computeConflicts(state.ProjectData.tasks);
   const exportBtn = document.getElementById('gantt-export-svg-btn');
   if (exportBtn) exportBtn.disabled = false;
   const exportPngBtn = document.getElementById('gantt-export-png-btn');
   if (exportPngBtn) exportPngBtn.disabled = false;
 
-  const tx = daysBetween(minD, TODAY) * ganttZoom;
+  const tx = daysBetween(minD, TODAY) * state.ganttZoom;
   ganttTodayX = (tx > 0 && tx < W) ? tx : null;
 
-  const isFiltered = ganttPhaseFilter !== 'all' || ganttTeamFilter !== 'all';
+  const isFiltered = state.ganttPhaseFilter !== 'all' || state.ganttTeamFilter !== 'all';
 
   return { visibleTasks, isFiltered, minD, maxD, W, bodyH, cpSet, conflictSet, tx };
 }
@@ -1413,12 +1386,12 @@ function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
-    const wd = wdDisplay(t, ganttWorkDays, TODAY);
+    const wd = wdDisplay(t, state.ganttWorkDays, TODAY);
     const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
     const phaseNum = parseInt(t.wbs.split('.')[0]) || 1;
-    const isCollapsed = isPhaseHeader && collapsedPhases.has(phaseNum);
+    const isCollapsed = isPhaseHeader && state.collapsedPhases.has(phaseNum);
     const showHandle = !isFiltered && !isPhaseHeader;
-    const showCollapseBtn = isPhaseHeader && ganttPhaseFilter === 'all';
+    const showCollapseBtn = isPhaseHeader && state.ganttPhaseFilter === 'all';
     const div = document.createElement('div');
     div.className = 'gantt-row' + (isCollapsed ? ' phase-collapsed' : '');
     div.dataset.taskid = t.id;
@@ -1481,15 +1454,15 @@ function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskPctEdit(pctEl, t); } });
 
     div.addEventListener('click', () => openTaskPanel(t.id));
-    div.addEventListener('mouseenter', e => { if (!barDrag.active && !rowDrag.active) showTooltip(t, e); });
+    div.addEventListener('mouseenter', e => { if (!state.barDrag.active && !state.rowDrag.active) showTooltip(t, e); });
     div.addEventListener('mouseleave', hideTooltip);
     lb.appendChild(div);
   });
 
   // Apply keyboard-focus highlight to the tracked row (if any)
-  if (ganttKeyFocusIdx >= 0) {
+  if (state.ganttKeyFocusIdx >= 0) {
     const rows = lb.querySelectorAll('.gantt-row');
-    if (rows[ganttKeyFocusIdx]) rows[ganttKeyFocusIdx].classList.add('kb-focus');
+    if (rows[state.ganttKeyFocusIdx]) rows[state.ganttKeyFocusIdx].classList.add('kb-focus');
   }
 }
 
@@ -1529,7 +1502,7 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
   headerWrap.style.transform = `translateX(-${document.getElementById('gantt-right').scrollLeft}px)`;
 
   // ── Body SVG ────────────────────────────────────────
-  barEls      = {};
+  state.barEls      = {};
   depArrowEls = [];
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('width', W); svg.setAttribute('height', bodyH);
@@ -1537,7 +1510,7 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
   svg.setAttribute('role', 'application');
   svg.setAttribute('aria-label', `Gantt chart — drag bars to adjust dates and duration. Today is ${TODAY.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' })}`);
   svg.style.display = 'block';
-  if (showCriticalPath) svg.classList.add('cp-active');
+  if (state.showCriticalPath) svg.classList.add('cp-active');
 
   // Arrowhead marker
   const defs = document.createElementNS(NS, 'defs');
@@ -1564,8 +1537,8 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
 
   visibleTasks.forEach((t, i) => {
     if (!t.start || !t.end) return;
-    const x   = daysBetween(minD, t.start) * ganttZoom;
-    const w   = Math.max(daysBetween(t.start, t.end) * ganttZoom, ganttZoom);
+    const x   = daysBetween(minD, t.start) * state.ganttZoom;
+    const w   = Math.max(daysBetween(t.start, t.end) * state.ganttZoom, state.ganttZoom);
     const midY = i*RH + RH/2;
     const color = phaseColor(t.wbs);
 
@@ -1580,10 +1553,10 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
     hit.setAttribute('aria-label', `${t.milestone ? 'Milestone' : 'Task'} ${t.wbs}: ${t.name}, ${t.pct}% complete${_hitStart ? ', ' + _hitStart + ' to ' + _hitEnd : ''}`);
     hit.dataset.taskid = t.id;
     hit.addEventListener('mouseenter', e => {
-      if (!barDrag.active && !rowDrag.active) {
+      if (!state.barDrag.active && !state.rowDrag.active) {
         showTooltip(t, e);
-        if (showCriticalPath) {
-          Object.entries(barEls).forEach(([id, els]) => {
+        if (state.showCriticalPath) {
+          Object.entries(state.barEls).forEach(([id, els]) => {
             const op = cpSet.has(t.id) ? (cpSet.has(+id) ? '1' : '0.2') : (+id === t.id ? '1' : '0.2');
             ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = op; });
           });
@@ -1595,15 +1568,15 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
     });
     hit.addEventListener('mouseleave', () => {
       hideTooltip();
-      if (showCriticalPath) {
-        Object.entries(barEls).forEach(([id, els]) => {
+      if (state.showCriticalPath) {
+        Object.entries(state.barEls).forEach(([id, els]) => {
           const base = cpSet.has(+id) ? '' : '0.35';
           ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = base; });
         });
         depArrowEls.forEach(({ el }) => { el.style.opacity = ''; });
       }
     });
-    hit.addEventListener('click', () => { if (!ganttDragDidMove && !barDrag.active) openTaskPanel(t.id); });
+    hit.addEventListener('click', () => { if (!ganttDragDidMove && !state.barDrag.active) openTaskPanel(t.id); });
     hit.addEventListener('dblclick', e => { e.stopPropagation(); openGanttDatePicker(t, e.clientX, e.clientY); });
     svg.appendChild(hit);
 
@@ -1615,8 +1588,8 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
       d.style.pointerEvents = 'none';
       svg.appendChild(d);
       barPos[t.id] = { sx: mx - sz, ex: mx + sz, my: midY };
-      barEls[t.id] = { diamond: d, midY };
-      if (showCriticalPath && !cpSet.has(t.id)) d.style.opacity = '0.35';
+      state.barEls[t.id] = { diamond: d, midY };
+      if (state.showCriticalPath && !cpSet.has(t.id)) d.style.opacity = '0.35';
     } else {
       const by = i*RH + RH*0.28, bh = RH*0.44;
       const bgRect = appendRect(svg, NS, x, by, w, bh, color + '30', 4);
@@ -1636,12 +1609,12 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
         svg.appendChild(outlineRect);
       }
       barPos[t.id] = { sx: x, ex: x + w, my: midY };
-      barEls[t.id] = { bgRect, progRect, outlineRect, midY };
-      if (showCriticalPath && !cpSet.has(t.id)) {
+      state.barEls[t.id] = { bgRect, progRect, outlineRect, midY };
+      if (state.showCriticalPath && !cpSet.has(t.id)) {
         [bgRect, progRect, outlineRect].forEach(el => { if (el) el.style.opacity = '0.35'; });
       }
       // Critical path ring overlay
-      if (showCriticalPath && cpSet.has(t.id)) {
+      if (state.showCriticalPath && cpSet.has(t.id)) {
         const ring = document.createElementNS(NS, 'rect');
         ring.setAttribute('x', x - 1); ring.setAttribute('y', by - 1);
         ring.setAttribute('width', w + 2); ring.setAttribute('height', bh + 2);
@@ -1677,17 +1650,17 @@ function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }) {
       p.setAttribute('d', pathD); p.setAttribute('fill', 'none');
       p.setAttribute('data-pred-id', did);
       p.setAttribute('data-succ-id', t.id);
-      const isCritical = showCriticalPath && cpSet.has(did) && cpSet.has(t.id);
+      const isCritical = state.showCriticalPath && cpSet.has(did) && cpSet.has(t.id);
       if (isCritical) {
         p.setAttribute('stroke', '#e06c75'); p.setAttribute('stroke-width', 2.5);
       } else {
         p.setAttribute('stroke', depStroke); p.setAttribute('stroke-width', 1.5);
-        if (showCriticalPath) p.setAttribute('stroke-dasharray', '5 3');
+        if (state.showCriticalPath) p.setAttribute('stroke-dasharray', '5 3');
       }
       p.setAttribute('marker-end', 'url(#arr)');
       p.setAttribute('tabindex', '0');
       p.setAttribute('role', 'button');
-      const predTask = ProjectData.tasks.find(tk => tk.id === did);
+      const predTask = state.ProjectData.tasks.find(tk => tk.id === did);
       p.setAttribute('aria-label', `Open ${t.name} — depends on ${predTask ? predTask.name : did}`);
       p.style.cursor = 'pointer';
       p.addEventListener('keydown', e => {
@@ -1744,7 +1717,7 @@ function renderHeader(svg, NS, minD, maxD, W) {
   appendLine(svg, NS, 0, W, HH, HH, headerBorder, 1);
   const cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
   while (cur <= maxD) {
-    const x = daysBetween(minD, cur) * ganttZoom;
+    const x = daysBetween(minD, cur) * state.ganttZoom;
     appendLine(svg, NS, x, x, 0, HH + 9999, monthGridLine, 1);
     const ml = document.createElementNS(NS, 'text');
     ml.setAttribute('x', x+5); ml.setAttribute('y', 30);
@@ -1755,7 +1728,7 @@ function renderHeader(svg, NS, minD, maxD, W) {
     const nxt = new Date(cur); nxt.setMonth(nxt.getMonth()+1);
     const wk = new Date(cur); wk.setDate(wk.getDate() + (7 - wk.getDay()));
     while (wk < nxt && wk <= maxD) {
-      const wx = daysBetween(minD, wk) * ganttZoom;
+      const wx = daysBetween(minD, wk) * state.ganttZoom;
       appendLine(svg, NS, wx, wx, 42, HH, weekGridLine, 1);
       const dl = document.createElementNS(NS, 'text');
       dl.setAttribute('x', wx+2); dl.setAttribute('y', 54);
@@ -1774,13 +1747,13 @@ function renderBodyGrid(svg, NS, minD, maxD, W, bodyH) {
   const weekLine  = isLight ? 'rgba(0,0,0,0.05)'  : 'rgba(48,54,61,0.22)';
   const cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
   while (cur <= maxD) {
-    const x = daysBetween(minD, cur) * ganttZoom;
+    const x = daysBetween(minD, cur) * state.ganttZoom;
     appendLine(svg, NS, x, x, 0, bodyH, monthLine, 1);
-    if (ganttZoom >= 5) {
+    if (state.ganttZoom >= 5) {
       const nxt = new Date(cur); nxt.setMonth(nxt.getMonth()+1);
       const wk = new Date(cur); wk.setDate(wk.getDate() + (7 - wk.getDay()));
       while (wk < nxt && wk <= maxD) {
-        const wx = daysBetween(minD, wk) * ganttZoom;
+        const wx = daysBetween(minD, wk) * state.ganttZoom;
         appendLine(svg, NS, wx, wx, 0, bodyH, weekLine, 1);
         wk.setDate(wk.getDate()+7);
       }
@@ -1840,7 +1813,7 @@ function startTaskNameEdit(span, t) {
 function startTaskTeamEdit(span, t) {
   if (span.querySelector('select')) return;
   const orig = t.team;
-  const teams = [...new Set(ProjectData.tasks.map(x => x.team).filter(Boolean))].sort();
+  const teams = [...new Set(state.ProjectData.tasks.map(x => x.team).filter(Boolean))].sort();
   const sel = document.createElement('select');
   sel.className = 'gantt-cell-select';
   teams.forEach(tm => {
@@ -1907,7 +1880,7 @@ function startTaskPctEdit(span, t) {
 // ─── SPEC PANEL INLINE EDITS ─────────────────────────────────────────────────
 function _refreshSpecPanel(s) {
   renderSpecTable();
-  spCurrentType = null;
+  state.spCurrentType = null;
   openSpecPanel(s.id);
 }
 
@@ -1999,12 +1972,12 @@ function startSpecIdEdit(el, s) {
     const v = input.value.trim();
     if (!v) {
       s.id = orig; _refreshSpecPanel(s); showToast('Spec ID cannot be empty', null, 3500);
-    } else if (v !== orig && ProjectData.specs.some(x => x.id === v)) {
+    } else if (v !== orig && state.ProjectData.specs.some(x => x.id === v)) {
       s.id = orig; _refreshSpecPanel(s); showToast('Spec ID already in use', null, 3500);
     } else if (v !== orig) {
       pushUndo('spec ID change');
       s.id = v;
-      spCurrentId = v;
+      state.spCurrentId = v;
       _refreshSpecPanel(s);
       showToast('Spec ID changed', applyUndo, 5000);
     } else {
@@ -2018,7 +1991,7 @@ function startSpecIdEdit(el, s) {
 function startSpecNotesEdit(el, s) {
   if (el.querySelector('textarea')) return;
   const origNotes = s.notes;
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   el.innerHTML = '';
   el.removeAttribute('tabindex'); el.removeAttribute('role');
   const ta = document.createElement('textarea');
@@ -2036,12 +2009,12 @@ function startSpecNotesEdit(el, s) {
     if (done) return; done = true;
     if (ta.value !== origNotes) pushUndo('spec notes change');
     s.notes = ta.value;
-    spOpener = origOpener;
+    state.spOpener = origOpener;
     _refreshSpecPanel(s);
   };
   const cancel = () => {
     if (done) return; done = true;
-    spOpener = origOpener;
+    state.spOpener = origOpener;
     _refreshSpecPanel(s);
   };
   ta.addEventListener('keydown', e => {
@@ -2056,7 +2029,7 @@ function startSpecNotesEdit(el, s) {
 function startNotesEdit(el, t) {
   if (el.querySelector('textarea')) return;
   const origNotes = t.notes;
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   el.innerHTML = '';
   el.removeAttribute('tabindex'); el.removeAttribute('role');
   const ta = document.createElement('textarea');
@@ -2074,11 +2047,11 @@ function startNotesEdit(el, t) {
     if (done) return; done = true;
     t.notes = ta.value;
     renderGantt();
-    spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+    state.spCurrentType = null; openTaskPanel(t.id); state.spOpener = origOpener;
   };
   const cancel = () => {
     if (done) return; done = true;
-    spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+    state.spCurrentType = null; openTaskPanel(t.id); state.spOpener = origOpener;
     const newEl = document.querySelector('.sp-notes-field');
     if (newEl) newEl.focus();
   };
@@ -2094,17 +2067,17 @@ function startNotesEdit(el, t) {
 // wouldCreateCycle imported from ./compute/wbs.js (signature: wouldCreateCycle(tasks, taskId, candidateId))
 
 function removeDep(t, depId) {
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   t.deps = t.deps.filter(d => d !== depId);
   renderGantt();
-  spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+  state.spCurrentType = null; openTaskPanel(t.id); state.spOpener = origOpener;
 }
 
 function addDep(t, depId) {
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   if (!t.deps.includes(depId)) { t.deps.push(depId); t.deps.sort((a, b) => a - b); }
   renderGantt();
-  spCurrentType = null; openTaskPanel(t.id); spOpener = origOpener;
+  state.spCurrentType = null; openTaskPanel(t.id); state.spOpener = origOpener;
 }
 
 function wirePicker({ btnId, pickerId, listId, buildFn, ref, itemSelector }) {
@@ -2147,7 +2120,7 @@ function wirePicker({ btnId, pickerId, listId, buildFn, ref, itemSelector }) {
 
 function buildDepPickerList(input, t, listEl) {
   const q = input.value.trim().toLowerCase();
-  const candidates = ProjectData.tasks.filter(c => c.id !== t.id && !t.deps.includes(c.id));
+  const candidates = state.ProjectData.tasks.filter(c => c.id !== t.id && !t.deps.includes(c.id));
   const filtered = q ? candidates.filter(c =>
     c.name.toLowerCase().includes(q) || c.wbs.toLowerCase().includes(q) || String(c.id).includes(q)
   ) : candidates;
@@ -2161,7 +2134,7 @@ function buildDepPickerList(input, t, listEl) {
     return;
   }
   filtered.forEach(c => {
-    const isCycle = wouldCreateCycle(ProjectData.tasks, t.id, c.id);
+    const isCycle = wouldCreateCycle(state.ProjectData.tasks, t.id, c.id);
     const div = document.createElement('div');
     div.className = 'sp-dep-item' + (isCycle ? ' cycle' : '');
     div.setAttribute('role', 'option');
@@ -2176,22 +2149,22 @@ function buildDepPickerList(input, t, listEl) {
 }
 
 function removeSpecDep(s, taskId) {
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   s.depIds = s.depIds.filter(id => id !== taskId);
   renderSpecTable();
-  spCurrentType = null; openSpecPanel(s.id); spOpener = origOpener;
+  state.spCurrentType = null; openSpecPanel(s.id); state.spOpener = origOpener;
 }
 
 function addSpecDep(s, taskId) {
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   if (!s.depIds.includes(taskId)) { s.depIds.push(taskId); s.depIds.sort((a,b) => a-b); }
   renderSpecTable();
-  spCurrentType = null; openSpecPanel(s.id); spOpener = origOpener;
+  state.spCurrentType = null; openSpecPanel(s.id); state.spOpener = origOpener;
 }
 
 function buildSpecDepPickerList(input, s, listEl) {
   const q = input.value.trim().toLowerCase();
-  const candidates = ProjectData.tasks.filter(c => !s.depIds.includes(c.id));
+  const candidates = state.ProjectData.tasks.filter(c => !s.depIds.includes(c.id));
   const filtered = q ? candidates.filter(c =>
     c.name.toLowerCase().includes(q) || c.wbs.toLowerCase().includes(q) || String(c.id).includes(q)
   ) : candidates;
@@ -2217,22 +2190,22 @@ function buildSpecDepPickerList(input, s, listEl) {
 }
 
 function removeSpecLink(s, taskId) {
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   s.depIds = s.depIds.filter(id => id !== taskId);
   renderSpecTable();
-  spCurrentType = null; openTaskPanel(taskId); spOpener = origOpener;
+  state.spCurrentType = null; openTaskPanel(taskId); state.spOpener = origOpener;
 }
 
 function addSpecLink(s, taskId) {
-  const origOpener = spOpener;
+  const origOpener = state.spOpener;
   if (!s.depIds.includes(taskId)) { s.depIds.push(taskId); s.depIds.sort((a,b) => a-b); }
   renderSpecTable();
-  spCurrentType = null; openTaskPanel(taskId); spOpener = origOpener;
+  state.spCurrentType = null; openTaskPanel(taskId); state.spOpener = origOpener;
 }
 
 function buildSpecLinkPickerList(input, t, listEl) {
   const q = input.value.trim().toLowerCase();
-  const candidates = ProjectData.specs.filter(s => !s.depIds.includes(t.id));
+  const candidates = state.ProjectData.specs.filter(s => !s.depIds.includes(t.id));
   const filtered = q ? candidates.filter(s =>
     s.name.toLowerCase().includes(q) || s.id.toLowerCase().includes(q) || s.category.toLowerCase().includes(q)
   ) : candidates;
@@ -2262,11 +2235,11 @@ function startRowDrag(e, visIdx, t, rowEl) {
   const lb = document.getElementById('gantt-left-body');
   const taskRowCount = lb.querySelectorAll('.gantt-row').length;
 
-  rowDrag.active   = true;
-  rowDrag.srcIdx   = visIdx;
-  rowDrag.dropIdx  = visIdx;
-  rowDrag.rowCount = taskRowCount;
-  rowDrag.lb       = lb;
+  state.rowDrag.active   = true;
+  state.rowDrag.srcIdx   = visIdx;
+  state.rowDrag.dropIdx  = visIdx;
+  state.rowDrag.rowCount = taskRowCount;
+  state.rowDrag.lb       = lb;
 
   const ghost = document.createElement('div');
   ghost.className = 'gantt-row-ghost';
@@ -2274,50 +2247,50 @@ function startRowDrag(e, visIdx, t, rowEl) {
   ghost.style.left = (e.clientX + 10) + 'px';
   ghost.style.top  = (e.clientY - 17) + 'px';
   document.body.appendChild(ghost);
-  rowDrag.ghost = ghost;
+  state.rowDrag.ghost = ghost;
 
   const indicator = document.createElement('div');
   indicator.style.cssText = 'position:fixed;z-index:801;height:2px;background:var(--accent);pointer-events:none;display:none';
   document.body.appendChild(indicator);
-  rowDrag.indicator = indicator;
+  state.rowDrag.indicator = indicator;
 
   e.preventDefault();
 }
 
 function doRowDragMove(e) {
-  if (!rowDrag.active) return;
-  const lb = rowDrag.lb;
+  if (!state.rowDrag.active) return;
+  const lb = state.rowDrag.lb;
 
-  rowDrag.ghost.style.left = (e.clientX + 10) + 'px';
-  rowDrag.ghost.style.top  = (e.clientY - 17) + 'px';
+  state.rowDrag.ghost.style.left = (e.clientX + 10) + 'px';
+  state.rowDrag.ghost.style.top  = (e.clientY - 17) + 'px';
 
   const lbRect  = lb.getBoundingClientRect();
   const relY    = e.clientY - lbRect.top + lb.scrollTop;
-  const dropIdx = Math.min(Math.max(0, Math.round(relY / RH)), rowDrag.rowCount);
-  rowDrag.dropIdx = dropIdx;
+  const dropIdx = Math.min(Math.max(0, Math.round(relY / RH)), state.rowDrag.rowCount);
+  state.rowDrag.dropIdx = dropIdx;
 
   const indicatorY = lbRect.top + dropIdx * RH - lb.scrollTop;
-  rowDrag.indicator.style.left    = lbRect.left + 'px';
-  rowDrag.indicator.style.width   = lbRect.width + 'px';
-  rowDrag.indicator.style.top     = indicatorY + 'px';
-  rowDrag.indicator.style.display = 'block';
+  state.rowDrag.indicator.style.left    = lbRect.left + 'px';
+  state.rowDrag.indicator.style.width   = lbRect.width + 'px';
+  state.rowDrag.indicator.style.top     = indicatorY + 'px';
+  state.rowDrag.indicator.style.display = 'block';
 }
 
 function endRowDrag(e) {
-  if (!rowDrag.active) return;
-  rowDrag.active = false;
-  if (rowDrag.ghost)     { rowDrag.ghost.remove();     rowDrag.ghost     = null; }
-  if (rowDrag.indicator) { rowDrag.indicator.remove(); rowDrag.indicator = null; }
+  if (!state.rowDrag.active) return;
+  state.rowDrag.active = false;
+  if (state.rowDrag.ghost)     { state.rowDrag.ghost.remove();     state.rowDrag.ghost     = null; }
+  if (state.rowDrag.indicator) { state.rowDrag.indicator.remove(); state.rowDrag.indicator = null; }
 
-  const srcIdx  = rowDrag.srcIdx;
-  const dropIdx = rowDrag.dropIdx;
+  const srcIdx  = state.rowDrag.srcIdx;
+  const dropIdx = state.rowDrag.dropIdx;
 
   if (dropIdx === srcIdx || dropIdx === srcIdx + 1) { renderGantt(); return; }
 
-  const visibleTasks = ProjectData.tasks.filter(t => {
+  const visibleTasks = state.ProjectData.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
-    if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
-    if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
+    if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
+    if (state.ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== state.ganttTeamFilter) return false;
     return true;
   });
 
@@ -2326,20 +2299,20 @@ function endRowDrag(e) {
 
   pushUndo('task reorder');
 
-  const origIdx = ProjectData.tasks.indexOf(dragged);
-  ProjectData.tasks.splice(origIdx, 1);
+  const origIdx = state.ProjectData.tasks.indexOf(dragged);
+  state.ProjectData.tasks.splice(origIdx, 1);
 
   const adjustedDrop  = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
-  const updatedVisible = ProjectData.tasks.filter(t => {
+  const updatedVisible = state.ProjectData.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
-    if (ganttPhaseFilter !== 'all' && ph !== ganttPhaseFilter) return false;
-    if (ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== ganttTeamFilter) return false;
+    if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
+    if (state.ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== state.ganttTeamFilter) return false;
     return true;
   });
   const targetTask = updatedVisible[adjustedDrop];
-  const targetIdx  = targetTask ? ProjectData.tasks.indexOf(targetTask) : ProjectData.tasks.length;
-  ProjectData.tasks.splice(targetIdx, 0, dragged);
-  recalcWBS(ProjectData.tasks);
+  const targetIdx  = targetTask ? state.ProjectData.tasks.indexOf(targetTask) : state.ProjectData.tasks.length;
+  state.ProjectData.tasks.splice(targetIdx, 0, dragged);
+  recalcWBS(state.ProjectData.tasks);
   renderGantt();
   showToast('Task reordered', applyUndo, 5000);
 }
@@ -2353,7 +2326,7 @@ function addNewSpec() {
     ? filterEl.value
     : (Object.keys(SPEC_COLORS)[0] || 'General');
   const prefix = activeCat.slice(0, 2).toUpperCase();
-  const existingNums = ProjectData.specs
+  const existingNums = state.ProjectData.specs
     .filter(s => s.id.toUpperCase().startsWith(prefix))
     .map(s => { const m = s.id.match(/(\d+)$/); return m ? parseInt(m[1]) : 0; });
   const nextNum = existingNums.length ? Math.max(...existingNums) + 1 : 1;
@@ -2363,7 +2336,7 @@ function addNewSpec() {
     value: '', units: '—', status: 'TBD', group: '', notes: '', depIds: []
   };
   pushUndo('spec added');
-  ProjectData.specs.push(newSpec);
+  state.ProjectData.specs.push(newSpec);
   renderSpecs();
   openSpecPanel(newId);
   showToast('Specification added', applyUndo, 5000);
@@ -2373,7 +2346,7 @@ function addNewSpec() {
 
 /** @param {number} taskId - Two-tap confirm delete; pushes undo, removes task and all dep references. */
 function deleteTask(taskId) {
-  if (!ProjectData.tasks.find(t => t.id === taskId)) return;
+  if (!state.ProjectData.tasks.find(t => t.id === taskId)) return;
   const btn = document.getElementById('sp-delete-task-btn');
   if (btn && btn.dataset.confirming !== '1') {
     btn.dataset.confirming = '1';
@@ -2388,10 +2361,10 @@ function deleteTask(taskId) {
     return;
   }
   pushUndo('task deleted');
-  ProjectData.tasks = ProjectData.tasks.filter(t => t.id !== taskId);
-  ProjectData.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== taskId); });
-  ProjectData.specs.forEach(s => { s.depIds = s.depIds.filter(d => d !== taskId); });
-  recalcWBS(ProjectData.tasks);
+  state.ProjectData.tasks = state.ProjectData.tasks.filter(t => t.id !== taskId);
+  state.ProjectData.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== taskId); });
+  state.ProjectData.specs.forEach(s => { s.depIds = s.depIds.filter(d => d !== taskId); });
+  recalcWBS(state.ProjectData.tasks);
   safeRender(renderGantt, 'Gantt Chart');
   safeRender(renderSpecs, 'Specifications');
   closeSidePanel();
@@ -2400,7 +2373,7 @@ function deleteTask(taskId) {
 
 /** @param {string} specId - Two-tap confirm delete; pushes undo, removes the spec. */
 function deleteSpec(specId) {
-  if (!ProjectData.specs.find(s => s.id === specId)) return;
+  if (!state.ProjectData.specs.find(s => s.id === specId)) return;
   const btn = document.getElementById('sp-delete-spec-btn');
   if (btn && btn.dataset.confirming !== '1') {
     btn.dataset.confirming = '1';
@@ -2415,7 +2388,7 @@ function deleteSpec(specId) {
     return;
   }
   pushUndo('spec deleted');
-  ProjectData.specs = ProjectData.specs.filter(s => s.id !== specId);
+  state.ProjectData.specs = state.ProjectData.specs.filter(s => s.id !== specId);
   safeRender(renderSpecs, 'Specifications');
   closeSidePanel();
   showToast('Specification deleted', applyUndo, 5000);
@@ -2423,22 +2396,22 @@ function deleteSpec(specId) {
 
 /** Appends a new blank task to the last WBS phase, selects a team from existing unique teams. */
 function addGanttTask() {
-  if (!ProjectData.tasks.length) return;
-  const lastTask = ProjectData.tasks[ProjectData.tasks.length - 1];
+  if (!state.ProjectData.tasks.length) return;
+  const lastTask = state.ProjectData.tasks[state.ProjectData.tasks.length - 1];
   const lastPhase = parseInt(String(lastTask.wbs).split('.')[0]) || 1;
-  const phaseTasks = ProjectData.tasks.filter(t => parseInt(String(t.wbs).split('.')[0]) === lastPhase && t.wbs.includes('.') && !t.wbs.endsWith('.0'));
+  const phaseTasks = state.ProjectData.tasks.filter(t => parseInt(String(t.wbs).split('.')[0]) === lastPhase && t.wbs.includes('.') && !t.wbs.endsWith('.0'));
   const nextNum = phaseTasks.length + 1;
   const newWbs = lastPhase + '.' + nextNum;
 
-  const teams = [...new Set(ProjectData.tasks.map(t => t.team).filter(Boolean))].sort();
+  const teams = [...new Set(state.ProjectData.tasks.map(t => t.team).filter(Boolean))].sort();
   const team = teams[0] || '';
 
-  const dates = ProjectData.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
+  const dates = state.ProjectData.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
   const progStart = new Date(Math.min(...dates));
-  const taskStart = snapToWorkDay(progStart, ganttWorkDays, 1);
-  const taskEnd   = snapToWorkDay(addDays(taskStart, 4), ganttWorkDays, 1);
+  const taskStart = snapToWorkDay(progStart, state.ganttWorkDays, 1);
+  const taskEnd   = snapToWorkDay(addDays(taskStart, 4), state.ganttWorkDays, 1);
 
-  const newId = Math.max(...ProjectData.tasks.map(t => t.id), 0) + 1;
+  const newId = Math.max(...state.ProjectData.tasks.map(t => t.id), 0) + 1;
   const newTask = {
     id: newId, wbs: newWbs,
     name: 'New Task ' + newId,
@@ -2446,24 +2419,24 @@ function addGanttTask() {
     start: taskStart, end: taskEnd,
     pct: 0, deps: [], team, milestone: false, notes: '',
   };
-  ProjectData.tasks.push(newTask);
+  state.ProjectData.tasks.push(newTask);
   renderGantt();
   const phaseNames = getPhaseNames();
   showToast('Task added to ' + (phaseNames[lastPhase] || ('Phase ' + lastPhase)) + '.');
 }
 
 function resetGanttToImported() {
-  if (!originalTasks.length) return;
-  const snapshot = ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
-  ProjectData.tasks = originalTasks.map(t => ({ ...t, deps: [...t.deps] }));
+  if (!state.originalTasks.length) return;
+  const snapshot = state.ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
+  state.ProjectData.tasks = state.originalTasks.map(t => ({ ...t, deps: [...t.deps] }));
   renderGantt();
-  showToast('Schedule reset to imported state.', () => { ProjectData.tasks = snapshot; renderGantt(); }, 30000);
+  showToast('Schedule reset to imported state.', () => { state.ProjectData.tasks = snapshot; renderGantt(); }, 30000);
 }
 
 // ─── SAVE TO EXCEL ────────────────────────────────────────────────────────────
 function saveToExcel() {
-  const wb = buildWorkbook(ProjectData, getWeightUnit());
-  const title = (ProjectData.info['Project Title'] || 'Dashboard').replace(/[/\\?%*:|"<>]/g, '-');
+  const wb = buildWorkbook(state.ProjectData, getWeightUnit());
+  const title = (state.ProjectData.info['Project Title'] || 'Dashboard').replace(/[/\\?%*:|"<>]/g, '-');
   const dateStr = new Date().toISOString().slice(0,10);
   XLSX.writeFile(wb, `${title} - ${dateStr}.xlsx`);
   clearDraft();
@@ -2488,7 +2461,7 @@ document.getElementById('gantt-calendar').addEventListener('mouseleave', () => {
 function showTooltip(t, e) {
   const color = ganttColor(t.category);
   const depNames = t.deps.map(id => {
-    const dep = ProjectData.tasks.find(d => d.id === id);
+    const dep = state.ProjectData.tasks.find(d => d.id === id);
     return dep ? `Task ${id}: ${esc(dep.name)}` : `Task ${id}`;
   });
   tooltip.innerHTML = `
@@ -2525,7 +2498,7 @@ document.addEventListener('mousemove', e => {
 function getPhaseNames() {
   const names = {};
   for (let i = 1; i <= 20; i++) {
-    const v = ProjectData.info['Phase ' + i + ' Name'];
+    const v = state.ProjectData.info['Phase ' + i + ' Name'];
     if (v) names[i] = String(v);
   }
   return names;
@@ -2557,13 +2530,13 @@ function renderProgDash() {
   const body = document.getElementById('prog-body');
   if (!body) return;
 
-  const totalTasks = ProjectData.tasks.length;
+  const totalTasks = state.ProjectData.tasks.length;
   const overallPct = totalTasks
-    ? Math.round(ProjectData.tasks.reduce((s, t) => s + (t.pct || 0), 0) / totalTasks)
+    ? Math.round(state.ProjectData.tasks.reduce((s, t) => s + (t.pct || 0), 0) / totalTasks)
     : 0;
-  const doneTasks = ProjectData.tasks.filter(t => t.pct >= 100).length;
+  const doneTasks = state.ProjectData.tasks.filter(t => t.pct >= 100).length;
 
-  const milestones = ProjectData.tasks.filter(t => t.milestone);
+  const milestones = state.ProjectData.tasks.filter(t => t.milestone);
   const milestoneDone = milestones.filter(t => t.pct >= 100).length;
   const nextMs = milestones
     .filter(t => t.pct < 100)
@@ -2581,14 +2554,14 @@ function renderProgDash() {
     daysToFinal > 0 ? `${daysToFinal} days remaining` :
     daysToFinal === 0 ? 'Today' : 'Completed';
 
-  const overdueTasks = ProjectData.tasks.filter(t => t.end && t.end < TODAY && (t.pct || 0) < 100 && !t.milestone).length;
+  const overdueTasks = state.ProjectData.tasks.filter(t => t.end && t.end < TODAY && (t.pct || 0) < 100 && !t.milestone).length;
 
-  const specAchieved = ProjectData.specs.filter(s => s.status === 'Achieved').length;
-  const specTarget   = ProjectData.specs.filter(s => s.status === 'Target').length;
-  const specTBD      = ProjectData.specs.filter(s => s.status === 'TBD').length;
+  const specAchieved = state.ProjectData.specs.filter(s => s.status === 'Achieved').length;
+  const specTarget   = state.ProjectData.specs.filter(s => s.status === 'Target').length;
+  const specTBD      = state.ProjectData.specs.filter(s => s.status === 'TBD').length;
 
   const phaseMap = {};
-  ProjectData.tasks.forEach(t => {
+  state.ProjectData.tasks.forEach(t => {
     const ph = parseInt(String(t.wbs).split('.')[0]) || 1;
     if (!phaseMap[ph]) phaseMap[ph] = [];
     phaseMap[ph].push(t);
@@ -2597,7 +2570,7 @@ function renderProgDash() {
 
   // Team workload: track both count and task list
   const teamTaskMap = {};
-  ProjectData.tasks.forEach(t => {
+  state.ProjectData.tasks.forEach(t => {
     const team = t.team || 'Unassigned';
     if (!teamTaskMap[team]) teamTaskMap[team] = [];
     teamTaskMap[team].push(t);
@@ -2691,7 +2664,7 @@ function renderProgDash() {
           <div class="spec-pill target"><div class="pill-count">${specTarget}</div>Target</div>
           <div class="spec-pill tbd"><div class="pill-count">${specTBD}</div>TBD</div>
         </div>
-        <div style="margin-top:14px;font-size:0.8rem;color:var(--muted)">${ProjectData.specs.length} specifications total</div>
+        <div style="margin-top:14px;font-size:0.8rem;color:var(--muted)">${state.ProjectData.specs.length} specifications total</div>
       </div>
     </div>
 
@@ -2706,7 +2679,7 @@ function renderProgDash() {
 }
 
 // ─── WEIGHT BUDGET ────────────────────────────────────────────────────────────
-function getWeightUnit() { return String(ProjectData.info['Weight Unit'] || 'lb'); }
+function getWeightUnit() { return String(state.ProjectData.info['Weight Unit'] || 'lb'); }
 function showWtTooltip(e, el) {
   const est    = Number(el.dataset.est);
   const tgt    = Number(el.dataset.tgt);
@@ -2730,13 +2703,13 @@ function hideWtTooltip() { tooltip.style.display = 'none'; }
 
 function renderWeightBudget() {
   const body = document.getElementById('weight-body');
-  if (!body || !ProjectData.weights.length) return;
+  if (!body || !state.ProjectData.weights.length) return;
 
   const unit        = getWeightUnit();
-  const totalTarget = ProjectData.weights.reduce((s, w) => s + w.target, 0);
-  const totalEst    = ProjectData.weights.reduce((s, w) => s + w.estimated, 0);
+  const totalTarget = state.ProjectData.weights.reduce((s, w) => s + w.target, 0);
+  const totalEst    = state.ProjectData.weights.reduce((s, w) => s + w.estimated, 0);
   const totalMargin = totalTarget - totalEst;
-  const maxVal      = Math.max(...ProjectData.weights.map(w => Math.max(w.target, w.estimated)), 1);
+  const maxVal      = Math.max(...state.ProjectData.weights.map(w => Math.max(w.target, w.estimated)), 1);
   const marginColor = totalMargin >= 0 ? '#3fb950' : '#d29922';
   const marginSign  = totalMargin >= 0 ? '+' : '';
   const marginPct   = Math.round(Math.abs(totalMargin) / totalTarget * 100);
@@ -2769,7 +2742,7 @@ function renderWeightBudget() {
       </div>
       ${(() => {
         const grouped = {};
-        ProjectData.weights.forEach(w => {
+        state.ProjectData.weights.forEach(w => {
           const g = w.group || 'Other';
           if (!grouped[g]) grouped[g] = [];
           grouped[g].push(w);
@@ -2803,7 +2776,7 @@ function renderWeightBudget() {
             const barColor = margin < 0 ? '#d29922' : '#3fb950';
             const mSign    = margin >= 0 ? '+' : '';
             const mClass   = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
-            return `<div class="wt-row" style="padding-left:12px;cursor:pointer" data-wt-idx="${ProjectData.weights.indexOf(w)}" title="Click to edit">
+            return `<div class="wt-row" style="padding-left:12px;cursor:pointer" data-wt-idx="${state.ProjectData.weights.indexOf(w)}" title="Click to edit">
               <div title="${esc(w.subsystem)} (${esc(w.group)})">${esc(w.subsystem)}</div>
               <div class="wt-bar-wrap" style="cursor:crosshair"
                 data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}">
@@ -2846,11 +2819,11 @@ function renderWeightBudget() {
 }
 
 // ─── WEIGHT BUDGET EDITING ────────────────────────────────────────────────────
-/** @param {number} idx - Index in ProjectData.weights; opens an edit form in the side panel. */
+/** @param {number} idx - Index in state.ProjectData.weights; opens an edit form in the side panel. */
 function openWeightPanel(idx) {
-  if (spCurrentType === 'weight' && spCurrentId === idx) { closeSidePanel(); return; }
-  spOpener = document.activeElement;
-  const w = ProjectData.weights[idx];
+  if (state.spCurrentType === 'weight' && state.spCurrentId === idx) { closeSidePanel(); return; }
+  state.spOpener = document.activeElement;
+  const w = state.ProjectData.weights[idx];
   if (!w) return;
   document.getElementById('sp-title').textContent = w.subsystem || 'Weight Row';
 
@@ -2895,13 +2868,13 @@ function openWeightPanel(idx) {
   spBody.innerHTML = html;
   document.getElementById('wt-save-btn').addEventListener('click', () => saveWeightRow(idx));
   document.getElementById('wt-delete-btn').addEventListener('click', () => deleteWeightRow(idx));
-  spCurrentType = 'weight'; spCurrentId = idx;
+  state.spCurrentType = 'weight'; state.spCurrentId = idx;
   showSidePanel();
 }
 
 function saveWeightRow(idx) {
   pushUndo('edit weight row');
-  const w = ProjectData.weights[idx];
+  const w = state.ProjectData.weights[idx];
   w.subsystem = document.getElementById('wt-edit-subsystem').value.trim() || w.subsystem;
   w.group     = document.getElementById('wt-edit-group').value.trim();
   w.target    = parseFloat(document.getElementById('wt-edit-target').value) || 0;
@@ -2922,19 +2895,19 @@ function deleteWeightRow(idx) {
     return;
   }
   pushUndo('delete weight row');
-  ProjectData.weights.splice(idx, 1);
+  state.ProjectData.weights.splice(idx, 1);
   closeSidePanel();
-  if (!ProjectData.weights.length) document.getElementById('weight-tab-btn').style.display = 'none';
+  if (!state.ProjectData.weights.length) document.getElementById('weight-tab-btn').style.display = 'none';
   else safeRender(renderWeightBudget, 'Weight Budget');
   showToast('Weight row deleted · undo with Ctrl+Z');
 }
 
 function addWeightRow() {
   pushUndo('add weight row');
-  ProjectData.weights.push({ subsystem: 'New Subsystem', group: 'Other', target: 0, estimated: 0, status: 'TBD', notes: '' });
+  state.ProjectData.weights.push({ subsystem: 'New Subsystem', group: 'Other', target: 0, estimated: 0, status: 'TBD', notes: '' });
   document.getElementById('weight-tab-btn').style.display = '';
   safeRender(renderWeightBudget, 'Weight Budget');
-  openWeightPanel(ProjectData.weights.length - 1);
+  openWeightPanel(state.ProjectData.weights.length - 1);
 }
 
 // ─── SPECS ────────────────────────────────────────────────────────────────────
@@ -2942,7 +2915,7 @@ function addWeightRow() {
 function renderSpecs() {
   const sel = document.getElementById('specs-filter');
   sel.innerHTML = '<option value="all">All Categories</option>';
-  [...new Set(ProjectData.specs.map(s => s.category))].forEach(c => {
+  [...new Set(state.ProjectData.specs.map(s => s.category))].forEach(c => {
     const o = document.createElement('option'); o.value = c; o.textContent = c;
     sel.appendChild(o);
   });
@@ -2953,7 +2926,7 @@ function renderSpecs() {
 
 function specStatusRank(s) {
   if (s.status === 'TBD') {
-    const risk = s.depIds.some(id => { const t = ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY; });
+    const risk = s.depIds.some(id => { const t = state.ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY; });
     return risk ? 0 : 1;
   }
   return s.status === 'Target' ? 2 : s.status === 'Achieved' ? 3 : 4;
@@ -2966,21 +2939,21 @@ function setSpecsCategoryFilter(val) {
 function clearSpecsFilters() {
   document.getElementById('specs-filter').value = 'all';
   document.getElementById('specs-search').value = '';
-  specSearchQuery = '';
+  state.specSearchQuery = '';
   renderSpecTable();
 }
 
 function setSpecSort(col) {
-  if (specSortState.col === col) specSortState.dir = specSortState.dir === 'asc' ? 'desc' : 'asc';
-  else { specSortState.col = col; specSortState.dir = 'asc'; }
+  if (state.specSortState.col === col) state.specSortState.dir = state.specSortState.dir === 'asc' ? 'desc' : 'asc';
+  else { state.specSortState.col = col; state.specSortState.dir = 'asc'; }
   renderSpecTable();
 }
 
 function renderSpecTable() {
   const cat  = document.getElementById('specs-filter').value;
-  let list = cat === 'all' ? ProjectData.specs : ProjectData.specs.filter(s => s.category === cat);
-  if (specSearchQuery.trim()) {
-    const q = specSearchQuery.trim().toLowerCase();
+  let list = cat === 'all' ? state.ProjectData.specs : state.ProjectData.specs.filter(s => s.category === cat);
+  if (state.specSearchQuery.trim()) {
+    const q = state.specSearchQuery.trim().toLowerCase();
     list = list.filter(s =>
       s.name.toLowerCase().includes(q) ||
       s.id.toLowerCase().includes(q) ||
@@ -2994,8 +2967,8 @@ function renderSpecTable() {
   const SORT_COLS   = ['id','name','value','units','status','group','notes','deps'];
   const SORT_LABELS = ['Spec ID','Specification','Value','Units','Status','Responsible Group','Notes','Dep. Tasks'];
   const thHtml = SORT_COLS.map((c, i) => {
-    const active  = specSortState.col === c;
-    const ind     = active ? (specSortState.dir === 'asc' ? '↑' : '↓') : '↕';
+    const active  = state.specSortState.col === c;
+    const ind     = active ? (state.specSortState.dir === 'asc' ? '↑' : '↓') : '↕';
     const indCls  = 'spec-sort-ind' + (active ? ' active' : '');
     const alignSt = c === 'deps' ? ' style="text-align:center"' : '';
     return `<th${alignSt} data-sort-col="${c}">${SORT_LABELS[i]}<span class="${indCls}">${ind}</span></th>`;
@@ -3004,7 +2977,7 @@ function renderSpecTable() {
   const specRow = (s, col) => {
     const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
     const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
-      const t = ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY;
+      const t = state.ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY;
     });
     const riskDesc = hasRisk ? ' — risk: dependent task already started' : '';
     const depText = s.depIds.length
@@ -3023,10 +2996,10 @@ function renderSpecTable() {
   };
 
   let bodyHtml = '';
-  if (specSortState.col) {
+  if (state.specSortState.col) {
     const sorted = [...list].sort((a, b) => {
       let va, vb;
-      switch (specSortState.col) {
+      switch (state.specSortState.col) {
         case 'id':     va = a.id;             vb = b.id;             break;
         case 'name':   va = a.name;           vb = b.name;           break;
         case 'value':  va = a.value;          vb = b.value;          break;
@@ -3038,7 +3011,7 @@ function renderSpecTable() {
         default: return 0;
       }
       const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
-      return specSortState.dir === 'asc' ? cmp : -cmp;
+      return state.specSortState.dir === 'asc' ? cmp : -cmp;
     });
     sorted.forEach(s => {
       const col = SPEC_COLORS[s.category] || { bg:'rgba(88,166,255,.1)', text:'#58a6ff' };
@@ -3057,7 +3030,7 @@ function renderSpecTable() {
   const wrap = document.getElementById('specs-table-wrap');
   if (!list.length) {
     const cat = document.getElementById('specs-filter').value;
-    const hasSearch = specSearchQuery.trim().length > 0;
+    const hasSearch = state.specSearchQuery.trim().length > 0;
     if (cat !== 'all' || hasSearch) {
       wrap.innerHTML = `<div style="padding:24px;color:var(--muted);font-size:0.82rem;text-align:center">No specifications match the current filter. <button class="specs-clear-filter-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:inherit;text-decoration:underline;padding:0">Clear filters</button></div>`;
       wrap.querySelector('.specs-clear-filter-btn').addEventListener('click', clearSpecsFilters);
@@ -3099,20 +3072,20 @@ function renderSpecTable() {
 }
 
 function cycleSpecStatus(specId) {
-  const s = ProjectData.specs.find(s => s.id === specId);
+  const s = state.ProjectData.specs.find(s => s.id === specId);
   if (!s) return;
   const cycle = { 'Achieved': 'Target', 'Target': 'TBD', 'TBD': 'Achieved' };
   s.status = cycle[s.status] || 'TBD';
   renderSpecTable();
-  if (spCurrentType === 'spec' && spCurrentId === specId) openSpecPanel(specId);
+  if (state.spCurrentType === 'spec' && state.spCurrentId === specId) openSpecPanel(specId);
 }
 
 // ─── SIDE PANEL – SPEC ───────────────────────────────────────────────────────
 /** @param {string} specId - Opens the spec detail panel; second call on same ID toggles it closed. */
 function openSpecPanel(specId) {
-  if (spCurrentType === 'spec' && spCurrentId === specId) { closeSidePanel(); return; }
-  spOpener = document.activeElement;
-  const s = ProjectData.specs.find(s => s.id === specId);
+  if (state.spCurrentType === 'spec' && state.spCurrentId === specId) { closeSidePanel(); return; }
+  state.spOpener = document.activeElement;
+  const s = state.ProjectData.specs.find(s => s.id === specId);
   if (!s) return;
   const col = SPEC_COLORS[s.category] || { text:'#58a6ff' };
   document.getElementById('sp-title').textContent = s.name;
@@ -3127,7 +3100,7 @@ function openSpecPanel(specId) {
   </div>`;
 
   const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
-    const t = ProjectData.tasks.find(t => t.id === id);
+    const t = state.ProjectData.tasks.find(t => t.id === id);
     return t && t.start && t.start <= TODAY;
   });
   if (hasRisk) html += `<div class="risk-alert">⚠ BLOCKED RISK — Spec is TBD but dependent task(s) have started</div>`;
@@ -3136,7 +3109,7 @@ function openSpecPanel(specId) {
     html += `<div class="no-deps">No task dependencies linked<br>to this specification.</div>`;
   } else {
     s.depIds.forEach(id => {
-      const t = ProjectData.tasks.find(t => t.id === id);
+      const t = state.ProjectData.tasks.find(t => t.id === id);
       if (!t) {
         html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-spec-dep="${id}" aria-label="Remove task ${id}" title="Remove">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found in Schedule</div></div>`;
         return;
@@ -3196,7 +3169,7 @@ function openSpecPanel(specId) {
   const delSpecBtn = spBody.querySelector('#sp-delete-spec-btn');
   if (delSpecBtn) delSpecBtn.addEventListener('click', () => deleteSpec(s.id));
 
-  spCurrentType = 'spec'; spCurrentId = specId;
+  state.spCurrentType = 'spec'; state.spCurrentId = specId;
   showSidePanel();
 
   // Wire title (sp-title) for name edit
@@ -3213,9 +3186,9 @@ function openSpecPanel(specId) {
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
 /** @param {number} taskId - Opens the task detail panel; second call on same ID toggles it closed. */
 function openTaskPanel(taskId) {
-  if (spCurrentType === 'task' && spCurrentId === taskId) { closeSidePanel(); return; }
-  spOpener = document.activeElement;
-  const t = ProjectData.tasks.find(t => t.id === taskId);
+  if (state.spCurrentType === 'task' && state.spCurrentId === taskId) { closeSidePanel(); return; }
+  state.spOpener = document.activeElement;
+  const t = state.ProjectData.tasks.find(t => t.id === taskId);
   if (!t) return;
   const gc = ganttColor(t.category);
   document.getElementById('sp-title').textContent = t.name;
@@ -3228,8 +3201,8 @@ function openTaskPanel(taskId) {
       ? `<span class="badge badge-target">${t.pct}% In Progress</span>`
       : `<span class="badge badge-tbd">Not Started</span>`;
 
-  const totalWd = countWorkDays(t.start, t.end, ganttWorkDays);
-  const remWd   = workDaysRemaining(t.end, ganttWorkDays, TODAY);
+  const totalWd = countWorkDays(t.start, t.end, state.ganttWorkDays);
+  const remWd   = workDaysRemaining(t.end, state.ganttWorkDays, TODAY);
   let html = `<div class="sp-meta">
     <div class="sp-meta-id">
       <code style="color:${gc}">Task ${t.id}</code> · WBS ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span>
@@ -3247,7 +3220,7 @@ function openTaskPanel(taskId) {
   // Dependencies (tasks this one depends on)
   html += `<div class="sp-section-label">Depends On${t.deps.length ? ` (${t.deps.length})` : ''}</div>`;
   t.deps.forEach(id => {
-    const dep = ProjectData.tasks.find(d => d.id === id);
+    const dep = state.ProjectData.tasks.find(d => d.id === id);
     if (!dep) {
       html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${id}" aria-label="Remove dependency" title="Remove dependency">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`;
       return;
@@ -3268,7 +3241,7 @@ function openTaskPanel(taskId) {
   </div>`;
 
   // Linked specs
-  const linkedSpecs = ProjectData.specs.filter(s => s.depIds.includes(t.id));
+  const linkedSpecs = state.ProjectData.specs.filter(s => s.depIds.includes(t.id));
   html += `<div class="sp-section-label" style="margin-top:16px">Linked Specifications${linkedSpecs.length ? ` (${linkedSpecs.length})` : ''}</div>`;
   if (!linkedSpecs.length) {
     html += `<div class="no-deps">No specifications linked<br>to this task.</div>`;
@@ -3324,7 +3297,7 @@ function openTaskPanel(taskId) {
   spBody.querySelectorAll('[data-rm-spec-link]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
-      const spec = ProjectData.specs.find(s => s.id === btn.dataset.rmSpecLink);
+      const spec = state.ProjectData.specs.find(s => s.id === btn.dataset.rmSpecLink);
       if (spec) removeSpecLink(spec, t.id);
     });
   });
@@ -3336,16 +3309,16 @@ function openTaskPanel(taskId) {
   const delTaskBtn = spBody.querySelector('#sp-delete-task-btn');
   if (delTaskBtn) delTaskBtn.addEventListener('click', () => deleteTask(t.id));
 
-  spCurrentType = 'task'; spCurrentId = taskId;
+  state.spCurrentType = 'task'; state.spCurrentId = taskId;
   showSidePanel();
 }
 
 // ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
 /** @param {string} name - Person's name key; opens their profile panel or toggles it closed. */
 function openOrgPanel(name) {
-  if (spCurrentType === 'org' && spCurrentId === name) { closeSidePanel(); return; }
-  spOpener = document.activeElement;
-  const person = ProjectData.org.find(p => p.name === name);
+  if (state.spCurrentType === 'org' && state.spCurrentId === name) { closeSidePanel(); return; }
+  state.spOpener = document.activeElement;
+  const person = state.ProjectData.org.find(p => p.name === name);
   if (!person) return;
   const col = teamColor(person.team);
   document.getElementById('sp-title').textContent = person.name;
@@ -3358,7 +3331,7 @@ function openOrgPanel(name) {
   </div>`;
 
   // Direct reports
-  const reports = ProjectData.org.filter(p => p.reportsTo.includes(name));
+  const reports = state.ProjectData.org.filter(p => p.reportsTo.includes(name));
   if (reports.length) {
     html += `<div class="sp-section-label">Direct Reports (${reports.length})</div>`;
     reports.forEach(r => {
@@ -3372,7 +3345,7 @@ function openOrgPanel(name) {
   }
 
   // Tasks owned by this person's team
-  const myTasks = ProjectData.tasks.filter(t => t.team === person.team);
+  const myTasks = state.ProjectData.tasks.filter(t => t.team === person.team);
   if (myTasks.length) {
     html += `<div class="sp-section-label" style="margin-top:16px">Team Tasks (${myTasks.length})</div>`;
     myTasks.forEach(t => {
@@ -3403,19 +3376,19 @@ function openOrgPanel(name) {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
   spBody.querySelector('#org-edit-person-btn').addEventListener('click', () => openOrgEditPanel(name));
-  spCurrentType = 'org'; spCurrentId = name;
+  state.spCurrentType = 'org'; state.spCurrentId = name;
   showSidePanel();
 }
 
 // ─── ORG CHART EDITING ────────────────────────────────────────────────────────
 /** @param {string|null} name - Person's current name, or null to create a new person. */
 function openOrgEditPanel(name) {
-  const person = name ? ProjectData.org.find(p => p.name === name) : null;
+  const person = name ? state.ProjectData.org.find(p => p.name === name) : null;
   const isNew  = !person;
-  spOpener = spOpener || document.activeElement;
+  state.spOpener = state.spOpener || document.activeElement;
   document.getElementById('sp-title').textContent = isNew ? 'Add Person' : `Edit: ${person.name}`;
 
-  const allTeams = [...new Set(ProjectData.org.map(p => p.team).filter(Boolean))].sort();
+  const allTeams = [...new Set(state.ProjectData.org.map(p => p.team).filter(Boolean))].sort();
   const teamDl   = allTeams.map(t => `<option>${esc(t)}</option>`).join('');
 
   const html = `<div class="sp-meta" style="padding:14px 14px 4px">
@@ -3457,7 +3430,7 @@ function openOrgEditPanel(name) {
     document.getElementById('org-delete-btn').addEventListener('click', () => deleteOrgPerson(name));
   }
 
-  if (!spCurrentType) { spCurrentType = 'org'; spCurrentId = name; showSidePanel(); }
+  if (!state.spCurrentType) { state.spCurrentType = 'org'; state.spCurrentId = name; showSidePanel(); }
 }
 
 function saveOrgPerson(oldName) {
@@ -3471,19 +3444,19 @@ function saveOrgPerson(oldName) {
   pushUndo(oldName ? 'edit org person' : 'add org person');
 
   if (oldName) {
-    const person = ProjectData.org.find(p => p.name === oldName);
+    const person = state.ProjectData.org.find(p => p.name === oldName);
     if (!person) return;
     if (newName !== oldName) {
-      ProjectData.org.forEach(p => { p.reportsTo = p.reportsTo.map(r => r === oldName ? newName : r); });
+      state.ProjectData.org.forEach(p => { p.reportsTo = p.reportsTo.map(r => r === oldName ? newName : r); });
     }
     person.name = newName; person.title = newTitle; person.team = newTeam;
     person.reportsTo = newReports; person.email = newEmail;
   } else {
-    ProjectData.org.push({ name: newName, title: newTitle, team: newTeam, reportsTo: newReports, email: newEmail });
+    state.ProjectData.org.push({ name: newName, title: newTitle, team: newTeam, reportsTo: newReports, email: newEmail });
     document.getElementById('org-tab-btn').style.display = '';
   }
 
-  spCurrentType = null;
+  state.spCurrentType = null;
   safeRender(renderOrgChart, 'Org Chart');
   openOrgPanel(newName);
   showToast(oldName ? 'Person updated' : `${newName} added`);
@@ -3498,10 +3471,10 @@ function deleteOrgPerson(name) {
     return;
   }
   pushUndo('delete org person');
-  ProjectData.org = ProjectData.org.filter(p => p.name !== name);
-  ProjectData.org.forEach(p => { p.reportsTo = p.reportsTo.filter(r => r !== name); });
+  state.ProjectData.org = state.ProjectData.org.filter(p => p.name !== name);
+  state.ProjectData.org.forEach(p => { p.reportsTo = p.reportsTo.filter(r => r !== name); });
   closeSidePanel();
-  if (!ProjectData.org.length) document.getElementById('org-tab-btn').style.display = 'none';
+  if (!state.ProjectData.org.length) document.getElementById('org-tab-btn').style.display = 'none';
   else safeRender(renderOrgChart, 'Org Chart');
   showToast('Person deleted · undo with Ctrl+Z');
 }
@@ -3509,17 +3482,17 @@ function deleteOrgPerson(name) {
 // ─── PROJECT INFO EDITING ─────────────────────────────────────────────────────
 /** Opens the project info editor in the side panel. Second call closes it (toggle). */
 function openInfoPanel() {
-  if (spCurrentType === 'info') { closeSidePanel(); return; }
-  spOpener = document.activeElement;
+  if (state.spCurrentType === 'info') { closeSidePanel(); return; }
+  state.spOpener = document.activeElement;
   document.getElementById('sp-title').textContent = 'Project Info';
 
   const STANDARD = ['Project Title','Project Subtitle','File Administrator','Program Start','Program End','Work Days','Weight Unit'];
   const PHASES   = Array.from({ length: 10 }, (_, i) => `Phase ${i + 1} Name`);
-  const extraKeys = Object.keys(ProjectData.info).filter(k => !STANDARD.includes(k) && !PHASES.includes(k));
+  const extraKeys = Object.keys(state.ProjectData.info).filter(k => !STANDARD.includes(k) && !PHASES.includes(k));
 
   const field = (key) => `<div class="sp-form-group" data-info-key="${esc(key)}">
     <label class="sp-form-label">${esc(key)}</label>
-    <input class="sp-form-input info-edit-input" type="text" value="${esc(String(ProjectData.info[key] || ''))}">
+    <input class="sp-form-input info-edit-input" type="text" value="${esc(String(state.ProjectData.info[key] || ''))}">
   </div>`;
 
   let html = `<div class="sp-meta" style="padding:14px 14px 4px">
@@ -3542,7 +3515,7 @@ function openInfoPanel() {
   const spBody = document.getElementById('sp-body');
   spBody.innerHTML = html;
   document.getElementById('info-save-btn').addEventListener('click', saveInfoPanel);
-  spCurrentType = 'info'; spCurrentId = null;
+  state.spCurrentType = 'info'; state.spCurrentId = null;
   showSidePanel();
 }
 
@@ -3551,13 +3524,13 @@ function saveInfoPanel() {
   document.querySelectorAll('#sp-body [data-info-key]').forEach(group => {
     const key = group.dataset.infoKey;
     const val = group.querySelector('.info-edit-input').value.trim();
-    if (val) ProjectData.info[key] = val; else delete ProjectData.info[key];
+    if (val) state.ProjectData.info[key] = val; else delete state.ProjectData.info[key];
   });
-  const wd = ProjectData.info['Work Days'];
-  if (wd) { ganttWorkDays = parseWorkDays(String(wd)); safeSetItem('vh-workdays', JSON.stringify(ganttWorkDays)); }
-  const title    = ProjectData.info['Project Title']      || 'Vehicle Design Dashboard';
-  const subtitle = ProjectData.info['Project Subtitle']   || '';
-  const admin    = ProjectData.info['File Administrator'] || '';
+  const wd = state.ProjectData.info['Work Days'];
+  if (wd) { state.ganttWorkDays = parseWorkDays(String(wd)); safeSetItem('vh-workdays', JSON.stringify(state.ganttWorkDays)); }
+  const title    = state.ProjectData.info['Project Title']      || 'Vehicle Design Dashboard';
+  const subtitle = state.ProjectData.info['Project Subtitle']   || '';
+  const admin    = state.ProjectData.info['File Administrator'] || '';
   const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
   document.getElementById('project-title').textContent    = title;
   document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
@@ -3584,10 +3557,10 @@ function closeSidePanel() {
   document.getElementById('side-panel').classList.remove('open');
   document.getElementById('org-container').style.paddingRight = '';
   document.getElementById('gantt-right-col').style.marginRight = '';
-  spCurrentType = null;
-  spCurrentId   = null;
-  if (spOpener && typeof spOpener.focus === 'function') { spOpener.focus(); }
-  spOpener = null;
+  state.spCurrentType = null;
+  state.spCurrentId   = null;
+  if (state.spOpener && typeof state.spOpener.focus === 'function') { state.spOpener.focus(); }
+  state.spOpener = null;
 }
 
 // ─── ORG CHART ───────────────────────────────────────────────────────────────
@@ -3617,7 +3590,7 @@ function renderOrgChart() {
   const empty = document.getElementById('org-empty');
   const container = document.getElementById('org-container');
 
-  if (!ProjectData.org.length) {
+  if (!state.ProjectData.org.length) {
     empty.style.display = 'flex';
     container.style.display = 'none';
     return;
@@ -3626,11 +3599,11 @@ function renderOrgChart() {
   container.style.display = 'block';
 
   // Build tree (filtered by search query when active; ancestors included to preserve hierarchy)
-  const q = orgSearchQuery.toLowerCase();
-  let orgData = ProjectData.org;
+  const q = state.orgSearchQuery.toLowerCase();
+  let orgData = state.ProjectData.org;
   const matchedNames = new Set();
   if (q) {
-    const matched = ProjectData.org.filter(p =>
+    const matched = state.ProjectData.org.filter(p =>
       [p.name, p.title, p.team, p.email].some(v => v && v.toLowerCase().includes(q)));
     const ancestorSet = new Set();
     matched.forEach(p => {
@@ -3638,13 +3611,13 @@ function renderOrgChart() {
       ancestorSet.add(p.name);
       let cur = p;
       while (cur.reportsTo && cur.reportsTo[0]) {
-        const parent = ProjectData.org.find(x => x.name === cur.reportsTo[0]);
+        const parent = state.ProjectData.org.find(x => x.name === cur.reportsTo[0]);
         if (!parent || ancestorSet.has(parent.name)) break;
         ancestorSet.add(parent.name);
         cur = parent;
       }
     });
-    orgData = ProjectData.org.filter(p => ancestorSet.has(p.name));
+    orgData = state.ProjectData.org.filter(p => ancestorSet.has(p.name));
   }
   const nodeMap = {};
   orgData.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
@@ -3834,30 +3807,30 @@ function renderOrgChart() {
 (function initPersistedState() {
   const savedGanttZoom = parseInt(localStorage.getItem('vh-zoom-gantt'));
   if (!isNaN(savedGanttZoom) && savedGanttZoom >= 0 && savedGanttZoom < ZOOM_STEPS.length) {
-    zoomIdx   = savedGanttZoom;
-    ganttZoom = ZOOM_STEPS[zoomIdx];
-    document.getElementById('zoom-label').textContent = Math.round((ganttZoom / 4) * 100) + '%';
+    state.zoomIdx   = savedGanttZoom;
+    state.ganttZoom = ZOOM_STEPS[state.zoomIdx];
+    document.getElementById('zoom-label').textContent = Math.round((state.ganttZoom / 4) * 100) + '%';
   }
   const savedSpecsZoom = parseInt(localStorage.getItem('vh-zoom-specs'));
   if (!isNaN(savedSpecsZoom) && savedSpecsZoom >= 0 && savedSpecsZoom < SPECS_ZOOM_STEPS.length) {
-    specsZoomIdx = savedSpecsZoom;
-    document.getElementById('specs-zoom-label').textContent = Math.round((SPECS_ZOOM_STEPS[specsZoomIdx] / 0.84) * 100) + '%';
+    state.specsZoomIdx = savedSpecsZoom;
+    document.getElementById('specs-zoom-label').textContent = Math.round((SPECS_ZOOM_STEPS[state.specsZoomIdx] / 0.84) * 100) + '%';
   }
   const savedOrgZoom = parseInt(localStorage.getItem('vh-zoom-org'));
   if (!isNaN(savedOrgZoom) && savedOrgZoom >= 0 && savedOrgZoom < ORG_ZOOM_STEPS.length) {
-    orgZoomIdx = savedOrgZoom;
-    document.getElementById('org-zoom-label').textContent = Math.round(ORG_ZOOM_STEPS[orgZoomIdx] * 100) + '%';
+    state.orgZoomIdx = savedOrgZoom;
+    document.getElementById('org-zoom-label').textContent = Math.round(ORG_ZOOM_STEPS[state.orgZoomIdx] * 100) + '%';
   }
   // Restore CP toggle state
   if (localStorage.getItem('vh-show-cp') === '1') {
-    showCriticalPath = true;
+    state.showCriticalPath = true;
     const cpBtn = document.getElementById('gantt-cp-btn');
     if (cpBtn) cpBtn.setAttribute('aria-pressed', 'true');
   }
 
   // Sync work days button label
   const wdBtn = document.getElementById('workdays-btn');
-  if (wdBtn) wdBtn.textContent = workdaysSummary(ganttWorkDays) + ' ▾';
+  if (wdBtn) wdBtn.textContent = workdaysSummary(state.ganttWorkDays) + ' ▾';
 
   // Wire org search input
   let _orgSearchTimer = null;
@@ -3865,13 +3838,13 @@ function renderOrgChart() {
   const osClear = document.getElementById('org-search-clear');
   if (osInput) {
     osInput.addEventListener('input', () => {
-      orgSearchQuery = osInput.value;
-      if (osClear) osClear.style.display = orgSearchQuery ? 'block' : 'none';
+      state.orgSearchQuery = osInput.value;
+      if (osClear) osClear.style.display = state.orgSearchQuery ? 'block' : 'none';
       clearTimeout(_orgSearchTimer);
       _orgSearchTimer = setTimeout(renderOrgChart, 200);
     });
     osInput.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { orgSearchQuery = ''; osInput.value = ''; if (osClear) osClear.style.display = 'none'; renderOrgChart(); }
+      if (e.key === 'Escape') { state.orgSearchQuery = ''; osInput.value = ''; if (osClear) osClear.style.display = 'none'; renderOrgChart(); }
     });
   }
 
@@ -3881,29 +3854,29 @@ function renderOrgChart() {
   const ssClear = document.getElementById('specs-search-clear');
   if (ssInput) {
     ssInput.addEventListener('input', () => {
-      specSearchQuery = ssInput.value;
-      safeSetItem('vh-filter-specs-search', specSearchQuery);
-      if (ssClear) ssClear.style.display = specSearchQuery ? 'block' : 'none';
+      state.specSearchQuery = ssInput.value;
+      safeSetItem('vh-filter-specs-search', state.specSearchQuery);
+      if (ssClear) ssClear.style.display = state.specSearchQuery ? 'block' : 'none';
       clearTimeout(_specSearchTimer);
       _specSearchTimer = setTimeout(renderSpecTable, 200);
     });
     ssInput.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
-        specSearchQuery = ''; ssInput.value = '';
+        state.specSearchQuery = ''; ssInput.value = '';
         localStorage.removeItem('vh-filter-specs-search');
         if (ssClear) ssClear.style.display = 'none'; renderSpecTable();
       }
     });
     // Restore saved spec search query on page load
     const savedSearch = localStorage.getItem('vh-filter-specs-search') || '';
-    if (savedSearch) { ssInput.value = savedSearch; specSearchQuery = savedSearch; if (ssClear) ssClear.style.display = 'block'; }
+    if (savedSearch) { ssInput.value = savedSearch; state.specSearchQuery = savedSearch; if (ssClear) ssClear.style.display = 'block'; }
   }
 
   // Restore saved Gantt phase and team filter on page load
   const _savedPhase = localStorage.getItem('vh-filter-phase');
-  if (_savedPhase) ganttPhaseFilter = _savedPhase;
+  if (_savedPhase) state.ganttPhaseFilter = _savedPhase;
   const _savedTeam = localStorage.getItem('vh-filter-team');
-  if (_savedTeam) ganttTeamFilter = _savedTeam;
+  if (_savedTeam) state.ganttTeamFilter = _savedTeam;
 })();
 
 // ─── WIRE STATIC UI EVENT HANDLERS ──────────────────────────────────────────
@@ -3941,7 +3914,7 @@ document.getElementById('gantt-reset-btn').addEventListener('click', resetGanttT
 // Specs toolbar
 document.getElementById('specs-filter').addEventListener('change', e => setSpecsCategoryFilter(e.target.value));
 document.getElementById('specs-search-clear').addEventListener('click', () => {
-  specSearchQuery = '';
+  state.specSearchQuery = '';
   document.getElementById('specs-search').value = '';
   renderSpecTable();
 });
@@ -3953,7 +3926,7 @@ document.getElementById('specs-zoom-in-btn').addEventListener('click', () => adj
 document.getElementById('org-zoom-out-btn').addEventListener('click', () => adjustOrgZoom(-1));
 document.getElementById('org-zoom-in-btn').addEventListener('click', () => adjustOrgZoom(1));
 document.getElementById('org-search-clear').addEventListener('click', () => {
-  orgSearchQuery = '';
+  state.orgSearchQuery = '';
   document.getElementById('org-search').value = '';
   renderOrgChart();
 });
@@ -3982,7 +3955,7 @@ document.getElementById('side-panel').addEventListener('keydown', e => {
 
 // Warn before closing with unsaved edits
 window.addEventListener('beforeunload', e => {
-  if (isDirty) { e.preventDefault(); return (e.returnValue = ''); }
+  if (state.isDirty) { e.preventDefault(); return (e.returnValue = ''); }
 });
 
 // Draft restore on page load
@@ -4006,14 +3979,14 @@ window.addEventListener('beforeunload', e => {
       if (t.start) t.start = new Date(t.start);
       if (t.end)   t.end   = new Date(t.end);
     });
-    ProjectData.tasks   = snap.tasks;
-    ProjectData.specs   = snap.specs   || [];
-    ProjectData.org     = snap.org     || [];
-    ProjectData.weights = snap.weights || [];
-    ProjectData.info    = snap.info    || {};
-    originalTasks = ProjectData.tasks.map(t => ({ ...t, deps: [...(t.deps || [])] }));
-    recalcWBS(ProjectData.tasks);
-    isDirty = true;
+    state.ProjectData.tasks   = snap.tasks;
+    state.ProjectData.specs   = snap.specs   || [];
+    state.ProjectData.org     = snap.org     || [];
+    state.ProjectData.weights = snap.weights || [];
+    state.ProjectData.info    = snap.info    || {};
+    state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...(t.deps || [])] }));
+    recalcWBS(state.ProjectData.tasks);
+    state.isDirty = true;
     renderDashboard();
     banner.style.display = 'none';
     showToast('Draft restored — export to Excel to save permanently');

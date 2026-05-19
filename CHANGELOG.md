@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.2.0] — 2026-05-19
+
+### Added
+- `src/state.js` — single exported `state` object holding all cross-module mutable state: `ProjectData`, `originalTasks`, `ganttWorkDays`, `undoStack`, `redoStack`, `isDirty`, `spCurrentType/Id/Opener`, `barDrag`, `barDragPreSnapshot`, `barEls`, `rowDrag`, `ganttPhaseFilter`, `ganttTeamFilter`, `collapsedPhases`, `calDisplayMonth`, `ganttKeyFocusIdx`, `showCriticalPath`, `showGanttLegend`, `zoomIdx`, `ganttZoom`, `specsZoomIdx`, `specSortState`, `specSearchQuery`, `orgZoomIdx`, `orgSearchQuery`
+
+### Changed
+- `src/main.js` imports `state` from `./state.js`; all 26 extracted globals replaced with `state.*` references throughout (~600 substitutions)
+- Implementation-local state (`_draftTimer`, `_exportReminderTimer`, `conflictSet`, `depArrowEls`, pan/toast/modal timers) remains in `src/main.js`
+
+---
+
 ## [3.1.0] — 2026-05-19
 
 ### Added
