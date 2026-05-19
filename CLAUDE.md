@@ -28,6 +28,7 @@ npm test         # Vitest unit tests
 | `src/compute/criticalPath.js` | `computeCriticalPath(tasks)` |
 | `src/compute/conflicts.js` | `computeConflicts(tasks)` |
 | `src/compute/wbs.js` | `recalcWBS(tasks)`, `wouldCreateCycle(tasks, taskId, candidateId)` |
+| `src/parse.js` | `parseInfoSheet`, `parseScheduleSheet`, `parseSpecsSheet`, `parseOrgSheet`, `parseWeightSheet`, `extractWorkDays` |
 | `src/styles.css` | All CSS |
 | `src/main.js` | All app logic (state, rendering, event wiring) |
 

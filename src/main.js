@@ -18,8 +18,10 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v3.0.0'; // also update the HTML comment on line 1 of index.html
-document.getElementById('app-version-label').textContent = APP_VERSION;
+const APP_VERSION = 'v3.0.1'; // also update the HTML comment on line 1 of index.html
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('app-version-label').textContent = APP_VERSION;
+});
 
 
 // Gantt scroll-to-today guard: only auto-scroll once per file load

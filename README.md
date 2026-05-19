@@ -114,7 +114,7 @@ git clone https://github.com/kalkisharma/ProgramDashboardSuite.git
 cd ProgramDashboardSuite
 npm install
 npm run dev       # dev server at http://localhost:5173
-npm test          # run unit tests (52 tests, ~300ms)
+npm test          # run unit tests (69 tests, ~400ms)
 npm run build     # outputs dist/index.html (single inlined file)
 ```
 
@@ -127,6 +127,7 @@ src/
   constants.js             # ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK, …
   colors.js                # color maps + phaseColor(), ganttColor(), teamColor()
   utils.js                 # esc, parseDate, fmt, daysBetween, work-day utilities
+  parse.js                 # pure sheet-parsing functions (no DOM); used by parseWorkbook()
   compute/
     criticalPath.js        # CPM forward/backward pass (pure)
     conflicts.js           # dependency overlap detection (pure)

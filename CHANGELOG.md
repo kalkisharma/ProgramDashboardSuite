@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.1] — 2026-05-19
+
+### Fixed
+- `APP_VERSION` label assignment now runs inside `DOMContentLoaded` instead of at module import time — prevents silent crash if the DOM element is absent
+- `src/parse.js` added to README structure tree and CLAUDE.md module layout table
+- README test count corrected (52 → 69)
+- Added tests for null date handling in `parseScheduleSheet` and alternate column-name fallback in `parseWeightSheet`
+
+---
+
 ## [3.0.0] — 2026-05-18
 
 ### Changed (breaking — new build required)

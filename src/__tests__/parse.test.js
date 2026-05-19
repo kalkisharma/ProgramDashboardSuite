@@ -72,6 +72,16 @@ describe('parseScheduleSheet', () => {
     ]);
     expect(parseScheduleSheet(ws)).toHaveLength(0);
   });
+
+  it('produces null start/end for missing date values', () => {
+    const ws = sheet([
+      ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'],
+      [4, '1.4', 'No Dates', '', null, null, 0, '', '', '', ''],
+    ]);
+    const task = parseScheduleSheet(ws)[0];
+    expect(task.start).toBeNull();
+    expect(task.end).toBeNull();
+  });
 });
 
 describe('parseSpecsSheet', () => {
@@ -112,7 +122,7 @@ describe('parseWeightSheet', () => {
     expect(parseWeightSheet(null)).toEqual([]);
   });
 
-  it('parses a weight row', () => {
+  it('parses a weight row with exact column names', () => {
     const ws = sheet([
       ['Subsystem','Group','Target Weight (lb)','Estimated Weight (lb)','Status','Notes'],
       ['Wing','Structure',120,115,'On Track',''],
@@ -121,6 +131,16 @@ describe('parseWeightSheet', () => {
     expect(weights[0].subsystem).toBe('Wing');
     expect(weights[0].target).toBe(120);
     expect(weights[0].estimated).toBe(115);
+  });
+
+  it('falls back to startsWith match for alternate column names', () => {
+    const ws = sheet([
+      ['Subsystem','Group','Target Weight (kg)','Estimated Weight (kg)','Status','Notes'],
+      ['Fuselage','Frame',200,195,'TBD',''],
+    ]);
+    const weights = parseWeightSheet(ws);
+    expect(weights[0].target).toBe(200);
+    expect(weights[0].estimated).toBe(195);
   });
 });
 
