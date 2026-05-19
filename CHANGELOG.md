@@ -11,10 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - `src/excel.js` module — extracts `buildWorkbook(projectData, weightUnit)` (pure, returns SheetJS workbook, no side effects) and `generateSampleExcel()` (standalone TW-2 sample data generator) from `src/main.js`
 - Function index comment at top of `src/main.js` — maps every major section to its line number for faster navigation
+- `src/__tests__/excel.test.js` — 21 tests for `buildWorkbook`: sheet presence, header rows, field mapping, date formatting, null dates, milestone flag, dangling dep filtering, reportsTo join, weight unit in column headers
 
 ### Changed
 - `saveToExcel()` in `src/main.js` replaced with a thin wrapper calling `buildWorkbook(ProjectData, getWeightUnit())`; all workbook-building logic lives in `src/excel.js`
 - `src/main.js` reduced by ~147 lines (4192 → 4045) after extracting sample-data and workbook-build logic
+- Test suite grows from 71 to 92 tests across 6 files
 
 ---
 

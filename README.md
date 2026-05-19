@@ -114,7 +114,7 @@ git clone https://github.com/kalkisharma/ProgramDashboardSuite.git
 cd ProgramDashboardSuite
 npm install
 npm run dev       # dev server at http://localhost:5173
-npm test          # run unit tests (69 tests, ~400ms)
+npm test          # run unit tests (92 tests, ~500ms)
 npm run build     # outputs dist/index.html (single inlined file)
 ```
 
