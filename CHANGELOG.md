@@ -6,6 +6,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.0.0] — 2026-05-18
+
+### Changed (breaking — new build required)
+- **Vite build system** introduced (`npm run dev` / `npm run build`); output is still a single inlined `dist/index.html` via `vite-plugin-singlefile`; SheetJS now an npm package dependency (`xlsx ^0.18.5`) instead of a vendored script tag
+- `dashboard.html` preserved on `main` as a legacy reference; active development now targets `index.html` + `src/`
+
+### Added
+- **ES module extraction** — pure functions moved out of `src/main.js` into dedicated modules:
+  - `src/constants.js`: `ZOOM_STEPS`, `SPECS_ZOOM_STEPS`, `ORG_ZOOM_STEPS`, `RH`, `HH`, `PHASE_NAMES_FALLBACK`
+  - `src/colors.js`: all color constants and `phaseColor()`, `ganttColor()`, `teamColor()`
+  - `src/utils.js`: `esc`, `parseDate`, `parseDeps`, `fmt`, `daysBetween`, `parseWorkDays`, `isWorkDay`, `addDays`, `snapToWorkDay`, `countWorkDays`, `workDaysRemaining`, `wdDisplay`
+  - `src/compute/criticalPath.js`: `computeCriticalPath(tasks)` — Kahn's topological sort + CPM forward/backward pass
+  - `src/compute/conflicts.js`: `computeConflicts(tasks)` — dependency overlap detection
+  - `src/compute/wbs.js`: `recalcWBS(tasks)`, `wouldCreateCycle(tasks, taskId, candidateId)`
+- **Vitest test suite** (`src/__tests__/`): 52 tests covering all extracted modules; timezone-safe date helpers using local-time constructor; `npm test` / `npm run test:watch`
+- `countWorkDays`, `workDaysRemaining`, `wdDisplay` now take explicit `wds` and `today` parameters (no global reads) — call sites in `src/main.js` pass `ganttWorkDays` and `TODAY`
+- `wouldCreateCycle` now takes `tasks` as first parameter instead of reading `ProjectData.tasks` directly
+
+---
+
 ## [2.7.0] — 2026-05-15
 
 ### Added

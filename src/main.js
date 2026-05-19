@@ -1,5 +1,11 @@
 import * as XLSX from "xlsx";
 import "./styles.css";
+import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from './constants.js';
+import { GANTT_COLORS, PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, ganttColor, teamColor } from './colors.js';
+import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay } from './utils.js';
+import { computeCriticalPath } from './compute/criticalPath.js';
+import { computeConflicts } from './compute/conflicts.js';
+import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
 
 // ─── App State ────────────────────────────────────────────────────────────────
 const ProjectData = { info: {}, tasks: [], specs: [], org: [], weights: [] };
@@ -11,14 +17,9 @@ let spOpener      = null; // element that triggered the side panel open (focus r
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v2.7.0'; // also update the HTML comment on line 1
+const APP_VERSION = 'v3.0.0'; // also update the HTML comment on line 1 of index.html
 document.getElementById('app-version-label').textContent = APP_VERSION;
 
-// Escape user-supplied strings before inserting into innerHTML (XSS prevention)
-function esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 // Gantt scroll-to-today guard: only auto-scroll once per file load
 let ganttScrolledToday = false;
@@ -41,46 +42,7 @@ let orgPanListenersAttached = false;
 let oDragging = false, oDragX = 0, oDragY = 0, oDragSL = 0, oDragST = 0;
 
 // ─── Work Day Utilities ───────────────────────────────────────────────────────
-function parseWorkDays(str) {
-  const map = { mon:1, tue:2, wed:3, thu:4, fri:5, sat:6, sun:0 };
-  return String(str).toLowerCase().split(',')
-    .map(s => map[s.trim().slice(0,3)]).filter(n => n !== undefined);
-}
-function isWorkDay(date, wds) { return (wds || ganttWorkDays).includes(date.getDay()); }
-function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
-function snapToWorkDay(date, wds, dir) {
-  // dir: 1 = forward, -1 = backward, 0 = nearest
-  const d = new Date(date); d.setHours(0,0,0,0);
-  if (isWorkDay(d, wds)) return d;
-  if (dir === undefined || dir === 0) {
-    const fwd = snapToWorkDay(date, wds, 1);
-    const bwd = snapToWorkDay(date, wds, -1);
-    return Math.abs(daysBetween(date, fwd)) <= Math.abs(daysBetween(date, bwd)) ? fwd : bwd;
-  }
-  let i = 0;
-  while (!isWorkDay(d, wds) && i < 14) { d.setDate(d.getDate() + (dir >= 0 ? 1 : -1)); i++; }
-  return d;
-}
-function countWorkDays(start, end) {
-  if (!start || !end) return 0;
-  let count = 0;
-  const d = new Date(start); d.setHours(0,0,0,0);
-  const e = new Date(end);   e.setHours(0,0,0,0);
-  while (d <= e) { if (isWorkDay(d, ganttWorkDays)) count++; d.setDate(d.getDate() + 1); }
-  return count;
-}
-function workDaysRemaining(endDate) {
-  if (!endDate) return 0;
-  const e = new Date(endDate); e.setHours(0,0,0,0);
-  if (e < TODAY) return 0;
-  return countWorkDays(TODAY, e);
-}
-function wdDisplay(t) {
-  if (t.pct === 100) return { text: '✓', cls: 'done' };
-  const rem = workDaysRemaining(t.end);
-  if (rem <= 0 && t.end && t.end < TODAY) return { text: '0 wd', cls: 'overdue' };
-  return { text: rem + ' wd', cls: '' };
-}
+// (imported from ./utils.js)
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 function toggleTheme() {
@@ -334,93 +296,7 @@ document.getElementById('help-overlay').addEventListener('click', e => {
 })();
 
 // ─── Category Colors ──────────────────────────────────────────────────────────
-const GANTT_COLORS = {
-  // Legacy ground-vehicle categories
-  Concept:       '#7c3aed',
-  Engineering:   '#1d6fe8',
-  Prototype:     '#0891b2',
-  Validation:    '#d97706',
-  Launch:        '#dc2626',
-  // Expanded aerospace / tilt-wing categories
-  Aerodynamics:  '#06b6d4',
-  Propulsion:    '#3b82f6',
-  Structures:    '#f59e0b',
-  Avionics:      '#84cc16',
-  Systems:       '#14b8a6',
-  'Ground Test': '#f97316',
-  'Flight Test': '#ec4899',
-  Certification: '#ef4444',
-  Production:    '#8b5cf6',
-  Integration:   '#a78bfa',
-  Testing:       '#fb923c',
-};
-// Phase colors: keyed by top-level WBS number (1.x → index 0, 2.x → index 1, …)
-const PHASE_COLORS = [
-  '#7c3aed', // Phase 1 – purple
-  '#06b6d4', // Phase 2 – cyan
-  '#3b82f6', // Phase 3 – blue
-  '#f59e0b', // Phase 4 – amber
-  '#ec4899', // Phase 5 – pink
-  '#ef4444', // Phase 6 – red
-  '#84cc16', // Phase 7 – lime
-  '#14b8a6', // Phase 8 – teal
-  '#f97316', // Phase 9 – orange
-  '#8b5cf6', // Phase 10 – violet
-  '#10b981', // Phase 11 – green
-  '#6366f1', // Phase 12 – indigo
-];
-function phaseColor(wbs) {
-  const phase = (parseInt(String(wbs).split('.')[0]) || 1) - 1;
-  return PHASE_COLORS[phase % PHASE_COLORS.length];
-}
-
-// Dynamic fallback: any unknown category gets a color from the pool, cached per category
-const _colorPool = ['#10b981','#6366f1','#f43f5e','#0ea5e9','#a855f7','#22d3ee','#fbbf24','#4ade80','#fb7185','#38bdf8'];
-const _colorCache = {};
-function ganttColor(category) {
-  if (GANTT_COLORS[category]) return GANTT_COLORS[category];
-  if (!_colorCache[category]) {
-    _colorCache[category] = _colorPool[Object.keys(_colorCache).length % _colorPool.length];
-  }
-  return _colorCache[category];
-}
-
-const SPEC_COLORS = {
-  // Ground vehicle
-  Powertrain:    { bg: 'rgba(239,68,68,.12)',   text: '#ef4444' },
-  Chassis:       { bg: 'rgba(29,111,232,.12)',  text: '#60a5fa' },
-  Electrical:    { bg: 'rgba(251,191,36,.12)',  text: '#fbbf24' },
-  Body:          { bg: 'rgba(52,211,153,.12)',  text: '#34d399' },
-  Safety:        { bg: 'rgba(248,113,113,.12)', text: '#f87171' },
-  Software:      { bg: 'rgba(167,139,250,.12)', text: '#a78bfa' },
-  // Tilt-wing / aerospace
-  Aerodynamics:  { bg: 'rgba(6,182,212,.12)',   text: '#06b6d4' },
-  Propulsion:    { bg: 'rgba(59,130,246,.12)',  text: '#3b82f6' },
-  Structures:    { bg: 'rgba(245,158,11,.12)',  text: '#f59e0b' },
-  Avionics:      { bg: 'rgba(132,204,22,.12)',  text: '#84cc16' },
-  Systems:       { bg: 'rgba(20,184,166,.12)',  text: '#14b8a6' },
-  Certification: { bg: 'rgba(239,68,68,.12)',   text: '#ef4444' },
-};
-const TEAM_COLORS = {
-  // Ground vehicle
-  Powertrain:      '#ef4444',
-  Chassis:         '#60a5fa',
-  Electrical:      '#fbbf24',
-  Software:        '#a78bfa',
-  Safety:          '#f87171',
-  Body:            '#34d399',
-  Manufacturing:   '#d97706',
-  // Aerospace / tilt-wing
-  Systems:         '#14b8a6',
-  Aerodynamics:    '#06b6d4',
-  Propulsion:      '#3b82f6',
-  Structures:      '#f59e0b',
-  Avionics:        '#84cc16',
-  'Flight Test':   '#ec4899',
-  Certification:   '#ef4444',
-  'All Teams':     '#58a6ff',
-};
-function teamColor(t) { return TEAM_COLORS[t] || '#58a6ff'; }
+// ─── Colors (imported from ./colors.js) ──────────────────────────────────────
 
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 /** @param {HTMLElement} btn - The clicked tab button. @param {string} id - Tab key ('gantt'|'specs'|'prog'|'weight'|'org'). */
@@ -592,18 +468,6 @@ function parseWorkbook(wb) {
   clearDraft();
 }
 
-function parseDate(v) {
-  if (!v) return null;
-  if (v instanceof Date) { const d = new Date(v); d.setHours(0,0,0,0); return d; }
-  const d = new Date(v);
-  if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
-  return null;
-}
-function parseDeps(v) {
-  if (!v) return [];
-  return String(v).split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-}
-function fmt(d) { return d ? d.toISOString().slice(0,10) : '—'; }
 
 // ─── Render Dashboard ─────────────────────────────────────────────────────────
 /** Entry point after file load — updates topbar metadata and re-renders all visible tabs. */
@@ -661,7 +525,7 @@ function renderDashboard() {
 }
 
 // ─── GANTT ────────────────────────────────────────────────────────────────────
-const ZOOM_STEPS = [1, 2, 3, 4, 6, 8, 12, 16]; // pixels per day
+// ZOOM_STEPS, RH, HH imported from ./constants.js
 let zoomIdx = 3;                                 // default: 4px/day = 100%
 let ganttZoom = ZOOM_STEPS[zoomIdx];
 let ganttMinDateRef = null;                      // set during renderGantt for adjustZoom scroll math
@@ -693,10 +557,6 @@ function togglePhaseCollapse(phaseNum) {
   safeSetItem('vh-collapsed-phases', JSON.stringify([...collapsedPhases]));
   renderGantt();
 }
-const RH = 36;
-const HH = 60;
-
-function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
 
 // Drag-pan state for gantt-right
 let ganttDragging = false, ganttDragDidMove = false, ganttDragStartX, ganttDragScrollLeft;
@@ -803,8 +663,8 @@ function doBarDragMove(e) {
   updateBarElementsDirect(barDrag.taskId, newStart, newEnd);
 
   const label = document.getElementById('gantt-drag-label');
-  const total = countWorkDays(newStart, newEnd);
-  const rem   = workDaysRemaining(newEnd);
+  const total = countWorkDays(newStart, newEnd, ganttWorkDays);
+  const rem   = workDaysRemaining(newEnd, ganttWorkDays, TODAY);
   label.textContent = `${fmt(newStart)} → ${fmt(newEnd)}  ·  ${total} wd total  ·  ${rem} wd left`;
   label.style.display = 'block';
   label.style.left = Math.min(e.clientX + 16, window.innerWidth - label.offsetWidth - 10) + 'px';
@@ -1282,7 +1142,7 @@ function jumpToGanttDate(dateStr) {
 }
 
 // ── Specs zoom ────────────────────────────────────────────────────────────────
-const SPECS_ZOOM_STEPS = [0.6, 0.72, 0.84, 1.0, 1.15, 1.3, 1.5];
+// SPECS_ZOOM_STEPS imported from ./constants.js
 let specsZoomIdx = 2; // default 0.84rem = 100%
 let _specsZoomSaveTimer = null;
 function adjustSpecsZoom(dir) {
@@ -1301,7 +1161,7 @@ document.getElementById('specs-body').addEventListener('wheel', e => {
 }, { passive: false });
 
 // ── Org zoom ──────────────────────────────────────────────────────────────────
-const ORG_ZOOM_STEPS = [0.4, 0.55, 0.7, 0.85, 1.0, 1.2, 1.5, 2.0];
+// ORG_ZOOM_STEPS imported from ./constants.js
 let orgZoomIdx = 4; // default 1.0 = 100%
 let _orgZoomSaveTimer = null;
 function adjustOrgZoom(dir) {
@@ -1356,67 +1216,7 @@ function updateTodayFloat() {
   floatEl.style.top = '66px';
 }
 
-function computeCriticalPath(tasks) {
-  if (!tasks || tasks.length === 0) return new Set();
-  const dur = {}, successors = {}, inDeg = {};
-  tasks.forEach(t => {
-    dur[t.id]        = t.start && t.end ? Math.max(1, daysBetween(t.start, t.end)) : 1;
-    successors[t.id] = [];
-    inDeg[t.id]      = 0;
-  });
-  tasks.forEach(t => {
-    (t.deps || []).forEach(did => {
-      if (successors[did] !== undefined) { successors[did].push(t.id); inDeg[t.id]++; }
-    });
-  });
-  // Kahn's topological sort
-  const tmpDeg = { ...inDeg };
-  const queue  = tasks.filter(t => tmpDeg[t.id] === 0).map(t => t.id);
-  const order  = [];
-  while (queue.length) {
-    const id = queue.shift(); order.push(id);
-    successors[id].forEach(sid => { if (--tmpDeg[sid] === 0) queue.push(sid); });
-  }
-  if (order.length < tasks.length) return new Set(); // cycle detected
-  // Forward pass
-  const es = {}, ef = {};
-  tasks.forEach(t => { es[t.id] = 0; });
-  order.forEach(id => {
-    ef[id] = es[id] + dur[id];
-    successors[id].forEach(sid => { if (ef[id] > (es[sid] || 0)) es[sid] = ef[id]; });
-  });
-  // Backward pass
-  const maxEF = Math.max(...order.map(id => ef[id]));
-  const lf = {};
-  order.forEach(id => { lf[id] = maxEF; });
-  [...order].reverse().forEach(id => {
-    successors[id].forEach(sid => {
-      const lsSid = lf[sid] - dur[sid];
-      if (lsSid < lf[id]) lf[id] = lsSid;
-    });
-  });
-  // Identify critical path: slack ≤ 0 and connected to dependency chain
-  const cpSet = new Set();
-  order.forEach(id => {
-    const slack = (lf[id] - dur[id]) - es[id];
-    if (Math.round(slack) <= 0 && (inDeg[id] > 0 || successors[id].length > 0)) cpSet.add(id);
-  });
-  return cpSet;
-}
-
-function computeConflicts(tasks) {
-  const byId = {};
-  tasks.forEach(t => { byId[t.id] = t; });
-  const set = new Set();
-  tasks.forEach(t => {
-    if (t.milestone || !t.start) return;
-    t.deps.forEach(predId => {
-      const pred = byId[predId];
-      if (pred && pred.end && t.start < pred.end) set.add(t.id);
-    });
-  });
-  return set;
-}
+// computeCriticalPath, computeConflicts imported from ./compute/
 
 function toggleCriticalPath() {
   showCriticalPath = !showCriticalPath;
@@ -1654,7 +1454,7 @@ function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
-    const wd = wdDisplay(t);
+    const wd = wdDisplay(t, ganttWorkDays, TODAY);
     const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
     const phaseNum = parseInt(t.wbs.split('.')[0]) || 1;
     const isCollapsed = isPhaseHeader && collapsedPhases.has(phaseNum);
@@ -2332,19 +2132,7 @@ function startNotesEdit(el, t) {
 }
 
 // ─── SIDE PANEL: DEPENDENCY EDITING ──────────────────────────────────────────
-function wouldCreateCycle(taskId, candidateId) {
-  const succs = {};
-  ProjectData.tasks.forEach(t => { succs[t.id] = []; });
-  ProjectData.tasks.forEach(t => { t.deps.forEach(d => { if (succs[d]) succs[d].push(t.id); }); });
-  const visited = new Set([taskId]);
-  const q = [...(succs[taskId] || [])];
-  while (q.length) {
-    const id = q.shift();
-    if (id === candidateId) return true;
-    if (!visited.has(id)) { visited.add(id); (succs[id] || []).forEach(s => q.push(s)); }
-  }
-  return false;
-}
+// wouldCreateCycle imported from ./compute/wbs.js (signature: wouldCreateCycle(tasks, taskId, candidateId))
 
 function removeDep(t, depId) {
   const origOpener = spOpener;
@@ -2414,7 +2202,7 @@ function buildDepPickerList(input, t, listEl) {
     return;
   }
   filtered.forEach(c => {
-    const isCycle = wouldCreateCycle(t.id, c.id);
+    const isCycle = wouldCreateCycle(ProjectData.tasks, t.id, c.id);
     const div = document.createElement('div');
     div.className = 'sp-dep-item' + (isCycle ? ' cycle' : '');
     div.setAttribute('role', 'option');
@@ -2597,22 +2385,6 @@ function endRowDrag(e) {
   showToast('Task reordered', applyUndo, 5000);
 }
 
-function recalcWBS(tasks) {
-  let currentPhase = 1;
-  const phaseCounts = {};
-  tasks.forEach(t => {
-    const hasSubDot = t.wbs.includes('.') && !t.wbs.endsWith('.0');
-    if (!hasSubDot) {
-      // Phase header — keep its phase number
-      currentPhase = parseInt(t.wbs) || currentPhase;
-      t.wbs = currentPhase + '.0';
-    } else {
-      if (!phaseCounts[currentPhase]) phaseCounts[currentPhase] = 0;
-      phaseCounts[currentPhase]++;
-      t.wbs = currentPhase + '.' + phaseCounts[currentPhase];
-    }
-  });
-}
 
 // ─── ADD / DELETE TASK & SPEC ─────────────────────────────────────────────────
 /** Appends a new blank spec with auto-generated ID, opens its panel, and auto-focuses the name field. */
@@ -2830,8 +2602,7 @@ document.addEventListener('mousemove', e => {
 });
 
 // ─── PROGRAM DASHBOARD ────────────────────────────────────────────────────────
-// Fallback phase names used when the Excel Project Info sheet has no "Phase N Name" rows
-const PHASE_NAMES_FALLBACK = ['Concept','Preliminary Design','Detail Design','Prototype & Ground Test','Flight Test','Certification'];
+// PHASE_NAMES_FALLBACK imported from ./constants.js
 function getPhaseNames() {
   const names = {};
   for (let i = 1; i <= 20; i++) {
@@ -3538,8 +3309,8 @@ function openTaskPanel(taskId) {
       ? `<span class="badge badge-target">${t.pct}% In Progress</span>`
       : `<span class="badge badge-tbd">Not Started</span>`;
 
-  const totalWd = countWorkDays(t.start, t.end);
-  const remWd   = workDaysRemaining(t.end);
+  const totalWd = countWorkDays(t.start, t.end, ganttWorkDays);
+  const remWd   = workDaysRemaining(t.end, ganttWorkDays, TODAY);
   let html = `<div class="sp-meta">
     <div class="sp-meta-id">
       <code style="color:${gc}">Task ${t.id}</code> · WBS ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span>
