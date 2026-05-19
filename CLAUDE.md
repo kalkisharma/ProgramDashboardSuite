@@ -4,16 +4,42 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Running the App
 
-No build system. Open `dashboard.html` directly in any modern browser, or:
+**Dev server** (Vite, recommended):
+```
+npm install
+npm run dev      # http://localhost:5173
+npm run build    # outputs dist/index.html (single inlined file)
+npm test         # Vitest unit tests
+```
 
-```
-python -m http.server
-# then open localhost:8000/dashboard.html
-```
+**Legacy** (`dashboard.html` on main branch): open directly in a browser. No build needed. This file is preserved as a reference but is no longer the primary development target.
 
 ## Architecture
 
-**Single-file vanilla JS app** (`dashboard.html`, ~5550 lines). All HTML, CSS, and JavaScript are in one file. SheetJS is vendored locally as `xlsx.full.min.js` (no CDN).
+**Vite + ES Modules** (`src/main.js`, ~4200 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
+
+### Source Module Layout
+
+| Module | Exports |
+|---|---|
+| `src/constants.js` | `ZOOM_STEPS`, `SPECS_ZOOM_STEPS`, `ORG_ZOOM_STEPS`, `RH`, `HH`, `PHASE_NAMES_FALLBACK` |
+| `src/colors.js` | `GANTT_COLORS`, `PHASE_COLORS`, `SPEC_COLORS`, `TEAM_COLORS`, `phaseColor()`, `ganttColor()`, `teamColor()` |
+| `src/utils.js` | `esc`, `parseDate`, `parseDeps`, `fmt`, `daysBetween`, `parseWorkDays`, `isWorkDay`, `addDays`, `snapToWorkDay`, `countWorkDays(start, end, wds)`, `workDaysRemaining(endDate, wds, today)`, `wdDisplay(t, wds, today)` |
+| `src/compute/criticalPath.js` | `computeCriticalPath(tasks)` |
+| `src/compute/conflicts.js` | `computeConflicts(tasks)` |
+| `src/compute/wbs.js` | `recalcWBS(tasks)`, `wouldCreateCycle(tasks, taskId, candidateId)` |
+| `src/styles.css` | All CSS |
+| `src/main.js` | All app logic (state, rendering, event wiring) |
+
+**Note on `countWorkDays`, `workDaysRemaining`, `wdDisplay`:** these functions require explicit `wds` (work days array) and `today` (Date) parameters. Call sites in `src/main.js` pass `ganttWorkDays` and `TODAY` respectively.
+
+### Test Suite
+
+Tests live in `src/__tests__/`. All pure-function modules have test coverage:
+- `utils.test.js` — 35 tests covering all utils exports
+- `criticalPath.test.js` — critical path algorithm correctness
+- `conflicts.test.js` — conflict detection edge cases
+- `wbs.test.js` — WBS renumbering and cycle detection
 
 ### Global State
 
@@ -263,4 +289,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v2.4.0** | Fix safeSetItem recursion bug; auto-save draft to localStorage; beforeunload warning | Done |
 | **v2.5.0** | Inline date picker on double-click of Gantt bars / milestones | Done |
 | **v2.6.0** | Code cleanup: eliminate all inline onclick attributes | Done |
-| **v2.7.0** | Gantt name-column resize + export reminder toast | Done — current release |
+| **v2.7.0** | Gantt name-column resize + export reminder toast | Done |
+| **v3.0.0** | Vite build, ES module extraction, Vitest test suite | Done — current |

@@ -10,23 +10,7 @@ A client-side program dashboard for aerospace and vehicle development programs. 
 
 ## Getting Started
 
-**Both files must stay in the same folder:**
-
-```
-dashboard.html
-xlsx.full.min.js
-```
-
-### Option A — Open directly (recommended)
-
-Double-click `dashboard.html` or drag it into any modern browser. No web server needed.
-
-### Option B — Local server
-
-```bash
-python -m http.server
-# then open http://localhost:8000/dashboard.html
-```
+**Distributed as a single HTML file.** Download `dist/index.html` from the [latest release](https://github.com/kalkisharma/ProgramDashboardSuite/releases) and open it in any modern browser — no install, no server, no internet connection required.
 
 ### Load your data
 
@@ -117,7 +101,57 @@ All edits are tracked in an undo/redo stack (max 50 entries). An auto-save draft
 
 ## Offline Use
 
-The tool runs entirely offline. `xlsx.full.min.js` is vendored locally — no internet connection is required or used after the files are on disk.
+The tool runs entirely offline. The distributed `dist/index.html` is fully self-contained — all JS and CSS are inlined. No internet connection is required or used.
+
+---
+
+## For Developers
+
+### Quick start
+
+```bash
+git clone https://github.com/kalkisharma/ProgramDashboardSuite.git
+cd ProgramDashboardSuite
+npm install
+npm run dev       # dev server at http://localhost:5173
+npm test          # run unit tests (52 tests, ~300ms)
+npm run build     # outputs dist/index.html (single inlined file)
+```
+
+### Project structure
+
+```
+src/
+  main.js                  # all app logic (~4200 lines)
+  styles.css               # all CSS
+  constants.js             # ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK, …
+  colors.js                # color maps + phaseColor(), ganttColor(), teamColor()
+  utils.js                 # esc, parseDate, fmt, daysBetween, work-day utilities
+  compute/
+    criticalPath.js        # CPM forward/backward pass (pure)
+    conflicts.js           # dependency overlap detection (pure)
+    wbs.js                 # WBS renumbering + cycle detection (pure)
+  __tests__/               # Vitest unit tests for all pure modules
+index.html                 # HTML shell (imports src/main.js as ES module)
+dist/index.html            # build output — single self-contained file (git-ignored)
+dashboard.html             # legacy single-file reference (no build needed)
+```
+
+The build uses [vite-plugin-singlefile](https://github.com/richardtallent/vite-plugin-singlefile) to inline all JS and CSS into one `dist/index.html`. This is what gets distributed to end users.
+
+### Architecture primer
+
+Read **[CLAUDE.md](CLAUDE.md)** before touching `src/main.js`. It documents the global state model, undo/redo architecture, Gantt rendering approach, localStorage keys, and versioning convention. The file is written for AI-assisted development but is the most complete map of the codebase.
+
+### Versioning
+
+Two sync points must be updated together on every release:
+1. Line 1 of `index.html` — `<!-- Program Dashboard Suite vX.Y.Z — YYYY-MM-DD -->`
+2. `APP_VERSION` constant in `src/main.js`
+
+Then: `git tag vX.Y.Z <commit-sha>`.
+
+See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
