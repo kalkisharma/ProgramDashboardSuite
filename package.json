@@ -1,6 +1,6 @@
 {
   "name": "program-dashboard-suite",
-  "version": "3.0.0-dev",
+  "version": "3.0.0",
   "description": "A client-side program dashboard for aerospace and vehicle development programs.",
   "scripts": {
     "dev": "vite",

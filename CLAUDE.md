@@ -187,7 +187,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 
 **Body grid lines:** `renderBodyGrid(svg, NS, minD, maxD, W, bodyH)` draws month boundary vertical lines (full body height) and, when `ganttZoom >= 5`, week sub-lines at reduced opacity. Non-work-day column shading has been removed.
 
-**Light/dark mode:** `toggleTheme()` toggles `.light-mode` on `<body>`, persists to `localStorage` under key `'vh-theme'`, and calls `renderGantt()` if tasks are loaded (so SVG colors update immediately). Applied by an IIFE on page load. The `☀/🌙` button is always visible in the topbar. CSS overrides live under `body.light-mode { ... }` in the `<style>` block. Light mode uses `--bg: #f0f2f5` and `--surface: #e8eaed` (soft off-white, not pure white).
+**Light/dark/dim mode:** `toggleTheme()` cycles dark → dim → light → dark, toggling `.dim-mode` or `.light-mode` on `<body>`. Persists to `localStorage` under `'vh-theme'`. Calls `renderGantt()` and `renderOrgChart()` if data is loaded (SVG colors update immediately). Applied by an IIFE on page load. The theme button (`#theme-toggle`) shows `🌙` (dark), `🌓` (dim), or `☀` (light) and is always visible in the topbar. CSS overrides live under `body.dim-mode { ... }` and `body.light-mode { ... }`. Light mode uses `--bg: #f0f2f5` and `--surface: #e8eaed`.
 
 **Topbar buttons (right group):**
 - `#generate-sample-btn` — hidden after first file load

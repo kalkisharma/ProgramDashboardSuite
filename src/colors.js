@@ -42,6 +42,8 @@ export function phaseColor(wbs) {
 const _colorPool = ['#10b981','#6366f1','#f43f5e','#0ea5e9','#a855f7','#22d3ee','#fbbf24','#4ade80','#fb7185','#38bdf8'];
 const _colorCache = {};
 
+export function clearColorCache() { for (const k in _colorCache) delete _colorCache[k]; }
+
 export function ganttColor(category) {
   if (GANTT_COLORS[category]) return GANTT_COLORS[category];
   if (!_colorCache[category]) {

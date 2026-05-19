@@ -1,11 +1,12 @@
 import * as XLSX from "xlsx";
 import "./styles.css";
 import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from './constants.js';
-import { GANTT_COLORS, PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, ganttColor, teamColor } from './colors.js';
+import { GANTT_COLORS, PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, ganttColor, teamColor, clearColorCache } from './colors.js';
 import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay } from './utils.js';
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
 import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
+import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, extractWorkDays } from './parse.js';
 
 // ─── App State ────────────────────────────────────────────────────────────────
 const ProjectData = { info: {}, tasks: [], specs: [], org: [], weights: [] };
@@ -369,98 +370,19 @@ function loadFile(file) {
 function parseWorkbook(wb) {
   ProjectData.info = {}; ProjectData.tasks = []; ProjectData.specs = []; ProjectData.org = []; ProjectData.weights = [];
   undoStack = []; redoStack = [];
+  clearColorCache();
 
-  const ws1 = wb.Sheets['Project Info'];
-  if (ws1) {
-    XLSX.utils.sheet_to_json(ws1, { header:1 })
-      .forEach(r => { if (r[0] && r[1] != null) ProjectData.info[String(r[0]).trim()] = r[1]; });
-    const wd = ProjectData.info['Work Days'];
-    if (wd) {
-      const parsed = parseWorkDays(String(wd));
-      if (parsed.length) {
-        ganttWorkDays = parsed;
-        const wdBtn = document.getElementById('workdays-btn');
-        if (wdBtn) wdBtn.textContent = workdaysSummary(parsed) + ' ▾';
-      }
-    }
-  }
+  ProjectData.info    = parseInfoSheet(wb.Sheets['Project Info']);
+  ProjectData.tasks   = parseScheduleSheet(wb.Sheets['Schedule']);
+  ProjectData.specs   = parseSpecsSheet(wb.Sheets['Specifications']);
+  ProjectData.org     = parseOrgSheet(wb.Sheets['Org Chart']);
+  ProjectData.weights = parseWeightSheet(wb.Sheets['Weight Budget']);
 
-  const ws2 = wb.Sheets['Schedule'];
-  if (ws2) {
-    const rows = XLSX.utils.sheet_to_json(ws2, { header:1 });
-    const h = rows[0] || [];
-    ProjectData.tasks = rows.slice(1).filter(r => r[h.indexOf('Task ID')] != null).map(r => {
-      const g = k => r[h.indexOf(k)];
-      return {
-        id:        +g('Task ID'),
-        wbs:       String(g('WBS') || ''),
-        name:      String(g('Task Name') || ''),
-        category:  String(g('Category') || ''),
-        start:     parseDate(g('Start Date')),
-        end:       parseDate(g('End Date')),
-        pct:       +g('% Complete') || 0,
-        deps:      parseDeps(g('Dependencies')),
-        team:      String(g('Responsible Team') || ''),
-        milestone: String(g('Milestone') || '').toUpperCase() === 'Y',
-        notes:     String(g('Notes') || ''),
-      };
-    });
-  }
-
-  const ws3 = wb.Sheets['Specifications'];
-  if (ws3) {
-    const rows = XLSX.utils.sheet_to_json(ws3, { header:1 });
-    const h = rows[0] || [];
-    ProjectData.specs = rows.slice(1).filter(r => r[h.indexOf('Spec ID')] != null).map(r => {
-      const g = k => r[h.indexOf(k)];
-      return {
-        id:       String(g('Spec ID') || ''),
-        category: String(g('Category') || ''),
-        name:     String(g('Specification Name') || ''),
-        value:    g('Value') != null ? g('Value') : '',
-        units:    String(g('Units') || '—'),
-        status:   String(g('Status') || 'TBD'),
-        group:    String(g('Responsible Group') || ''),
-        notes:    String(g('Notes') || ''),
-        depIds:   parseDeps(g('Dependent Task IDs')),
-      };
-    });
-  }
-
-  const ws4 = wb.Sheets['Org Chart'];
-  if (ws4) {
-    const rows = XLSX.utils.sheet_to_json(ws4, { header:1 });
-    const h = rows[0] || [];
-    ProjectData.org = rows.slice(1).filter(r => r[h.indexOf('Name')] != null).map(r => {
-      const g = k => r[h.indexOf(k)];
-      return {
-        name:      String(g('Name') || ''),
-        title:     String(g('Title') || ''),
-        team:      String(g('Team') || ''),
-        reportsTo: String(g('Reports To') || '').split(',').map(s => s.trim()).filter(Boolean),
-        email:     String(g('Email') || ''),
-      };
-    });
-  }
-
-  const ws5 = wb.Sheets['Weight Budget'];
-  if (ws5) {
-    const rows = XLSX.utils.sheet_to_json(ws5, { header: 1 });
-    const h = rows[0] || [];
-    // Find weight columns flexibly: exact match first, then any header starting with "Target Weight" / "Estimated Weight"
-    const tgtCol = h.find(c => c === 'Target Weight (lb)') || h.find(c => String(c).startsWith('Target Weight')) || 'Target Weight (lb)';
-    const estCol = h.find(c => c === 'Estimated Weight (lb)') || h.find(c => String(c).startsWith('Estimated Weight')) || 'Estimated Weight (lb)';
-    ProjectData.weights = rows.slice(1).filter(r => r[h.indexOf('Subsystem')] != null).map(r => {
-      const g = k => r[h.indexOf(k)];
-      return {
-        subsystem: String(g('Subsystem') || ''),
-        group:     String(g('Group') || ''),
-        target:    Number(g(tgtCol)) || 0,
-        estimated: Number(g(estCol)) || 0,
-        status:    String(g('Status') || 'TBD'),
-        notes:     String(g('Notes') || ''),
-      };
-    });
+  const wds = extractWorkDays(ProjectData.info);
+  if (wds) {
+    ganttWorkDays = wds;
+    const wdBtn = document.getElementById('workdays-btn');
+    if (wdBtn) wdBtn.textContent = workdaysSummary(wds) + ' ▾';
   }
 
   // Deep-copy tasks for reset
