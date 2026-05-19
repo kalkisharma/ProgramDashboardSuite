@@ -16,7 +16,7 @@ npm test         # Vitest unit tests
 
 ## Architecture
 
-**Vite + ES Modules** (`src/main.js`, ~4200 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
+**Vite + ES Modules** (`src/main.js`, ~4045 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
 
 ### Source Module Layout
 
@@ -29,8 +29,9 @@ npm test         # Vitest unit tests
 | `src/compute/conflicts.js` | `computeConflicts(tasks)` |
 | `src/compute/wbs.js` | `recalcWBS(tasks)`, `wouldCreateCycle(tasks, taskId, candidateId)` |
 | `src/parse.js` | `parseInfoSheet`, `parseScheduleSheet`, `parseSpecsSheet`, `parseOrgSheet`, `parseWeightSheet`, `extractWorkDays` |
+| `src/excel.js` | `buildWorkbook(projectData, weightUnit)`, `generateSampleExcel()` |
 | `src/styles.css` | All CSS |
-| `src/main.js` | All app logic (state, rendering, event wiring) |
+| `src/main.js` | All app logic (state, rendering, event wiring) — function index comment at top maps sections to line numbers |
 
 **Note on `countWorkDays`, `workDaysRemaining`, `wdDisplay`:** these functions require explicit `wds` (work days array) and `today` (Date) parameters. Call sites in `src/main.js` pass `ganttWorkDays` and `TODAY` respectively.
 
@@ -291,4 +292,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v2.5.0** | Inline date picker on double-click of Gantt bars / milestones | Done |
 | **v2.6.0** | Code cleanup: eliminate all inline onclick attributes | Done |
 | **v2.7.0** | Gantt name-column resize + export reminder toast | Done |
-| **v3.0.0** | Vite build, ES module extraction, Vitest test suite | Done — current |
+| **v3.0.0** | Vite build, ES module extraction, Vitest test suite | Done |
+| **v3.1.0** | `src/excel.js` extraction; function index in `src/main.js` | Done — current |

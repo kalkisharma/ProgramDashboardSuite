@@ -6,6 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.1.0] — 2026-05-19
+
+### Added
+- `src/excel.js` module — extracts `buildWorkbook(projectData, weightUnit)` (pure, returns SheetJS workbook, no side effects) and `generateSampleExcel()` (standalone TW-2 sample data generator) from `src/main.js`
+- Function index comment at top of `src/main.js` — maps every major section to its line number for faster navigation
+
+### Changed
+- `saveToExcel()` in `src/main.js` replaced with a thin wrapper calling `buildWorkbook(ProjectData, getWeightUnit())`; all workbook-building logic lives in `src/excel.js`
+- `src/main.js` reduced by ~147 lines (4192 → 4045) after extracting sample-data and workbook-build logic
+
+---
+
 ## [3.0.1] — 2026-05-19
 
 ### Fixed
