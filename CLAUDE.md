@@ -293,4 +293,6 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v2.6.0** | Code cleanup: eliminate all inline onclick attributes | Done |
 | **v2.7.0** | Gantt name-column resize + export reminder toast | Done |
 | **v3.0.0** | Vite build, ES module extraction, Vitest test suite | Done |
-| **v3.1.0** | `src/excel.js` extraction; function index in `src/main.js` | Done — current |
+| **v3.1.0** | `src/excel.js` extraction; function index in `src/main.js` | Done |
+| **v3.2.0** | `state.js` singleton — all mutable globals injectable | Planned |
+| **v4.0.0** | Milestone Gate: full module split, 150+ tests, ARIA announcements | Planned |
