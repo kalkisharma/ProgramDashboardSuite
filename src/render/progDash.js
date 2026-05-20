@@ -34,9 +34,11 @@ export function renderProgDash() {
   const milestoneDone = milestones.filter(t => t.pct >= 100).length;
   const nextMs = milestones
     .filter(t => t.pct < 100)
+    // Use start date for ordering; fall back to end for milestones where only end is set.
     .sort((a, b) => (a.start||a.end) - (b.start||b.end))[0];
   const daysToNext = nextMs ? daysBetween(TODAY, nextMs.start) : null;
 
+  // Sort descending by end (fall back to start) to find the last milestone in the program.
   const finalMs = milestones.slice().sort((a, b) => (b.end || b.start) - (a.end || a.start))[0];
   const finalMsDate = finalMs ? (finalMs.end || finalMs.start) : null;
   const finalMsDateStr = finalMsDate
@@ -67,6 +69,7 @@ export function renderProgDash() {
     if (!teamTaskMap[team]) teamTaskMap[team] = [];
     teamTaskMap[team].push(t);
   });
+  // Used to normalize bar widths so the largest team always fills 100% of the track.
   const maxTeamCount = Math.max(...Object.values(teamTaskMap).map(v => v.length), 1);
 
   const pctColor = overallPct >= 75 ? '#3fb950' : overallPct >= 40 ? '#58a6ff' : '#d29922';

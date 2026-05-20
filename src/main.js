@@ -249,9 +249,6 @@ document.getElementById('help-overlay').addEventListener('click', e => {
   }
 })();
 
-// ─── Category Colors ──────────────────────────────────────────────────────────
-// ─── Colors (imported from ./colors.js) ──────────────────────────────────────
-
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 /** @param {HTMLElement} btn - The clicked tab button. @param {string} id - Tab key ('gantt'|'specs'|'prog'|'weight'|'org'). */
 function switchTab(btn, id) {
@@ -622,9 +619,7 @@ function saveToExcel() {
   showToast('Exported to Excel — draft cleared');
 }
 
-// ─── TOOLTIP ─────────────────────────────────────────────────────────────────
-// showTooltip, hideTooltip, positionTooltip — imported from ./ui/tooltip.js
-const tooltip = document.getElementById('tooltip'); // local alias for weight/dep tooltips
+const tooltip = document.getElementById('tooltip'); // local alias used by weight/dep tooltip handlers
 
 document.getElementById('gantt-calendar').addEventListener('mouseover', e => {
   const cell = e.target.closest('[data-cal-tip]');
@@ -644,14 +639,6 @@ document.addEventListener('mousemove', e => {
   if (tt.style.display === 'block') positionTooltip(e);
 });
 
-// ─── PROGRAM DASHBOARD ────────────────────────────────────────────────────────
-// renderProgDash, getPhaseNames — imported from ./render/progDash.js
-
-// toggleWtGroup — internal to ./render/weightBudget.js
-// toggleTeamRow — internal to ./render/progDash.js
-
-// renderProgDash is defined in ./render/progDash.js and imported above
-// ─── WEIGHT BUDGET ────────────────────────────────────────────────────────────
 // ─── WEIGHT BUDGET EDITING ────────────────────────────────────────────────────
 /** @param {number} idx - Index in state.ProjectData.weights; opens an edit form in the side panel. */
 function openWeightPanel(idx) {

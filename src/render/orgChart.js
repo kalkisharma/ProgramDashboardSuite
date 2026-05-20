@@ -1,17 +1,27 @@
 import { state } from '../state.js';
 import { teamColor } from '../colors.js';
 
+// Card dimensions and spacing constants (px).
 const NW = 180, NH = 72, HG = 28, VG = 80;
 
+// Pan state is module-level because the listeners are attached once and must
+// survive re-renders (the SVG is replaced but the container scroll listeners are not).
 let orgPanListenersAttached = false;
 let oDragging = false, oDragX = 0, oDragY = 0, oDragSL = 0, oDragST = 0;
 
+// Returns the total pixel width needed to lay out this node and all its descendants.
+// A leaf needs exactly NW; a parent needs its children's widths plus gaps between them,
+// but never less than NW (a node can't be narrower than one card).
 function calcSubW(node) {
   if (!node.children.length) return NW;
   const total = node.children.reduce((s, c) => s + calcSubW(c), 0);
   return Math.max(NW, total + HG * (node.children.length - 1));
 }
 
+// Assigns x/y pixel coordinates to every node in the subtree rooted at `node`.
+// `left` is the left edge of the horizontal slot allocated to this subtree.
+// The node card is centered within its slot: x = left + (slotWidth - cardWidth) / 2.
+// Children are placed left-to-right, each within their own sub-slot.
 function assignPos(node, left, depth) {
   node.y = depth * (NH + VG);
   const sw = calcSubW(node);
@@ -48,6 +58,8 @@ export function renderOrgChart() {
     matched.forEach(p => {
       matchedNames.add(p.name);
       ancestorSet.add(p.name);
+      // Walk up the primary reporting chain so matched nodes are shown in context —
+      // a result card with no parent visible would appear as a disconnected root.
       let cur = p;
       while (cur.reportsTo && cur.reportsTo[0]) {
         const parent = state.ProjectData.org.find(x => x.name === cur.reportsTo[0]);
@@ -62,6 +74,8 @@ export function renderOrgChart() {
   orgData.forEach(p => { nodeMap[p.name] = { ...p, children: [] }; });
   const roots = [];
   orgData.forEach(p => {
+    // reportsTo[0] is the primary manager and determines tree position.
+    // reportsTo[1..] are secondary managers rendered as dashed lines (matrix reporting).
     const primary = p.reportsTo[0];
     if (primary && nodeMap[primary]) nodeMap[primary].children.push(nodeMap[p.name]);
     else roots.push(nodeMap[p.name]);

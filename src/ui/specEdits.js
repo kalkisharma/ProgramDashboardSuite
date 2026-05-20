@@ -4,12 +4,17 @@ import { renderSpecTable } from '../render/specs.js';
 import { pushUndo } from '../core/undo.js';
 import { showToast } from './toast.js';
 
+// Nulling spCurrentType before re-opening forces openSpecPanel to treat this as a fresh
+// open rather than a toggle-close, so the panel re-renders with the updated field value.
 function _refreshSpecPanel(s) {
   renderSpecTable();
   state.spCurrentType = null;
   if (state.handlers.openSpecPanel) state.handlers.openSpecPanel(s.id);
 }
 
+// Each startSpec*Edit function follows the same pattern: replace the clicked element with
+// an inline input/select, then on commit write the new value to the spec object and call
+// _refreshSpecPanel to re-render both the table and the side panel.
 export function startSpecNameEdit(el, s) {
   if (el.querySelector('input')) return;
   const orig = s.name;
@@ -103,6 +108,7 @@ export function startSpecIdEdit(el, s) {
     } else if (v !== orig) {
       pushUndo('spec ID change');
       s.id = v;
+      // spCurrentId must track the new ID so the panel toggle check stays consistent.
       state.spCurrentId = v;
       _refreshSpecPanel(s);
       showToast('Spec ID changed', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
@@ -117,6 +123,8 @@ export function startSpecIdEdit(el, s) {
 export function startSpecNotesEdit(el, s) {
   if (el.querySelector('textarea')) return;
   const origNotes = s.notes;
+  // spOpener is saved/restored around the textarea lifecycle so that when the panel
+  // re-renders after save, focus returns to whatever triggered the original panel open.
   const origOpener = state.spOpener;
   el.innerHTML = '';
   el.removeAttribute('tabindex'); el.removeAttribute('role');
