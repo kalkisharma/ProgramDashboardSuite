@@ -6,6 +6,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [3.2.1] — 2026-05-19
+
+### Fixed
+- `resetState()` exported from `src/state.js` — resets all fields to initial values; call in `beforeEach` in tests that touch state to prevent bleed-through between test runs
+- `parseWorkbook()` now resets `state.collapsedPhases`, `state.calDisplayMonth`, `state.ganttKeyFocusIdx`, `state.barDrag`, `state.barDragPreSnapshot`, `state.barEls`, and `state.rowDrag` on each file load — these previously persisted stale values across loads
+- Function index line numbers in `src/main.js` refreshed to match post-v3.2.0 positions
+- Comment on App State block corrected (`spCurrent*` → `state.spCurrent*`)
+
+---
+
 ## [3.2.0] — 2026-05-19
 
 ### Added

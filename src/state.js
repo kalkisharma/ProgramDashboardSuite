@@ -52,3 +52,40 @@ export const state = {
   orgZoomIdx:    4, // index into ORG_ZOOM_STEPS; default 1.0
   orgSearchQuery: '',
 };
+
+/**
+ * Resets all state fields to their initial values.
+ * Call in beforeEach in any test that touches state to prevent bleed-through.
+ */
+export function resetState() {
+  state.ProjectData   = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+  state.originalTasks = [];
+  state.ganttWorkDays = [1, 2, 3, 4, 5];
+  state.undoStack     = [];
+  state.redoStack     = [];
+  state.isDirty       = false;
+  state.spCurrentType = null;
+  state.spCurrentId   = null;
+  state.spOpener      = null;
+  state.zoomIdx          = 3;
+  state.ganttZoom        = ZOOM_STEPS[3];
+  state.ganttPhaseFilter = 'all';
+  state.ganttTeamFilter  = 'all';
+  state.collapsedPhases  = new Set();
+  state.calDisplayMonth  = null;
+  state.ganttKeyFocusIdx = -1;
+  state.showCriticalPath = false;
+  state.showGanttLegend  = false;
+  state.barDrag = {
+    active: false, pending: false, taskId: null, mode: null,
+    startClientX: 0, origStart: null, origEnd: null, startScrollLeft: 0,
+  };
+  state.barDragPreSnapshot = null;
+  state.barEls  = {};
+  state.rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
+  state.specsZoomIdx    = 2;
+  state.specSortState   = { col: null, dir: 'asc' };
+  state.specSearchQuery = '';
+  state.orgZoomIdx    = 4;
+  state.orgSearchQuery = '';
+}

@@ -11,47 +11,47 @@ import { buildWorkbook, generateSampleExcel } from './excel.js';
 import { state } from './state.js';
 
 // ─── Function Index ───────────────────────────────────────────────────────────
-// L12   App State          — state.ProjectData, state.ganttWorkDays, undo/redo stacks, drag state
-// L48   Work Day Utilities — workdaysSummary, toggleWorkdaysPicker
-// L51   Theme              — toggleTheme, applyTheme
-// L305  Tab Switching      — switchTab, renderDashboard, safeRender
-// L316  File Loading       — drag-drop + file input wiring, parseWorkbook
-// L452  Gantt Chart        — renderGantt, renderBodyGrid, renderGanttCalendar,
+// L47   App State          — state.* (see src/state.js); TODAY, APP_VERSION
+// L70   Work Day Utilities — workdaysSummary, toggleWorkdaysPicker
+// L73   Theme              — toggleTheme, applyTheme
+// L327  Tab Switching      — switchTab, renderDashboard, safeRender
+// L338  File Loading       — drag-drop + file input wiring, parseWorkbook
+// L474  Gantt Chart        — renderGantt, renderBodyGrid, renderGanttCalendar,
 //                            initGanttPan, initGanttColumnResize, initGanttNameColResize,
 //                            adjustZoom, toggleGanttLegend, toggleCriticalPath,
 //                            toggleGanttCalendar, jumpToGanttDate, navigateCalendar
-// L1774 Gantt Inline Edits — startTaskNameEdit, startTaskTeamEdit, startTaskPctEdit,
+// L1781 Gantt Inline Edits — startTaskNameEdit, startTaskTeamEdit, startTaskPctEdit,
 //                            startBarDrag, endBarDrag, openGanttDatePicker,
 //                            togglePhaseCollapse, addGanttTask, resetGanttToImported,
 //                            exportGanttSVG, exportGanttPNG
-// L1873 Spec Panel Edits   — startSpecFieldEdit, saveSpecField, addSpecRow
-// L2021 Side Panel Notes   — openNoteEdit, saveNoteEdit
-// L2059 Dependency Editing — openDepEdit, saveDepEdit, dep add/remove helpers
-// L2226 Row Reorder        — startRowDrag, doRowDragMove, endRowDrag
-// L2314 Add/Delete         — addGanttTask (duplicate entry above; also deleteTask, deleteSpec)
-// L2429 Save to Excel      — saveToExcel (thin wrapper around buildWorkbook from excel.js)
-// L2439 Tooltip            — showTooltip, positionTooltip, hideTooltip, showWtTooltip
-// L2489 Program Dashboard  — renderProgDash, toggleTeamRow, getPhaseNames
-// L2674 Weight Budget      — renderWeightBudget, showWtTooltip, hideWtTooltip
-// L2814 Weight Editing     — openWeightPanel, saveWeightRow, deleteWeightRow, addWeightRow
-// L2906 Specs              — renderSpecs, renderSpecTable, setSpecsCatFilter, setSpecsSearch
-// L3076 Side Panel – Spec  — openSpecPanel
-// L3179 Side Panel – Task  — openTaskPanel
-// L3309 Side Panel – Org   — openOrgPanel, openOrgEditPanel, saveOrgPerson, deleteOrgPerson
-// L3376 Org Editing        — org CRUD helpers
-// L3475 Project Info       — openInfoPanel, saveInfoPanel
-// L3559 Org Chart          — renderOrgChart, buildTree, calcSubW, assignPos
-// L3799 Init               — initPersistedState (restores zoom, filters, work days from localStorage)
-// L3875 Event Handlers     — all static addEventListener wiring
+// L1880 Spec Panel Edits   — startSpecFieldEdit, saveSpecField, addSpecRow
+// L2028 Side Panel Notes   — openNoteEdit, saveNoteEdit
+// L2066 Dependency Editing — openDepEdit, saveDepEdit, dep add/remove helpers
+// L2233 Row Reorder        — startRowDrag, doRowDragMove, endRowDrag
+// L2321 Add/Delete         — deleteTask, deleteSpec, addGanttTask
+// L2436 Save to Excel      — saveToExcel (thin wrapper around buildWorkbook from excel.js)
+// L2446 Tooltip            — showTooltip, positionTooltip, hideTooltip, showWtTooltip
+// L2496 Program Dashboard  — renderProgDash, toggleTeamRow, getPhaseNames
+// L2681 Weight Budget      — renderWeightBudget, showWtTooltip, hideWtTooltip
+// L2821 Weight Editing     — openWeightPanel, saveWeightRow, deleteWeightRow, addWeightRow
+// L2913 Specs              — renderSpecs, renderSpecTable, setSpecsCatFilter, setSpecsSearch
+// L3083 Side Panel – Spec  — openSpecPanel
+// L3186 Side Panel – Task  — openTaskPanel
+// L3316 Side Panel – Org   — openOrgPanel, openOrgEditPanel, saveOrgPerson, deleteOrgPerson
+// L3383 Org Editing        — org CRUD helpers
+// L3482 Project Info       — openInfoPanel, saveInfoPanel
+// L3566 Org Chart          — renderOrgChart, buildTree, calcSubW, assignPos
+// L3806 Init               — initPersistedState (restores zoom, filters, work days from localStorage)
+// L3882 Event Handlers     — all static addEventListener wiring
 
 // ─── App State ────────────────────────────────────────────────────────────────
-// state.ProjectData, state.originalTasks, state.ganttWorkDays, spCurrent*, state.undoStack, state.redoStack,
+// state.ProjectData, state.originalTasks, state.ganttWorkDays, state.spCurrent*, state.undoStack, state.redoStack,
 // state.isDirty, state.barDrag, state.barEls, state.rowDrag, zoom indices, filters, and view state
 // are all in src/state.js — import { state } from './state.js'
 const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
 // NOTE: TODAY is computed once at page load; reload the page if using past midnight.
 
-const APP_VERSION = 'v3.2.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v3.2.1'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('app-version-label').textContent = APP_VERSION;
 });
@@ -395,6 +395,13 @@ function loadFile(file) {
 function parseWorkbook(wb) {
   state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = [];
   state.undoStack = []; state.redoStack = [];
+  state.collapsedPhases  = new Set();
+  state.calDisplayMonth  = null;
+  state.ganttKeyFocusIdx = -1;
+  state.barDrag = { active: false, pending: false, taskId: null, mode: null, startClientX: 0, origStart: null, origEnd: null, startScrollLeft: 0 };
+  state.barDragPreSnapshot = null;
+  state.barEls  = {};
+  state.rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
   clearColorCache();
 
   state.ProjectData.info    = parseInfoSheet(wb.Sheets['Project Info']);
