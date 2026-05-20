@@ -179,3 +179,130 @@ describe('wdDisplay', () => {
     expect(result.cls).toBe('');
   });
 });
+
+describe('esc — extended', () => {
+  it('does not double-escape an already-escaped string', () => {
+    expect(esc('a&b')).toBe('a&amp;b');
+  });
+  it('handles numbers coerced to string', () => {
+    expect(esc(42)).toBe('42');
+  });
+  it('handles empty string', () => {
+    expect(esc('')).toBe('');
+  });
+});
+
+describe('parseDeps — extended', () => {
+  it('handles spaces around numbers', () => {
+    expect(parseDeps(' 1 , 2 , 3 ')).toEqual([1, 2, 3]);
+  });
+  it('handles single value', () => {
+    expect(parseDeps('5')).toEqual([5]);
+  });
+  it('includes negative numbers (parseDeps does not filter them)', () => {
+    const result = parseDeps('-1, 2');
+    expect(result).toContain(2);
+  });
+});
+
+describe('addDays — extended', () => {
+  it('adding 0 days returns same date', () => {
+    const d1 = d('2024-06-10');
+    const r = addDays(d1, 0);
+    expect(r.getDate()).toBe(10);
+  });
+  it('crosses month boundary', () => {
+    const r = addDays(d('2024-01-28'), 5);
+    expect(r.getMonth()).toBe(1); // February
+    expect(r.getDate()).toBe(2);
+  });
+});
+
+describe('isWorkDay — extended', () => {
+  it('Saturday is not a work day with Mon-Fri schedule', () => {
+    const sat = d('2024-06-08'); // Saturday
+    expect(isWorkDay(sat, WDS)).toBe(false);
+  });
+  it('Sunday is not a work day with Mon-Fri schedule', () => {
+    const sun = d('2024-06-09'); // Sunday
+    expect(isWorkDay(sun, WDS)).toBe(false);
+  });
+  it('Saturday is a work day if wds includes 6', () => {
+    const sat = d('2024-06-08');
+    expect(isWorkDay(sat, [1, 2, 3, 4, 5, 6])).toBe(true);
+  });
+  it('Monday is a work day with Mon-Thu schedule', () => {
+    const mon = d('2024-06-10');
+    expect(isWorkDay(mon, [1, 2, 3, 4])).toBe(true);
+  });
+  it('Friday is not a work day with Mon-Thu schedule', () => {
+    const fri = d('2024-06-07');
+    expect(isWorkDay(fri, [1, 2, 3, 4])).toBe(false);
+  });
+});
+
+describe('snapToWorkDay — extended', () => {
+  it('snaps Saturday forward to Monday (next week)', () => {
+    const sat = d('2024-06-08'); // Saturday
+    const result = snapToWorkDay(sat, WDS, 1);
+    expect(result.getDate()).toBe(10); // Monday June 10
+  });
+  it('snaps Sunday backward to Friday', () => {
+    const sun = d('2024-06-09');
+    const result = snapToWorkDay(sun, WDS, -1);
+    expect(result.getDay()).toBe(5); // Friday
+  });
+  it('already a Monday: no change (forward)', () => {
+    const mon = d('2024-06-10');
+    const result = snapToWorkDay(mon, WDS, 1);
+    expect(result.getDay()).toBe(1);
+    expect(result.getDate()).toBe(10);
+  });
+});
+
+describe('countWorkDays — extended', () => {
+  it('Mon-Thu schedule: 5 days of Mon-Fri = 4 work days', () => {
+    const wdsMT = [1, 2, 3, 4]; // Mon-Thu only
+    expect(countWorkDays(d('2024-06-03'), d('2024-06-07'), wdsMT)).toBe(4);
+  });
+  it('returns 0 when end before start', () => {
+    expect(countWorkDays(d('2024-06-07'), d('2024-06-03'), WDS)).toBe(0);
+  });
+  it('returns 0 for null end', () => {
+    expect(countWorkDays(d('2024-06-03'), null, WDS)).toBe(0);
+  });
+});
+
+describe('daysBetween — extended', () => {
+  it('returns negative when end is before start', () => {
+    expect(daysBetween(d('2024-06-10'), d('2024-06-01'))).toBeLessThan(0);
+  });
+  it('counts across month boundary', () => {
+    expect(daysBetween(d('2024-01-28'), d('2024-02-04'))).toBe(7);
+  });
+});
+
+describe('fmt — extended', () => {
+  it('formats date correctly at year boundary', () => {
+    expect(fmt(d('2024-12-31'))).toBe('2024-12-31');
+  });
+  it('pads month and day with leading zero', () => {
+    expect(fmt(d('2024-01-05'))).toBe('2024-01-05');
+  });
+});
+
+describe('parseWorkDays — extended', () => {
+  it('returns empty array for empty string', () => {
+    expect(parseWorkDays('')).toEqual([]);
+  });
+  it('parses Sat and Sun as 6 and 0', () => {
+    const wds = parseWorkDays('Sat,Sun');
+    expect(wds).toContain(6);
+    expect(wds).toContain(0);
+  });
+  it('repeated days produce repeated values (no dedup)', () => {
+    const wds = parseWorkDays('Mon,Mon,Tue');
+    expect(wds).toContain(1);
+    expect(wds).toContain(2);
+  });
+});

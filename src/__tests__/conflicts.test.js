@@ -42,4 +42,57 @@ describe('computeConflicts', () => {
     ];
     expect(computeConflicts(tasks).has(2)).toBe(false);
   });
+
+  it('no conflict when task starts on same day predecessor ends', () => {
+    const tasks = [
+      { id: 1, start: d('2024-01-01'), end: d('2024-01-10'), deps: [], milestone: false },
+      { id: 2, start: d('2024-01-10'), end: d('2024-01-20'), deps: [1], milestone: false },
+    ];
+    expect(computeConflicts(tasks)).toEqual(new Set());
+  });
+
+  it('detects multiple conflicts independently', () => {
+    const tasks = [
+      { id: 1, start: d('2024-01-01'), end: d('2024-01-20'), deps: [], milestone: false },
+      { id: 2, start: d('2024-01-01'), end: d('2024-01-30'), deps: [], milestone: false },
+      { id: 3, start: d('2024-01-10'), end: d('2024-01-25'), deps: [1], milestone: false },
+      { id: 4, start: d('2024-01-10'), end: d('2024-01-28'), deps: [2], milestone: false },
+    ];
+    const conflicts = computeConflicts(tasks);
+    expect(conflicts.has(3)).toBe(true);
+    expect(conflicts.has(4)).toBe(true);
+    expect(conflicts.has(1)).toBe(false);
+    expect(conflicts.has(2)).toBe(false);
+  });
+
+  it('task with missing predecessor is not flagged', () => {
+    const tasks = [
+      { id: 2, start: d('2024-01-10'), end: d('2024-01-20'), deps: [99], milestone: false },
+    ];
+    expect(computeConflicts(tasks)).toEqual(new Set());
+  });
+
+  it('handles empty deps array on all tasks', () => {
+    const tasks = [
+      { id: 1, start: d('2024-01-01'), end: d('2024-01-10'), deps: [], milestone: false },
+      { id: 2, start: d('2024-01-05'), end: d('2024-01-15'), deps: [], milestone: false },
+    ];
+    expect(computeConflicts(tasks)).toEqual(new Set());
+  });
+
+  it('conflict in a three-task chain only flags the violating task', () => {
+    const tasks = [
+      { id: 1, start: d('2024-01-01'), end: d('2024-01-10'), deps: [], milestone: false },
+      { id: 2, start: d('2024-01-11'), end: d('2024-01-20'), deps: [1], milestone: false },
+      { id: 3, start: d('2024-01-15'), end: d('2024-01-25'), deps: [2], milestone: false },
+    ];
+    const conflicts = computeConflicts(tasks);
+    expect(conflicts.has(3)).toBe(true);
+    expect(conflicts.has(2)).toBe(false);
+    expect(conflicts.has(1)).toBe(false);
+  });
+
+  it('returns a Set instance', () => {
+    expect(computeConflicts([]) instanceof Set).toBe(true);
+  });
 });

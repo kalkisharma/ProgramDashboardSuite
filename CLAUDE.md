@@ -16,7 +16,7 @@ npm test         # Vitest unit tests
 
 ## Architecture
 
-**Vite + ES Modules** (`src/main.js`, ~4000 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
+**Vite + ES Modules** (`src/main.js`, ~1434 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
 
 ### Source Module Layout
 
@@ -24,25 +24,40 @@ npm test         # Vitest unit tests
 |---|---|
 | `src/constants.js` | `ZOOM_STEPS`, `SPECS_ZOOM_STEPS`, `ORG_ZOOM_STEPS`, `RH`, `HH`, `PHASE_NAMES_FALLBACK` |
 | `src/colors.js` | `GANTT_COLORS`, `PHASE_COLORS`, `SPEC_COLORS`, `TEAM_COLORS`, `phaseColor()`, `ganttColor()`, `teamColor()` |
-| `src/utils.js` | `esc`, `parseDate`, `parseDeps`, `fmt`, `daysBetween`, `parseWorkDays`, `isWorkDay`, `addDays`, `snapToWorkDay`, `countWorkDays(start, end, wds)`, `workDaysRemaining(endDate, wds, today)`, `wdDisplay(t, wds, today)` |
+| `src/utils.js` | `esc`, `parseDate`, `parseDeps`, `fmt`, `daysBetween`, `parseWorkDays`, `isWorkDay`, `addDays`, `snapToWorkDay`, `countWorkDays(start, end, wds)`, `workDaysRemaining(endDate, wds, today)`, `wdDisplay(t, wds, today)`, `TODAY` |
 | `src/compute/criticalPath.js` | `computeCriticalPath(tasks)` |
 | `src/compute/conflicts.js` | `computeConflicts(tasks)` |
 | `src/compute/wbs.js` | `recalcWBS(tasks)`, `wouldCreateCycle(tasks, taskId, candidateId)` |
 | `src/parse.js` | `parseInfoSheet`, `parseScheduleSheet`, `parseSpecsSheet`, `parseOrgSheet`, `parseWeightSheet`, `extractWorkDays` |
 | `src/excel.js` | `buildWorkbook(projectData, weightUnit)`, `generateSampleExcel()` |
-| `src/state.js` | `state` — single exported mutable object holding all cross-module app state |
+| `src/state.js` | `state`, `resetState()` — single exported mutable object holding all cross-module app state |
 | `src/styles.css` | All CSS |
-| `src/main.js` | All app logic (state, rendering, event wiring) — function index comment at top maps sections to line numbers |
+| `src/main.js` | App init, side panels, event wiring (~1434 lines) — function index comment at top maps sections to line numbers |
+| `src/render/gantt.js` | All Gantt render + inline edit functions (`renderGantt`, bar drag, row keyboard nav, etc.) |
+| `src/render/specs.js` | `renderSpecs`, `renderSpecTable`, `setSpecsCategoryFilter`, `clearSpecsFilters`, `cycleSpecStatus` |
+| `src/render/progDash.js` | `renderProgDash`, `getPhaseNames` |
+| `src/render/weightBudget.js` | `renderWeightBudget`, `getWeightUnit` |
+| `src/render/orgChart.js` | `renderOrgChart` |
+| `src/ui/panelBase.js` | `showSidePanel`, `closeSidePanel` |
+| `src/ui/tooltip.js` | `showTooltip`, `hideTooltip`, `positionTooltip` |
+| `src/ui/toast.js` | `showToast`, `safeSetItem`, `safeRender` |
+| `src/ui/rowReorder.js` | `startRowDrag`, `doRowDragMove`, `endRowDrag` |
+| `src/ui/specEdits.js` | `startSpec*Edit` functions (name, id, category, value, units, group, notes) |
+| `src/ui/taskOps.js` | `addNewSpec`, `deleteTask`, `deleteSpec`, `addGanttTask`, `resetGanttToImported` |
+| `src/core/undo.js` | `pushUndo`, `fullSnapshot`, `applyUndo`, `applyRedo`, `scheduleDraftSave`, `clearDraft`, `updateUndoRedoBtns` |
 
-**Note on `countWorkDays`, `workDaysRemaining`, `wdDisplay`:** these functions require explicit `wds` (work days array) and `today` (Date) parameters. Call sites in `src/main.js` pass `ganttWorkDays` and `TODAY` respectively.
+**Note on `countWorkDays`, `workDaysRemaining`, `wdDisplay`:** these functions require explicit `wds` (work days array) and `today` (Date) parameters. Render modules import `TODAY` from `utils.js` directly.
 
 ### Test Suite
 
-Tests live in `src/__tests__/`. All pure-function modules have test coverage:
-- `utils.test.js` — 35 tests covering all utils exports
+Tests live in `src/__tests__/`. Coverage: 170 tests across 7 files.
+- `utils.test.js` — utils exports (esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay)
 - `criticalPath.test.js` — critical path algorithm correctness
 - `conflicts.test.js` — conflict detection edge cases
 - `wbs.test.js` — WBS renumbering and cycle detection
+- `parse.test.js` — all parse functions
+- `excel.test.js` — buildWorkbook output correctness
+- `state.test.js` — resetState() and state singleton
 
 ### Global State
 
@@ -307,5 +322,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v3.0.0** | Vite build, ES module extraction, Vitest test suite | Done |
 | **v3.1.0** | `src/excel.js` extraction; function index in `src/main.js` | Done |
 | **v3.2.0** | `state.js` singleton — all mutable globals injectable | Done |
-| **v3.2.1** | `resetState()` export; fix stale state on file reload; function index refresh | Done — current |
-| **v4.0.0** | Milestone Gate: full module split, 150+ tests, ARIA announcements | Planned |
+| **v3.2.1** | `resetState()` export; fix stale state on file reload; function index refresh | Done |
+| **v4.0.0** | Milestone Gate: full module split (main.js 1434 lines), 170 tests, Gantt row ARIA announcements | Done — current |

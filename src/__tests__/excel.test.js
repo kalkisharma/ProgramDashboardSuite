@@ -188,3 +188,65 @@ describe('buildWorkbook — Weight Budget sheet', () => {
     expect(row[4]).toBe('Estimated');
   });
 });
+
+describe('buildWorkbook — Schedule sheet extended', () => {
+  it('writes milestone: true as "Y"', () => {
+    const wb = buildWorkbook(minimalData(), 'lb');
+    const scheduleRows = rows(wb, 'Schedule');
+    const kickoffRow = scheduleRows.find(r => r[0] === 1);
+    expect(kickoffRow[9]).toBe('Y');
+  });
+
+  it('writes milestone: false as "N"', () => {
+    const wb = buildWorkbook(minimalData(), 'lb');
+    const scheduleRows = rows(wb, 'Schedule');
+    const analysisRow = scheduleRows.find(r => r[0] === 2);
+    expect(analysisRow[9]).toBe('N');
+  });
+
+  it('writes task rows in id order', () => {
+    const wb = buildWorkbook(minimalData(), 'lb');
+    const scheduleRows = rows(wb, 'Schedule');
+    const dataRows = scheduleRows.slice(1);
+    expect(dataRows[0][0]).toBe(1);
+    expect(dataRows[1][0]).toBe(2);
+  });
+
+  it('task with zero deps writes empty deps string', () => {
+    const pd = minimalData();
+    pd.tasks[0].deps = [];
+    const wb = buildWorkbook(pd, 'lb');
+    const scheduleRows = rows(wb, 'Schedule');
+    const row = scheduleRows.find(r => r[0] === 1);
+    expect(row[7]).toBe('');
+  });
+});
+
+describe('buildWorkbook — Specifications sheet extended', () => {
+  it('writes spec value as number when numeric', () => {
+    const wb = buildWorkbook(minimalData(), 'lb');
+    const specRows = rows(wb, 'Specifications');
+    const specRow = specRows.find(r => r[0] === 'AE-001');
+    expect(typeof specRow[3]).toBe('number');
+    expect(specRow[3]).toBe(200);
+  });
+
+  it('multiple specs written in order', () => {
+    const pd = minimalData();
+    pd.specs.push({ id: 'PE-001', category: 'Perf', name: 'Climb', value: 1000, units: 'ft/min', status: 'TBD', group: 'P', notes: '', depIds: [] });
+    const wb = buildWorkbook(pd, 'lb');
+    const specRows = rows(wb, 'Specifications').slice(1);
+    expect(specRows[0][0]).toBe('AE-001');
+    expect(specRows[1][0]).toBe('PE-001');
+  });
+});
+
+describe('buildWorkbook — Org Chart sheet extended', () => {
+  it('single reports-to written without trailing comma', () => {
+    const pd = minimalData();
+    pd.org = [{ name: 'Alice', title: 'Lead', team: 'Systems', reportsTo: ['Bob'], email: '' }];
+    const wb = buildWorkbook(pd, 'lb');
+    const orgRows = rows(wb, 'Org Chart');
+    expect(orgRows[1][3]).toBe('Bob');
+  });
+});

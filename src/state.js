@@ -32,6 +32,12 @@ export const state = {
   showCriticalPath: false,
   showGanttLegend:  false,
 
+  // ── Gantt render state ──────────────────────────────────────────────────────
+  ganttMinDateRef: null, // set by renderGantt; used by adjustZoom scroll math
+  ganttTodayX:     null, // px offset of Today line; null when out of range
+  depArrowEls:     [],   // { el, predId, succId } — rebuilt each renderGantt()
+  conflictSet:     new Set(), // task IDs with scheduling conflicts
+
   // ── Bar drag ────────────────────────────────────────────────────────────────
   barDrag: {
     active: false, pending: false, taskId: null, mode: null,
@@ -51,6 +57,18 @@ export const state = {
   // ── Org view ────────────────────────────────────────────────────────────────
   orgZoomIdx:    4, // index into ORG_ZOOM_STEPS; default 1.0
   orgSearchQuery: '',
+
+  // ── Handler registry (avoids circular imports between render/* and ui/*) ────
+  // Populated by main.js after all functions are defined. Render modules call
+  // these instead of importing from main.js directly.
+  handlers: {
+    openWeightPanel: null,
+    openTaskPanel:   null,
+    openSpecPanel:   null,
+    openOrgPanel:    null,
+    toggleHelp:      null,
+    applyUndo:       null,
+  },
 };
 
 /**
@@ -88,4 +106,9 @@ export function resetState() {
   state.specSearchQuery = '';
   state.orgZoomIdx    = 4;
   state.orgSearchQuery = '';
+  state.ganttMinDateRef = null;
+  state.ganttTodayX     = null;
+  state.depArrowEls     = [];
+  state.conflictSet     = new Set();
+  state.handlers = { openWeightPanel: null, openTaskPanel: null, openSpecPanel: null, openOrgPanel: null, toggleHelp: null, applyUndo: null };
 }

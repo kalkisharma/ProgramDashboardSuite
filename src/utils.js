@@ -1,3 +1,5 @@
+export const TODAY = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+
 export function esc(s) {
   return String(s == null ? '' : s)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');

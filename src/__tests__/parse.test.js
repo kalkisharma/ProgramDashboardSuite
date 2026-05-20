@@ -157,3 +157,108 @@ describe('extractWorkDays', () => {
     expect(extractWorkDays({ 'Work Days': 'invalid' })).toBeNull();
   });
 });
+
+describe('parseInfoSheet — extended', () => {
+  it('parses phase name keys', () => {
+    const ws = sheet([
+      ['Field', 'Value'],
+      ['Phase 1 Name', 'Concept'],
+      ['Phase 2 Name', 'PDR'],
+    ]);
+    const info = parseInfoSheet(ws);
+    expect(info['Phase 1 Name']).toBe('Concept');
+    expect(info['Phase 2 Name']).toBe('PDR');
+  });
+
+  it('skips rows with null key but includes rows with valid keys', () => {
+    const ws = sheet([
+      [null, 'no key'],
+      ['Valid Key', 'yes'],
+    ]);
+    const info = parseInfoSheet(ws);
+    expect(info['Valid Key']).toBe('yes');
+    expect(info).not.toHaveProperty('null');
+  });
+
+  it('handles numeric values', () => {
+    const ws = sheet([['Field', 'Value'], ['Budget', 1000000]]);
+    expect(parseInfoSheet(ws)['Budget']).toBe(1000000);
+  });
+});
+
+describe('parseScheduleSheet — extended', () => {
+  const HDR = ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'];
+
+  it('parses percent complete as a number', () => {
+    const ws = sheet([HDR, [5, '1.5', 'Task', '', new Date(2024,0,1), new Date(2024,0,10), 75, '', 'Eng', '', '']]);
+    expect(parseScheduleSheet(ws)[0].pct).toBe(75);
+  });
+
+  it('treats "y" (lowercase) as milestone', () => {
+    const ws = sheet([HDR, [6, '1.6', 'Rev', '', new Date(2024,0,1), new Date(2024,0,1), 0, '', '', 'y', '']]);
+    expect(parseScheduleSheet(ws)[0].milestone).toBe(true);
+  });
+
+  it('parses notes string', () => {
+    const ws = sheet([HDR, [7, '1.7', 'Task', '', null, null, 0, '', '', '', 'Important note']]);
+    expect(parseScheduleSheet(ws)[0].notes).toBe('Important note');
+  });
+
+  it('multiple tasks parsed in order', () => {
+    const ws = sheet([
+      HDR,
+      [1, '1.1', 'Alpha', '', new Date(2024,0,1), new Date(2024,0,5), 0, '', 'A', '', ''],
+      [2, '1.2', 'Beta',  '', new Date(2024,0,6), new Date(2024,0,10), 50, '1', 'B', '', ''],
+    ]);
+    const tasks = parseScheduleSheet(ws);
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0].name).toBe('Alpha');
+    expect(tasks[1].name).toBe('Beta');
+    expect(tasks[1].deps).toEqual([1]);
+  });
+});
+
+describe('parseSpecsSheet — extended', () => {
+  const HDR = ['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs'];
+
+  it('handles empty notes', () => {
+    const ws = sheet([HDR, ['PE-001','Perf','Climb Rate',1000,'ft/min','Target','Perf','','']]);
+    expect(parseSpecsSheet(ws)[0].notes).toBe('');
+  });
+
+  it('handles missing dep IDs', () => {
+    const ws = sheet([HDR, ['PE-002','Perf','Speed',250,'kt','TBD','Perf','','']]);
+    expect(parseSpecsSheet(ws)[0].depIds).toEqual([]);
+  });
+});
+
+describe('parseOrgSheet — extended', () => {
+  it('handles single reports-to (not a comma list)', () => {
+    const ws = sheet([
+      ['Name','Title','Team','Reports To','Email'],
+      ['Bob','Manager','Systems','Carol','bob@example.com'],
+    ]);
+    const org = parseOrgSheet(ws);
+    expect(org[0].reportsTo).toEqual(['Carol']);
+  });
+
+  it('handles empty reports-to (root node)', () => {
+    const ws = sheet([
+      ['Name','Title','Team','Reports To','Email'],
+      ['Carol','CEO','Exec','','carol@example.com'],
+    ]);
+    const org = parseOrgSheet(ws);
+    expect(org[0].reportsTo).toEqual([]);
+  });
+});
+
+describe('extractWorkDays — extended', () => {
+  it('returns Mon-Thu for "Mon,Tue,Wed,Thu"', () => {
+    expect(extractWorkDays({ 'Work Days': 'Mon,Tue,Wed,Thu' })).toEqual([1,2,3,4]);
+  });
+
+  it('handles uppercase day names', () => {
+    const result = extractWorkDays({ 'Work Days': 'MON,TUE,WED,THU,FRI' });
+    expect(result).toEqual([1,2,3,4,5]);
+  });
+});
