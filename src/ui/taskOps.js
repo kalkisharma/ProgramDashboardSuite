@@ -8,7 +8,6 @@ import { pushUndo } from '../core/undo.js';
 import { showToast, safeRender } from './toast.js';
 import { closeSidePanel } from './panelBase.js';
 import { recalcWBS } from '../compute/wbs.js';
-import { startSpecNameEdit } from './specEdits.js';
 
 export function addNewSpec() {
   const filterEl = document.getElementById('specs-filter');
@@ -28,10 +27,9 @@ export function addNewSpec() {
   pushUndo('spec added');
   state.ProjectData.specs.push(newSpec);
   renderSpecs();
-  if (state.handlers.openSpecPanel) state.handlers.openSpecPanel(newId);
-  showToast('Specification added', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
-  const nameEl = document.querySelector('#sp-body .sp-name-edit');
-  if (nameEl) startSpecNameEdit(nameEl, newSpec);
+  // Open the edit form directly so the user can fill in the name and details immediately.
+  if (state.handlers.openSpecEditPanel) state.handlers.openSpecEditPanel(newId);
+  else if (state.handlers.openSpecPanel) state.handlers.openSpecPanel(newId);
 }
 
 export function deleteTask(taskId) {

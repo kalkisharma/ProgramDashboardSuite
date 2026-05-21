@@ -28,9 +28,7 @@ import {
   startTaskNameEdit, startTaskTeamEdit, startTaskPctEdit,
   startPanDrag, updateTodayFloat,
 } from './render/gantt.js';
-import { startSpecNameEdit, startSpecCategoryEdit, startSpecValueEdit, startSpecUnitsEdit, startSpecGroupEdit, startSpecIdEdit, startSpecNotesEdit } from './ui/specEdits.js';
 import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported } from './ui/taskOps.js';
-import { startOrgNameEdit, startOrgTitleEdit, startOrgTeamEdit, startOrgReportsEdit, startOrgEmailEdit } from './ui/orgEdits.js';
 
 // ─── Function Index ───────────────────────────────────────────────────────────
 // L66   App State          — state.* (see src/state.js); APP_VERSION
@@ -43,7 +41,7 @@ import { startOrgNameEdit, startOrgTitleEdit, startOrgTeamEdit, startOrgReportsE
 // L658  Weight Editing     — openWeightPanel, saveWeightRow, deleteWeightRow, addWeightRow
 // L750  Side Panel – Spec  — openSpecPanel
 // L853  Side Panel – Task  — openTaskPanel
-// L983  Side Panel – Org   — openOrgPanel (inline edits), openOrgEditPanel (add only), saveOrgPerson, deleteOrgPerson
+// L983  Side Panel – Org   — openOrgPanel, openOrgEditPanel, saveOrgPerson, deleteOrgPerson
 // L1149 Project Info       — openInfoPanel, saveInfoPanel
 // L1212 Init               — initPersistedState (zoom, filters, work days from localStorage)
 // L~1270 Event Handlers    — all static addEventListener wiring
@@ -68,7 +66,7 @@ import { startOrgNameEdit, startOrgTitleEdit, startOrgTeamEdit, startOrgReportsE
 // are all in src/state.js — import { state } from './state.js'
 // TODAY imported from ./utils.js
 
-const APP_VERSION = 'v4.1.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v4.2.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('app-version-label').textContent = APP_VERSION;
 });
@@ -405,43 +403,6 @@ function renderDashboard() {
 }
 
 // renderGantt and all gantt functions — imported from ./render/gantt.js
-// ─── SIDE PANEL: NOTES EDIT ──────────────────────────────────────────────────
-function startNotesEdit(el, t) {
-  if (el.querySelector('textarea')) return;
-  const origNotes = t.notes;
-  const origOpener = state.spOpener;
-  el.innerHTML = '';
-  el.removeAttribute('tabindex'); el.removeAttribute('role');
-  const ta = document.createElement('textarea');
-  ta.className = 'sp-notes-ta';
-  ta.value = origNotes;
-  ta.placeholder = 'Add notes…';
-  el.appendChild(ta);
-  const hint = document.createElement('div');
-  hint.className = 'sp-hint';
-  hint.textContent = 'Ctrl/Cmd+Enter to save · Esc to cancel';
-  el.appendChild(hint);
-  ta.focus();
-  let done = false;
-  const save = () => {
-    if (done) return; done = true;
-    t.notes = ta.value;
-    renderGantt();
-    state.spCurrentType = null; openTaskPanel(t.id); state.spOpener = origOpener;
-  };
-  const cancel = () => {
-    if (done) return; done = true;
-    state.spCurrentType = null; openTaskPanel(t.id); state.spOpener = origOpener;
-    const newEl = document.querySelector('.sp-notes-field');
-    if (newEl) newEl.focus();
-  };
-  ta.addEventListener('keydown', e => {
-    e.stopPropagation(); // prevent Space/Enter from bubbling to parent div's activation listener
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); save(); }
-    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-  });
-  ta.addEventListener('blur', save);
-}
 
 // ─── SIDE PANEL: DEPENDENCY EDITING ──────────────────────────────────────────
 // wouldCreateCycle imported from ./compute/wbs.js (signature: wouldCreateCycle(tasks, taskId, candidateId))
@@ -744,11 +705,11 @@ function openSpecPanel(specId) {
 
   const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
   let html = `<div class="sp-meta">
-    <div class="sp-meta-name"><span class="sp-name-edit" tabindex="0" title="Click to edit name" style="font-weight:600;cursor:text">${esc(s.name)}</span></div>
-    <div class="sp-meta-id"><code class="sp-id-edit" tabindex="0" title="Click to edit spec ID" style="color:${col.text};cursor:text">${esc(s.id)}</code> · <span class="sp-cat-edit" tabindex="0" title="Click to edit category" style="color:${col.text};cursor:pointer">${esc(s.category)}</span> · <span class="sp-group-edit" tabindex="0" title="Click to edit group" style="cursor:text">${esc(s.group) || '<span style="color:var(--muted);font-style:italic">No group</span>'}</span></div>
-    <div class="sp-meta-val"><span class="sp-val-edit" tabindex="0" title="Click to edit value" style="cursor:text">${s.value !== '' && s.value != null ? esc(String(s.value)) : '<span style="color:var(--muted);font-style:italic">Add value…</span>'}</span> <span class="sp-units-edit" tabindex="0" title="Click to edit units" style="font-size:0.85rem;font-weight:400;color:var(--muted);cursor:text">${esc(s.units)}</span></div>
+    <div class="sp-meta-name" style="font-weight:600">${esc(s.name)}</div>
+    <div class="sp-meta-id"><code style="color:${col.text}">${esc(s.id)}</code> · <span style="color:${col.text}">${esc(s.category)}</span> · ${esc(s.group) || '<span style="color:var(--muted);font-style:italic">No group</span>'}</div>
+    <div class="sp-meta-val">${s.value !== '' && s.value != null ? esc(String(s.value)) : '<span style="color:var(--muted);font-style:italic">No value</span>'} <span style="font-size:0.85rem;font-weight:400;color:var(--muted)">${esc(s.units)}</span></div>
     <span class="badge ${sc}">${esc(s.status)}</span>
-    <div class="sp-notes-field${s.notes ? '' : ' empty'}" tabindex="0" role="button" aria-label="Edit spec notes">${s.notes ? esc(s.notes).replace(/\n/g,'<br>') : ''}</div>
+    ${s.notes ? `<div class="sp-meta-notes" style="white-space:pre-wrap;margin-top:8px">${esc(s.notes)}</div>` : ''}
   </div>`;
 
   const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
@@ -785,6 +746,7 @@ function openSpecPanel(specId) {
     <div class="sp-dep-list" id="sp-spec-dep-list"></div>
   </div>
   <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+    <button class="btn-secondary btn-sm" id="sp-edit-spec-btn" style="width:100%;margin-bottom:8px">Edit Spec</button>
     <button class="btn-secondary btn-sm" id="sp-delete-spec-btn" style="width:100%" aria-label="Delete this specification">Delete Specification</button>
   </div>`;
 
@@ -793,46 +755,81 @@ function openSpecPanel(specId) {
   spBody.querySelectorAll('[data-task-id]').forEach(el => {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
-
-  // Spec dep × remove buttons
   spBody.querySelectorAll('[data-rm-spec-dep]').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); removeSpecDep(s, +btn.dataset.rmSpecDep); });
   });
-
-  // Inline field edits: name, id, category, value, units, group, notes
-  [{ sel: '.sp-name-edit', fn: startSpecNameEdit }, { sel: '.sp-id-edit', fn: startSpecIdEdit },
-   { sel: '.sp-cat-edit', fn: startSpecCategoryEdit },
-   { sel: '.sp-val-edit', fn: startSpecValueEdit }, { sel: '.sp-units-edit', fn: startSpecUnitsEdit },
-   { sel: '.sp-group-edit', fn: startSpecGroupEdit }]
-    .forEach(({ sel, fn }) => {
-      const el = spBody.querySelector(sel);
-      if (!el) return;
-      el.addEventListener('click', () => fn(el, s));
-      el.addEventListener('keydown', e => { if (e.key === 'Enter') fn(el, s); });
-    });
-  const notesEl = spBody.querySelector('.sp-notes-field');
-  if (notesEl) {
-    notesEl.addEventListener('click', () => startSpecNotesEdit(notesEl, s));
-    notesEl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startSpecNotesEdit(notesEl, s); } });
-  }
-
   wirePicker({ btnId: 'sp-add-spec-dep-btn', pickerId: 'sp-spec-dep-picker', listId: 'sp-spec-dep-list', buildFn: buildSpecDepPickerList, ref: s });
-
+  spBody.querySelector('#sp-edit-spec-btn').addEventListener('click', () => openSpecEditPanel(specId));
   const delSpecBtn = spBody.querySelector('#sp-delete-spec-btn');
   if (delSpecBtn) delSpecBtn.addEventListener('click', () => deleteSpec(s.id));
 
   state.spCurrentType = 'spec'; state.spCurrentId = specId;
   showSidePanel();
+}
 
-  // Wire title (sp-title) for name edit
-  const titleEl = document.getElementById('sp-title');
-  if (titleEl) {
-    titleEl.style.cursor = 'text';
-    titleEl.setAttribute('tabindex', '0');
-    titleEl.setAttribute('title', 'Click to edit name');
-    titleEl.addEventListener('click', () => startSpecNameEdit(titleEl, s));
-    titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') startSpecNameEdit(titleEl, s); });
-  }
+// ─── SPEC EDIT FORM ──────────────────────────────────────────────────────────
+function openSpecEditPanel(specId) {
+  const s = state.ProjectData.specs.find(s => s.id === specId);
+  if (!s) return;
+  state.spOpener = state.spOpener || document.activeElement;
+  document.getElementById('sp-title').textContent = `Edit: ${s.name}`;
+  const cats = Object.keys(SPEC_COLORS);
+  const catOpts = cats.map(c => `<option value="${esc(c)}"${c === s.category ? ' selected' : ''}>${esc(c)}</option>`).join('');
+  const statusOpts = ['Achieved','Target','TBD'].map(st => `<option value="${esc(st)}"${st === s.status ? ' selected' : ''}>${esc(st)}</option>`).join('');
+  const html = `<div class="sp-meta" style="padding:14px 14px 4px">
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-name">Name</label>
+      <input class="sp-form-input" id="spec-edit-name" type="text" value="${esc(s.name)}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-id">Spec ID</label>
+      <input class="sp-form-input" id="spec-edit-id" type="text" value="${esc(s.id)}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-cat">Category</label>
+      <select class="sp-form-input" id="spec-edit-cat">${catOpts}</select></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-val">Value</label>
+      <input class="sp-form-input" id="spec-edit-val" type="text" value="${esc(String(s.value ?? ''))}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-units">Units</label>
+      <input class="sp-form-input" id="spec-edit-units" type="text" value="${esc(s.units)}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-group">Group</label>
+      <input class="sp-form-input" id="spec-edit-group" type="text" value="${esc(s.group)}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-status">Status</label>
+      <select class="sp-form-input" id="spec-edit-status">${statusOpts}</select></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="spec-edit-notes">Notes</label>
+      <textarea class="sp-form-input" id="spec-edit-notes" rows="4">${esc(s.notes || '')}</textarea></div>
+  </div>
+  <div style="padding:0 16px">
+    <button class="btn-primary" id="spec-save-btn" style="width:100%;margin-bottom:8px">Save Changes</button>
+    <button class="btn-secondary btn-sm" id="spec-cancel-btn" style="width:100%;margin-bottom:8px">Cancel</button>
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <button class="btn-secondary btn-sm" id="spec-edit-delete-btn" style="width:100%">Delete Specification</button>
+    </div>
+  </div>`;
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  document.getElementById('spec-save-btn').addEventListener('click', () => saveSpecEdits(specId));
+  document.getElementById('spec-cancel-btn').addEventListener('click', () => { state.spCurrentType = null; openSpecPanel(specId); });
+  document.getElementById('spec-edit-delete-btn').addEventListener('click', () => deleteSpec(specId));
+  if (!state.spCurrentType) { state.spCurrentType = 'spec'; state.spCurrentId = specId; showSidePanel(); }
+}
+
+function saveSpecEdits(specId) {
+  const s = state.ProjectData.specs.find(s => s.id === specId);
+  if (!s) return;
+  const newName   = document.getElementById('spec-edit-name').value.trim();
+  const newId     = document.getElementById('spec-edit-id').value.trim();
+  const newCat    = document.getElementById('spec-edit-cat').value;
+  const newVal    = document.getElementById('spec-edit-val').value.trim();
+  const newUnits  = document.getElementById('spec-edit-units').value.trim();
+  const newGroup  = document.getElementById('spec-edit-group').value.trim();
+  const newStatus = document.getElementById('spec-edit-status').value;
+  const newNotes  = document.getElementById('spec-edit-notes').value;
+  if (!newName)  { showToast('Spec name cannot be empty', null, 3500); return; }
+  if (!newId)    { showToast('Spec ID cannot be empty', null, 3500); return; }
+  if (newId !== specId && state.ProjectData.specs.some(x => x.id === newId)) { showToast('Spec ID already in use', null, 3500); return; }
+  pushUndo('edit spec');
+  s.name = newName; s.id = newId; s.category = newCat; s.value = newVal;
+  s.units = newUnits; s.group = newGroup; s.status = newStatus; s.notes = newNotes;
+  if (newId !== specId) state.spCurrentId = newId;
+  renderSpecTable();
+  state.spCurrentType = null; openSpecPanel(newId);
+  showToast('Spec updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
 }
 
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
@@ -866,7 +863,7 @@ function openTaskPanel(taskId) {
       <strong>Start:</strong> ${fmt(t.start)} &nbsp;·&nbsp; <strong>End:</strong> ${fmt(t.end)}<br>
       <strong>Work Days:</strong> ${totalWd} total &nbsp;·&nbsp; ${t.pct === 100 ? '<span style="color:var(--success)">Complete ✓</span>' : remWd > 0 ? remWd + ' remaining' : '<span style="color:var(--danger)">Overdue</span>'}
     </div>
-    <div class="sp-notes-field${t.notes ? '' : ' empty'}" tabindex="0" role="button" aria-label="Edit task notes">${t.notes ? esc(t.notes).replace(/\n/g,'<br>') : ''}</div>
+    ${t.notes ? `<div class="sp-meta-notes" style="white-space:pre-wrap;margin-top:8px">${esc(t.notes)}</div>` : ''}
   </div>`;
 
   // Dependencies (tasks this one depends on)
@@ -916,36 +913,22 @@ function openTaskPanel(taskId) {
     <div class="sp-dep-list" id="sp-spec-link-list"></div>
   </div>
   <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+    <button class="btn-secondary btn-sm" id="sp-edit-task-btn" style="width:100%;margin-bottom:8px">Edit Task</button>
     <button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task</button>
   </div>`;
 
   const spBody = document.getElementById('sp-body');
   spBody.innerHTML = html;
 
-  // Task cards → open task panel
   spBody.querySelectorAll('[data-task-id]').forEach(el => {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
-  // Spec cards → open spec panel (stop propagation handled by × button)
   spBody.querySelectorAll('[data-spec-id]').forEach(el => {
     el.addEventListener('click', () => openSpecPanel(el.dataset.specId));
   });
-
-  // Notes: click or keyboard activates inline edit
-  const notesEl = spBody.querySelector('.sp-notes-field');
-  if (notesEl) {
-    notesEl.addEventListener('click', () => startNotesEdit(notesEl, t));
-    notesEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startNotesEdit(notesEl, t); }
-    });
-  }
-
-  // Dep × remove buttons
   spBody.querySelectorAll('[data-rm-dep]').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); removeDep(t, +btn.dataset.rmDep); });
   });
-
-  // Spec link × remove buttons
   spBody.querySelectorAll('[data-rm-spec-link]').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -953,16 +936,74 @@ function openTaskPanel(taskId) {
       if (spec) removeSpecLink(spec, t.id);
     });
   });
-
   wirePicker({ btnId: 'sp-add-dep-btn', pickerId: 'sp-dep-picker', listId: 'sp-dep-list', buildFn: buildDepPickerList, ref: t, itemSelector: '.sp-dep-item:not(.cycle)' });
-
   wirePicker({ btnId: 'sp-add-spec-link-btn', pickerId: 'sp-spec-link-picker', listId: 'sp-spec-link-list', buildFn: buildSpecLinkPickerList, ref: t });
-
+  spBody.querySelector('#sp-edit-task-btn').addEventListener('click', () => openTaskEditPanel(taskId));
   const delTaskBtn = spBody.querySelector('#sp-delete-task-btn');
   if (delTaskBtn) delTaskBtn.addEventListener('click', () => deleteTask(t.id));
 
   state.spCurrentType = 'task'; state.spCurrentId = taskId;
   showSidePanel();
+}
+
+// ─── TASK EDIT FORM ───────────────────────────────────────────────────────────
+function openTaskEditPanel(taskId) {
+  const t = state.ProjectData.tasks.find(t => t.id === taskId);
+  if (!t) return;
+  state.spOpener = state.spOpener || document.activeElement;
+  document.getElementById('sp-title').textContent = `Edit: ${t.name}`;
+  const toDateInput = d => { if (!d) return ''; const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dy = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dy}`; };
+  const allTeams = [...new Set(state.ProjectData.tasks.map(t => t.team).filter(Boolean))].sort();
+  const teamDl = allTeams.map(tm => `<option>${esc(tm)}</option>`).join('');
+  const html = `<div class="sp-meta" style="padding:14px 14px 4px">
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-name">Name</label>
+      <input class="sp-form-input" id="task-edit-name" type="text" value="${esc(t.name)}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-team">Team</label>
+      <input class="sp-form-input" id="task-edit-team" type="text" list="task-team-dl" value="${esc(t.team)}">
+      <datalist id="task-team-dl">${teamDl}</datalist></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-start">Start Date</label>
+      <input class="sp-form-input" id="task-edit-start" type="date" value="${toDateInput(t.start)}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-end">End Date</label>
+      <input class="sp-form-input" id="task-edit-end" type="date" value="${toDateInput(t.end)}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-pct">% Complete</label>
+      <input class="sp-form-input" id="task-edit-pct" type="number" min="0" max="100" value="${t.pct}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-notes">Notes</label>
+      <textarea class="sp-form-input" id="task-edit-notes" rows="4">${esc(t.notes || '')}</textarea></div>
+  </div>
+  <div style="padding:0 16px">
+    <button class="btn-primary" id="task-save-btn" style="width:100%;margin-bottom:8px">Save Changes</button>
+    <button class="btn-secondary btn-sm" id="task-cancel-btn" style="width:100%;margin-bottom:8px">Cancel</button>
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <button class="btn-secondary btn-sm" id="task-edit-delete-btn" style="width:100%">Delete Task</button>
+    </div>
+  </div>`;
+  const spBody = document.getElementById('sp-body');
+  spBody.innerHTML = html;
+  document.getElementById('task-save-btn').addEventListener('click', () => saveTaskEdits(taskId));
+  document.getElementById('task-cancel-btn').addEventListener('click', () => { state.spCurrentType = null; openTaskPanel(taskId); });
+  document.getElementById('task-edit-delete-btn').addEventListener('click', () => deleteTask(taskId));
+  if (!state.spCurrentType) { state.spCurrentType = 'task'; state.spCurrentId = taskId; showSidePanel(); }
+}
+
+function saveTaskEdits(taskId) {
+  const t = state.ProjectData.tasks.find(t => t.id === taskId);
+  if (!t) return;
+  const name = document.getElementById('task-edit-name').value.trim();
+  if (!name) { showToast('Task name cannot be empty', null, 3500); return; }
+  const team     = document.getElementById('task-edit-team').value.trim();
+  const startStr = document.getElementById('task-edit-start').value;
+  const endStr   = document.getElementById('task-edit-end').value;
+  const pct      = Math.max(0, Math.min(100, Math.round(parseFloat(document.getElementById('task-edit-pct').value) || 0)));
+  const notes    = document.getElementById('task-edit-notes').value;
+  const parseD   = s => { if (!s) return null; const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+  const newStart = startStr ? snapToWorkDay(parseD(startStr), state.ganttWorkDays, 1) : t.start;
+  const newEnd   = endStr   ? snapToWorkDay(parseD(endStr),   state.ganttWorkDays, 1) : t.end;
+  if (newStart && newEnd && newEnd < newStart) { showToast('End date must be on or after start date', null, 3500); return; }
+  pushUndo('edit task');
+  t.name = name; t.team = team; t.start = newStart; t.end = newEnd; t.pct = pct; t.notes = notes;
+  renderGantt();
+  state.spCurrentType = null; openTaskPanel(taskId);
+  showToast('Task updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
 }
 
 // ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
@@ -975,16 +1016,13 @@ function openOrgPanel(name) {
   const col = teamColor(person.team);
   document.getElementById('sp-title').textContent = person.name;
 
-  // Fields are inline-editable (click to edit, Enter/Escape commit/cancel) — same pattern as spec panel.
   let html = `<div class="sp-meta">
-    <div class="sp-meta-name"><span class="org-name-edit" tabindex="0" title="Click to edit name" style="font-weight:600;cursor:text">${esc(person.name)}</span></div>
-    <div class="sp-meta-id"><span class="org-team-edit" tabindex="0" title="Click to edit team" style="color:${col};font-weight:700;cursor:text">${esc(person.team) || '<span style="color:var(--muted);font-style:italic">No team</span>'}</span></div>
-    <div class="sp-meta-val" style="font-size:1rem"><span class="org-title-edit" tabindex="0" title="Click to edit title" style="cursor:text">${esc(person.title) || '<span style="color:var(--muted);font-style:italic">No title</span>'}</span></div>
-    <div class="sp-meta-notes"><strong>Reports to:</strong> <span class="org-reports-edit" tabindex="0" title="Click to edit (comma-separated)" style="cursor:text">${person.reportsTo.length ? person.reportsTo.map(r => esc(r)).join(', ') : '<span style="color:var(--muted);font-style:italic">None</span>'}</span></div>
-    <div class="sp-meta-notes"><span class="org-email-edit" tabindex="0" title="Click to edit email" style="cursor:text">${person.email ? esc(person.email) : '<span style="color:var(--muted);font-style:italic">No email</span>'}</span></div>
+    <div class="sp-meta-id" style="color:${col};font-weight:700">${esc(person.team) || 'No Team'}</div>
+    <div class="sp-meta-val" style="font-size:1rem">${esc(person.title) || '—'}</div>
+    ${person.email ? `<div class="sp-meta-notes">${esc(person.email)}</div>` : ''}
+    ${person.reportsTo.length ? `<div class="sp-meta-notes"><strong>Reports to:</strong> ${person.reportsTo.map(r => esc(r)).join(', ')}</div>` : ''}
   </div>`;
 
-  // Direct reports
   const reports = state.ProjectData.org.filter(p => p.reportsTo.includes(name));
   if (reports.length) {
     html += `<div class="sp-section-label">Direct Reports (${reports.length})</div>`;
@@ -998,7 +1036,6 @@ function openOrgPanel(name) {
     });
   }
 
-  // Tasks owned by this person's team
   const myTasks = state.ProjectData.tasks.filter(t => t.team === person.team);
   if (myTasks.length) {
     html += `<div class="sp-section-label" style="margin-top:16px">Team Tasks (${myTasks.length})</div>`;
@@ -1018,7 +1055,7 @@ function openOrgPanel(name) {
   }
 
   html += `<div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
-    <button class="btn-secondary btn-sm" id="org-delete-btn" style="width:100%">Delete Person</button>
+    <button class="btn-secondary btn-sm" id="org-edit-person-btn" style="width:100%">Edit Person</button>
   </div>`;
 
   const spBody = document.getElementById('sp-body');
@@ -1029,39 +1066,18 @@ function openOrgPanel(name) {
   spBody.querySelectorAll('[data-task-id]').forEach(el => {
     el.addEventListener('click', () => openTaskPanel(+el.dataset.taskId));
   });
-
-  // Inline field edit wiring — same pattern as spec panel
-  [{ sel: '.org-name-edit', fn: startOrgNameEdit }, { sel: '.org-title-edit', fn: startOrgTitleEdit },
-   { sel: '.org-team-edit', fn: startOrgTeamEdit }, { sel: '.org-reports-edit', fn: startOrgReportsEdit },
-   { sel: '.org-email-edit', fn: startOrgEmailEdit }]
-    .forEach(({ sel, fn }) => {
-      const el = spBody.querySelector(sel);
-      if (!el) return;
-      el.addEventListener('click', () => fn(el, person));
-      el.addEventListener('keydown', e => { if (e.key === 'Enter') fn(el, person); });
-    });
-
-  spBody.querySelector('#org-delete-btn').addEventListener('click', () => deleteOrgPerson(name));
-
+  spBody.querySelector('#org-edit-person-btn').addEventListener('click', () => openOrgEditPanel(name));
   state.spCurrentType = 'org'; state.spCurrentId = name;
   showSidePanel();
-
-  // Wire sp-title for name editing (same affordance as spec panel)
-  const titleEl = document.getElementById('sp-title');
-  if (titleEl) {
-    titleEl.style.cursor = 'text';
-    titleEl.setAttribute('tabindex', '0');
-    titleEl.setAttribute('title', 'Click to edit name');
-    titleEl.addEventListener('click', () => { const el = spBody.querySelector('.org-name-edit'); if (el) startOrgNameEdit(el, person); });
-    titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { const el = spBody.querySelector('.org-name-edit'); if (el) startOrgNameEdit(el, person); } });
-  }
 }
 
 // ─── ORG CHART EDITING ────────────────────────────────────────────────────────
-/** Opens the Add Person form. Existing-person editing is handled inline in openOrgPanel. */
-function openOrgEditPanel() {
+/** @param {string|null} name - Person's current name, or null to add a new person. */
+function openOrgEditPanel(name) {
+  const person = name ? state.ProjectData.org.find(p => p.name === name) : null;
+  const isNew  = !person;
   state.spOpener = state.spOpener || document.activeElement;
-  document.getElementById('sp-title').textContent = 'Add Person';
+  document.getElementById('sp-title').textContent = isNew ? 'Add Person' : `Edit: ${person.name}`;
 
   const allTeams = [...new Set(state.ProjectData.org.map(p => p.team).filter(Boolean))].sort();
   const teamDl   = allTeams.map(t => `<option>${esc(t)}</option>`).join('');
@@ -1069,34 +1085,42 @@ function openOrgEditPanel() {
   const html = `<div class="sp-meta" style="padding:14px 14px 4px">
     <div class="sp-form-group">
       <label class="sp-form-label" for="org-edit-name">Name</label>
-      <input class="sp-form-input" id="org-edit-name" type="text" value="">
+      <input class="sp-form-input" id="org-edit-name" type="text" value="${esc(person ? person.name : '')}">
     </div>
     <div class="sp-form-group">
       <label class="sp-form-label" for="org-edit-title">Title / Role</label>
-      <input class="sp-form-input" id="org-edit-title" type="text" value="">
+      <input class="sp-form-input" id="org-edit-title" type="text" value="${esc(person ? person.title : '')}">
     </div>
     <div class="sp-form-group">
       <label class="sp-form-label" for="org-edit-team">Team</label>
-      <input class="sp-form-input" id="org-edit-team" type="text" list="org-team-dl" value="">
+      <input class="sp-form-input" id="org-edit-team" type="text" list="org-team-dl" value="${esc(person ? person.team : '')}">
       <datalist id="org-team-dl">${teamDl}</datalist>
     </div>
     <div class="sp-form-group">
       <label class="sp-form-label" for="org-edit-reports">Reports To <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:0.7rem">(comma-separated)</span></label>
-      <input class="sp-form-input" id="org-edit-reports" type="text" value="">
+      <input class="sp-form-input" id="org-edit-reports" type="text" value="${esc(person ? person.reportsTo.join(', ') : '')}">
     </div>
     <div class="sp-form-group">
       <label class="sp-form-label" for="org-edit-email">Email</label>
-      <input class="sp-form-input" id="org-edit-email" type="email" value="">
+      <input class="sp-form-input" id="org-edit-email" type="email" value="${esc(person ? person.email : '')}">
     </div>
   </div>
   <div style="padding:0 16px">
-    <button class="btn-primary" id="org-save-btn" style="width:100%;margin-bottom:8px">Add Person</button>
+    <button class="btn-primary" id="org-save-btn" style="width:100%;margin-bottom:8px">${isNew ? 'Add Person' : 'Save Changes'}</button>
+    ${!isNew ? `<button class="btn-secondary btn-sm" id="org-cancel-btn" style="width:100%;margin-bottom:8px">Cancel</button>
+    <div style="margin-top:8px;padding-top:12px;border-top:1px solid var(--border)">
+      <button class="btn-secondary btn-sm" id="org-delete-btn" style="width:100%">Delete Person</button>
+    </div>` : ''}
   </div>`;
 
   const spBody = document.getElementById('sp-body');
   spBody.innerHTML = html;
-  document.getElementById('org-save-btn').addEventListener('click', () => saveOrgPerson(null));
-  state.spCurrentType = 'org'; state.spCurrentId = null; showSidePanel();
+  document.getElementById('org-save-btn').addEventListener('click', () => saveOrgPerson(name));
+  if (!isNew) {
+    document.getElementById('org-cancel-btn').addEventListener('click', () => { state.spCurrentType = null; openOrgPanel(name); });
+    document.getElementById('org-delete-btn').addEventListener('click', () => deleteOrgPerson(name));
+  }
+  if (!state.spCurrentType) { state.spCurrentType = 'org'; state.spCurrentId = name; showSidePanel(); }
 }
 
 function saveOrgPerson(oldName) {
@@ -1285,10 +1309,12 @@ function saveInfoPanel() {
   if (_savedTeam) state.ganttTeamFilter = _savedTeam;
 
   // Register handler callbacks for render modules (avoids circular imports)
-  state.handlers.openWeightPanel = openWeightPanel;
-  state.handlers.openTaskPanel   = openTaskPanel;
-  state.handlers.openSpecPanel   = openSpecPanel;
-  state.handlers.openOrgPanel    = openOrgPanel;
+  state.handlers.openWeightPanel  = openWeightPanel;
+  state.handlers.openTaskPanel    = openTaskPanel;
+  state.handlers.openSpecPanel    = openSpecPanel;
+  state.handlers.openSpecEditPanel = openSpecEditPanel;
+  state.handlers.openTaskEditPanel = openTaskEditPanel;
+  state.handlers.openOrgPanel     = openOrgPanel;
   state.handlers.toggleHelp      = toggleHelp;
   state.handlers.applyUndo       = applyUndo;
 })();
@@ -1347,7 +1373,7 @@ document.getElementById('org-search-clear').addEventListener('click', () => {
 
 // Weight budget, org chart, and project info editing
 document.getElementById('weight-add-btn').addEventListener('click', addWeightRow);
-document.getElementById('org-add-btn').addEventListener('click', () => openOrgEditPanel());
+document.getElementById('org-add-btn').addEventListener('click', () => openOrgEditPanel(null));
 document.getElementById('proj-info-btn').addEventListener('click', openInfoPanel);
 
 // Side panel and modals

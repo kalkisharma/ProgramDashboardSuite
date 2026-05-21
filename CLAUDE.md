@@ -42,8 +42,6 @@ npm test         # Vitest unit tests
 | `src/ui/tooltip.js` | `showTooltip`, `hideTooltip`, `positionTooltip` |
 | `src/ui/toast.js` | `showToast`, `safeSetItem`, `safeRender` |
 | `src/ui/rowReorder.js` | `startRowDrag`, `doRowDragMove`, `endRowDrag` |
-| `src/ui/specEdits.js` | `startSpec*Edit` functions (name, id, category, value, units, group, notes) |
-| `src/ui/orgEdits.js` | `startOrg*Edit` functions (name, title, team, reports-to, email) — inline org profile editing |
 | `src/ui/taskOps.js` | `addNewSpec`, `deleteTask`, `deleteSpec`, `addGanttTask`, `resetGanttToImported` |
 | `src/core/undo.js` | `pushUndo`, `fullSnapshot`, `applyUndo`, `applyRedo`, `scheduleDraftSave`, `clearDraft`, `updateUndoRedoBtns` |
 
@@ -325,4 +323,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v3.2.0** | `state.js` singleton — all mutable globals injectable | Done |
 | **v3.2.1** | `resetState()` export; fix stale state on file reload; function index refresh | Done |
 | **v4.0.0** | Milestone Gate: full module split (main.js 1434 lines), 170 tests, Gantt row ARIA announcements | Done |
-| **v4.1.0** | Org profile inline editing — remove "Edit Person" step, fields editable directly in panel (spec pattern) | Done — current |
+| **v4.1.0** | Org profile inline editing — remove "Edit Person" step, fields editable directly in panel (spec pattern) | Done |
+| **v4.2.0** | Unified explicit edit buttons — "Edit Task", "Edit Spec", "Edit Person" forms replace all inline panel editing | Done — current |
