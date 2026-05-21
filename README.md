@@ -114,7 +114,7 @@ git clone https://github.com/kalkisharma/ProgramDashboardSuite.git
 cd ProgramDashboardSuite
 npm install
 npm run dev       # dev server at http://localhost:5173
-npm test          # run unit tests (92 tests, ~500ms)
+npm test          # run unit tests (170 tests, ~700ms)
 npm run build     # outputs dist/index.html (single inlined file)
 ```
 
@@ -122,27 +122,47 @@ npm run build     # outputs dist/index.html (single inlined file)
 
 ```
 src/
-  main.js                  # all app logic (~4200 lines)
+  main.js                  # app init, side panels, event wiring (~1460 lines)
+  state.js                 # single exported mutable state object
   styles.css               # all CSS
   constants.js             # ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK, …
   colors.js                # color maps + phaseColor(), ganttColor(), teamColor()
   utils.js                 # esc, parseDate, fmt, daysBetween, work-day utilities
-  parse.js                 # pure sheet-parsing functions (no DOM); used by parseWorkbook()
+  parse.js                 # pure sheet-parsing functions (no DOM)
+  excel.js                 # pure workbook-building functions (no DOM)
   compute/
-    criticalPath.js        # CPM forward/backward pass (pure)
+    criticalPath.js        # CPM (pure)
     conflicts.js           # dependency overlap detection (pure)
     wbs.js                 # WBS renumbering + cycle detection (pure)
-  __tests__/               # Vitest unit tests for all pure modules
-index.html                 # HTML shell (imports src/main.js as ES module)
+  render/
+    gantt.js               # Gantt SVG rendering + inline edits + bar drag
+    specs.js               # Specifications table rendering
+    progDash.js            # Program Dashboard KPIs and phase/team bars
+    weightBudget.js        # Weight Budget chart
+    orgChart.js            # Org chart SVG layout
+  ui/
+    panelBase.js           # showSidePanel / closeSidePanel
+    tooltip.js             # shared tooltip element
+    toast.js               # toast notifications + safeRender
+    rowReorder.js          # Gantt row drag-and-drop reorder
+    taskOps.js             # add/delete tasks and specs
+  core/
+    undo.js                # pushUndo, applyUndo/Redo, draft auto-save
+  __tests__/               # Vitest unit tests (170 tests across 7 files)
+docs/
+  TOUR.md                  # guided codebase walkthrough for new contributors
+  FLOW.md                  # key data flows as Mermaid diagrams
+index.html                 # HTML shell
 dist/index.html            # build output — single self-contained file (git-ignored)
-dashboard.html             # legacy single-file reference (no build needed)
 ```
 
 The build uses [vite-plugin-singlefile](https://github.com/richardtallent/vite-plugin-singlefile) to inline all JS and CSS into one `dist/index.html`. This is what gets distributed to end users.
 
 ### Architecture primer
 
-Read **[CLAUDE.md](CLAUDE.md)** before touching `src/main.js`. It documents the global state model, undo/redo architecture, Gantt rendering approach, localStorage keys, and versioning convention. The file is written for AI-assisted development but is the most complete map of the codebase.
+Start with **[docs/TOUR.md](docs/TOUR.md)** for a guided walkthrough of the module layout, data model, rendering pattern, and common gotchas. Then read **[docs/FLOW.md](docs/FLOW.md)** for key data flows (file load, bar drag, undo/redo) as Mermaid diagrams.
+
+**[CLAUDE.md](CLAUDE.md)** is the full developer reference — state model, localStorage keys, versioning convention, and the complete module API table. It is the authoritative source for release history.
 
 ### Versioning
 
@@ -151,8 +171,6 @@ Two sync points must be updated together on every release:
 2. `APP_VERSION` constant in `src/main.js`
 
 Then: `git tag vX.Y.Z <commit-sha>`.
-
-See [CHANGELOG.md](CHANGELOG.md) for full release history.
 
 ---
 
