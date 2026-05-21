@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v4.2.0 — 2026-05-21 -->
+<!-- Program Dashboard Suite v4.3.0 — 2026-05-21 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,21 +14,21 @@
     <div id="project-subtitle">Drop an Excel file to load your project</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <div class="tabs" id="tabs" role="tablist" style="display:none">
-      <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="gantt-panel"  data-tab="gantt">Gantt Chart</button>
-      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="specs-panel"  data-tab="specs">Vehicle Specifications</button>
-      <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="prog-panel"   data-tab="prog">Program Dashboard</button>
-      <button class="tab-btn" id="weight-tab-btn" role="tab" aria-selected="false" aria-controls="weight-panel" data-tab="weight" style="display:none">Weight Budget</button>
-      <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    style="display:none">Org Chart</button>
-    </div>
     <button class="btn-secondary" id="generate-sample-btn" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
     <button class="btn-secondary" id="save-excel-btn" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
-    <button class="btn-secondary btn-sm" id="proj-info-btn" title="Edit project information" style="display:none">Edit Project Info</button>
-    <span id="app-version-label" style="font-size:0.72rem;color:var(--muted);white-space:nowrap"></span>
+    <button class="btn-secondary btn-sm" id="proj-info-btn" title="Edit project information" style="display:none">Project Info</button>
     <button class="btn-secondary" id="help-btn" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
     <button id="theme-toggle" aria-label="Switch theme" title="Theme: Dark">🌙</button>
   </div>
 </div>
+
+<nav id="tab-nav" role="tablist" style="display:none">
+  <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="gantt-panel"  data-tab="gantt">Gantt Chart</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="specs-panel"  data-tab="specs">Vehicle Specifications</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="prog-panel"   data-tab="prog">Program Dashboard</button>
+  <button class="tab-btn" id="weight-tab-btn" role="tab" aria-selected="false" aria-controls="weight-panel" data-tab="weight" style="display:none">Weight Budget</button>
+  <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    style="display:none">Org Chart</button>
+</nav>
 
 <!-- MAIN -->
 <div id="main">
@@ -262,6 +262,8 @@
       <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Shift+Z</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Y</kbd></td><td style="padding:5px 8px;color:var(--muted)">Redo last undone action</td></tr>
       <tr><td style="padding:5px 8px;font-weight:700;white-space:nowrap"><kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Cmd+Enter</kbd> / <kbd style="background:var(--bg);border:1px solid var(--border);border-radius:3px;padding:1px 5px">Ctrl+Enter</kbd></td><td style="padding:5px 8px;color:var(--muted)">Save notes in the task side panel (Mac / Win)</td></tr>
     </table>
+
+    <p id="help-version" style="font-size:0.72rem;color:var(--muted);margin-top:20px;text-align:right"></p>
 
     </div>
   </div>

@@ -324,4 +324,5 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v3.2.1** | `resetState()` export; fix stale state on file reload; function index refresh | Done |
 | **v4.0.0** | Milestone Gate: full module split (main.js 1434 lines), 170 tests, Gantt row ARIA announcements | Done |
 | **v4.1.0** | Org profile inline editing — remove "Edit Person" step, fields editable directly in panel (spec pattern) | Done |
-| **v4.2.0** | Unified explicit edit buttons — "Edit Task", "Edit Spec", "Edit Person" forms replace all inline panel editing | Done — current |
+| **v4.2.0** | Unified explicit edit buttons — "Edit Task", "Edit Spec", "Edit Person" forms replace all inline panel editing | Done |
+| **v4.3.0** | Header reorganization — two-band layout (topbar + tab-nav), underline tab style, version in help modal footer | Done — current |

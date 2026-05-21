@@ -66,9 +66,9 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 // are all in src/state.js — import { state } from './state.js'
 // TODAY imported from ./utils.js
 
-const APP_VERSION = 'v4.2.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v4.3.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('app-version-label').textContent = APP_VERSION;
+  document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
 
 
@@ -354,12 +354,14 @@ function renderDashboard() {
   const subtitle = state.ProjectData.info['Project Subtitle']   || '';
   const admin    = state.ProjectData.info['File Administrator'] || '';
   const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
-  document.getElementById('project-title').textContent    = title;
+  const titleEl = document.getElementById('project-title');
+  titleEl.textContent = title;
+  titleEl.setAttribute('title', title);
   document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
   document.title = title + ' — Program Dashboard';
   document.getElementById('dropzone').style.display = 'none';
   document.getElementById('dashboard').style.display = 'flex';
-  document.getElementById('tabs').style.display = 'flex';
+  document.getElementById('tab-nav').style.display = 'flex';
   document.getElementById('org-tab-btn').style.display = state.ProjectData.org.length ? '' : 'none';
   document.getElementById('weight-tab-btn').style.display = state.ProjectData.weights.length ? '' : 'none';
   document.getElementById('generate-sample-btn').style.display = 'none';
@@ -1222,7 +1224,9 @@ function saveInfoPanel() {
   const subtitle = state.ProjectData.info['Project Subtitle']   || '';
   const admin    = state.ProjectData.info['File Administrator'] || '';
   const subParts = [subtitle, admin ? 'File Admin: ' + admin : ''].filter(Boolean);
-  document.getElementById('project-title').textContent    = title;
+  const titleEl2 = document.getElementById('project-title');
+  titleEl2.textContent = title;
+  titleEl2.setAttribute('title', title);
   document.getElementById('project-subtitle').textContent = subParts.join(' · ') || 'Project Dashboard';
   document.title = title + ' — Program Dashboard';
   safeRender(renderGantt,    'Gantt Chart');
