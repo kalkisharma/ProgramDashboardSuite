@@ -16,7 +16,7 @@ This tool runs entirely in the browser. Understanding its security posture:
 - **No server, no data transmission.** All processing happens locally on your machine. No Excel content, no project data, and no personal information is ever sent to any server.
 - **No CDN calls at runtime.** SheetJS is bundled into `dist/index.html` at build time via Vite. The distributed single-file HTML has no runtime network dependencies — once on disk, no outbound requests are made.
 - **HTML-escaped output.** All user-supplied Excel content is HTML-escaped before it is written into the page, preventing script execution from malicious cell values.
-- **No authentication, no cookies.** The tool stores a small number of preferences in `localStorage` (theme, zoom levels, work days, collapsed phases). No project data is sent anywhere.
+- **No authentication, no cookies.** The tool stores UI preferences in `localStorage` (theme, zoom levels, work days, column widths, collapsed phases, active filters). It also stores an **auto-save draft** (`vh-draft`) containing a full snapshot of the loaded project (tasks, specs, org chart, weight budget, project info) — written every 3 seconds after any edit and cleared on export. No data is transmitted; everything stays in the local browser. On shared machines, be aware that `localStorage` is accessible to any page on the same origin and persists until explicitly cleared or the draft is exported/dismissed.
 
 ---
 
@@ -26,7 +26,7 @@ For restricted or air-gapped environments:
 
 - Distribute `dist/index.html` as a single self-contained file. No companion files or network access are required.
 - The file can be placed on a shared network drive, a USB drive, or a local intranet server with no configuration changes.
-- If your environment enforces a Content Security Policy via HTTP headers (e.g., when served from a web server rather than opened as a local file), add `script-src 'self'` — no inline eval or CDN sources are needed.
+- If your environment enforces a Content Security Policy via HTTP headers (e.g., when served from a web server rather than opened as a local file): the build output inlines all JavaScript as `<script>` blocks (no external `src`), so `script-src 'self'` alone is **not** sufficient. You need either `'unsafe-inline'` or a hash of the inlined script (the hash changes on every build). `style-src 'unsafe-inline'` is similarly required for inlined CSS.
 
 ---
 
