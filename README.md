@@ -62,7 +62,7 @@ Click the `?` button in the top-right for a built-in guide covering each tab, th
 
 ## Gantt Editing
 
-Changes are made directly in the browser and saved back to Excel with **💾 Save to Excel**.
+Changes are made directly in the browser and exported back to Excel with **Export to Excel**.
 
 | Action | How |
 |---|---|
@@ -73,16 +73,16 @@ Changes are made directly in the browser and saved back to Excel with **💾 Sav
 | Edit task name | Click the name cell |
 | Change team | Click the team cell |
 | Edit % complete | Click the % cell |
-| Edit task notes | Open a task in the side panel → click the notes area; `Ctrl+Enter` saves, `Esc` cancels |
+| Edit task details / notes | Open a task in the side panel → click **Edit Task** → edit fields → **Save Changes** |
 | Add a dependency | Open a task in the side panel → click **+ Add dependency**; search by name, WBS, or ID |
 | Remove a dependency | Open a task in the side panel → click `×` on a "Depends On" card |
 | Add a task | Click **+ Add Task** in the toolbar |
 | Delete a task | Open a task in the side panel → click **Delete Task** (two-tap confirm) |
-| Reset all edits | Click **↺ Reset** — reverts to the last imported state |
+| Reset all edits | Click **↺ Reset to Imported** — reverts to the last imported state |
 | Undo / Redo | Click ⟲/⟳ in the toolbar or use Ctrl+Z / Ctrl+Y |
 | Export to Excel | Click **Export to Excel** — saves a dated `.xlsx` re-importable into this tool |
 
-Bar drags snap to configured work days. Dependency arrows redraw automatically on drop. The dependency picker prevents cycles — tasks that would create a circular dependency are shown greyed out.
+Bar drags snap to configured work days. Dependency arrows and status rings track the bar in real time during drag. The dependency picker prevents cycles — tasks that would create a circular dependency are shown greyed out.
 
 All edits are tracked in an undo/redo stack (max 50 entries). An auto-save draft is written to `localStorage` every 3 seconds after any edit; if you close and reopen the page without exporting, a banner offers to restore the draft.
 
@@ -170,7 +170,13 @@ Two sync points must be updated together on every release:
 1. Line 1 of `index.html` — `<!-- Program Dashboard Suite vX.Y.Z — YYYY-MM-DD -->`
 2. `APP_VERSION` constant in `src/main.js`
 
-Then: `git tag vX.Y.Z <commit-sha>`.
+Then:
+```bash
+git tag vX.Y.Z <commit-sha>
+git push origin vX.Y.Z
+npm run build
+gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --notes "..."
+```
 
 ---
 
