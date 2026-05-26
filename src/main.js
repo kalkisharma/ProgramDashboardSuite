@@ -294,6 +294,7 @@ document.addEventListener('click', e => {
 });
 
 function loadFile(file) {
+  if (state.isDirty && !window.confirm('You have unsaved edits. Load this file and discard your changes?')) return;
   hideLoadError();
   const r = new FileReader();
   r.onload = ev => {
@@ -674,7 +675,7 @@ function saveWeightRow(idx) {
 function deleteWeightRow(idx) {
   const btn = document.getElementById('wt-delete-btn');
   if (!btn.dataset.confirming) {
-    btn.dataset.confirming = '1'; btn.textContent = 'Tap again to confirm delete';
+    btn.dataset.confirming = '1'; btn.textContent = 'Click again to confirm';
     btn.style.background = 'var(--danger)'; btn.style.color = '#fff';
     setTimeout(() => { if (btn.dataset.confirming) { btn.dataset.confirming = ''; btn.textContent = 'Delete Row'; btn.style.background = ''; btn.style.color = ''; } }, 3000);
     return;
@@ -684,7 +685,7 @@ function deleteWeightRow(idx) {
   closeSidePanel();
   if (!state.ProjectData.weights.length) document.getElementById('weight-tab-btn').style.display = 'none';
   else safeRender(renderWeightBudget, 'Weight Budget');
-  showToast('Weight row deleted · undo with Ctrl+Z');
+  showToast('Weight row deleted', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
 }
 
 function addWeightRow() {
@@ -1157,7 +1158,7 @@ function saveOrgPerson(oldName) {
 function deleteOrgPerson(name) {
   const btn = document.getElementById('org-delete-btn');
   if (!btn.dataset.confirming) {
-    btn.dataset.confirming = '1'; btn.textContent = 'Tap again to confirm delete';
+    btn.dataset.confirming = '1'; btn.textContent = 'Click again to confirm';
     btn.style.background = 'var(--danger)'; btn.style.color = '#fff';
     setTimeout(() => { if (btn.dataset.confirming) { btn.dataset.confirming = ''; btn.textContent = 'Delete Person'; btn.style.background = ''; btn.style.color = ''; } }, 3000);
     return;
@@ -1168,7 +1169,7 @@ function deleteOrgPerson(name) {
   closeSidePanel();
   if (!state.ProjectData.org.length) document.getElementById('org-tab-btn').style.display = 'none';
   else safeRender(renderOrgChart, 'Org Chart');
-  showToast('Person deleted · undo with Ctrl+Z');
+  showToast('Person deleted', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
 }
 
 // ─── PROJECT INFO EDITING ─────────────────────────────────────────────────────

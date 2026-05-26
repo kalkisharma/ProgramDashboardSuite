@@ -49,7 +49,7 @@ export function renderProgDash() {
     daysToFinal > 0 ? `${daysToFinal} days remaining` :
     daysToFinal === 0 ? 'Today' : 'Completed';
 
-  const overdueTasks = state.ProjectData.tasks.filter(t => t.end && t.end < getToday() && (t.pct || 0) < 100 && !t.milestone).length;
+  const overdueTasks = state.ProjectData.tasks.filter(t => t.end && t.end < getToday() && (t.pct || 0) < 100).length;
 
   const specAchieved = state.ProjectData.specs.filter(s => s.status === 'Achieved').length;
   const specTarget   = state.ProjectData.specs.filter(s => s.status === 'Target').length;
@@ -123,7 +123,7 @@ export function renderProgDash() {
       <div class="kpi-card">
         <div class="kpi-label">Overdue</div>
         <div class="kpi-value" style="${overdueTasks > 0 ? 'color:#f85149' : ''}">${overdueTasks}</div>
-        <div class="kpi-sub">tasks past due</div>
+        <div class="kpi-sub">items past due</div>
       </div>
       ${nextMsCard}
       <div class="kpi-card">

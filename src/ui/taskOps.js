@@ -38,7 +38,7 @@ export function deleteTask(taskId) {
   const btn = document.getElementById('sp-delete-task-btn');
   if (btn && btn.dataset.confirming !== '1') {
     btn.dataset.confirming = '1';
-    btn.textContent = 'Tap again to confirm delete';
+    btn.textContent = 'Click again to confirm';
     btn.style.borderColor = '#f85149'; btn.style.color = '#f85149';
     setTimeout(() => {
       if (btn && btn.dataset.confirming === '1') {
@@ -64,7 +64,7 @@ export function deleteSpec(specId) {
   const btn = document.getElementById('sp-delete-spec-btn');
   if (btn && btn.dataset.confirming !== '1') {
     btn.dataset.confirming = '1';
-    btn.textContent = 'Tap again to confirm delete';
+    btn.textContent = 'Click again to confirm';
     btn.style.borderColor = '#f85149'; btn.style.color = '#f85149';
     setTimeout(() => {
       if (btn && btn.dataset.confirming === '1') {
@@ -114,6 +114,21 @@ export function addGanttTask() {
 
 export function resetGanttToImported() {
   if (!state.originalTasks.length) return;
+  const btn = document.getElementById('gantt-reset-btn');
+  if (btn && btn.dataset.confirming !== '1') {
+    const origText = btn.textContent;
+    btn.dataset.confirming = '1';
+    btn.textContent = '↺ Click again to confirm';
+    btn.style.borderColor = '#f85149'; btn.style.color = '#f85149';
+    setTimeout(() => {
+      if (btn && btn.dataset.confirming === '1') {
+        btn.dataset.confirming = ''; btn.textContent = origText;
+        btn.style.borderColor = ''; btn.style.color = '';
+      }
+    }, 3000);
+    return;
+  }
+  if (btn) { btn.dataset.confirming = ''; btn.style.borderColor = ''; btn.style.color = ''; }
   const cloneTask = t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] });
   const snapshot = state.ProjectData.tasks.map(cloneTask);
   state.ProjectData.tasks = state.originalTasks.map(cloneTask);
