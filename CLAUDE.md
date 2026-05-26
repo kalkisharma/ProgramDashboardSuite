@@ -8,15 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 npm install
 npm run dev      # http://localhost:5173
-npm run build    # outputs dist/index.html (single inlined file)
+npm run build    # outputs dist/ProgramDashboardSuite.html (single inlined file)
 npm test         # Vitest unit tests
 ```
 
-**Legacy** (`dashboard.html` on main branch): open directly in a browser. No build needed. This file is preserved as a reference but is no longer the primary development target.
-
 ## Architecture
 
-**Vite + ES Modules** (`src/main.js`, ~1434 lines) built into a single-file `dist/index.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
+**Vite + ES Modules** (`src/main.js`, ~1462 lines) built into a single-file `dist/ProgramDashboardSuite.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
 
 ### Source Module Layout
 
@@ -75,7 +73,7 @@ export const state = {
   redoStack:        [], // max 50 entries; populated by applyUndo(), cleared by pushUndo()
   isDirty:          false,
   barDrag:          { active: false, taskId: null, mode: null, ... },
-  barEls:           {},  // taskId → { bgRect, progRect, outlineRect, midY }
+  barEls:           {},  // taskId → { bgRect, progRect, outlineRect, midY [, diamond, cpRing, overRing] }
   rowDrag:          { active: false, srcIdx: null, dropIdx: null, ghost: null, indicator: null },
   calDisplayMonth:  null,
   collapsedPhases:  new Set(),
@@ -87,7 +85,7 @@ export const state = {
 };
 ```
 
-Implementation-local state that stays in `src/main.js`: `_draftTimer`, `_exportReminderTimer`, `_justLoaded`, `ganttMinDateRef`, `ganttTodayX`, `conflictSet`, `depArrowEls`, org/Gantt pan state, toast timers, help modal state, zoom debounce timers.
+Implementation-local state that stays in `src/main.js`: `_draftTimer`, `_exportReminderTimer`, `_justLoaded`, `ganttMinDateRef`, `ganttTodayX`, org/Gantt pan state, toast timers, help modal state, zoom debounce timers. Note: `state.conflictSet` and `state.depArrowEls` live in `state`, not in main.js.
 
 - `ProjectData.info` — key/value pairs from the "Project Info" sheet
 - `ProjectData.tasks[]` — `{ id, wbs, name, category, start, end, pct, deps, team, milestone, notes }`
@@ -178,7 +176,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 
 **Interactive editing (Gantt):** All edits operate on `ProjectData.tasks` directly and call `renderGantt()` to commit.
 
-- **Bar drag** — `mousedown` on a bar hit area (`data-taskid`) routes to `startBarDrag()`. Zone is determined by cursor position within 8px of left/right edge (`resize-left`/`resize-right`) or center (`move`). During drag, SVG elements are updated directly via `barEls[id]` (no full re-render). `snapToWorkDay()` keeps start/end on configured work days. A floating `#gantt-drag-label` shows new dates + work day counts. Full re-render fires on `mouseup`. Milestone bars use a diamond element stored as `barEls[id].diamond`.
+- **Bar drag** — `mousedown` on a bar hit area (`data-taskid`) routes to `startBarDrag()`. Zone is determined by cursor position within 8px of left/right edge (`resize-left`/`resize-right`) or center (`move`). During drag, SVG elements are updated directly via `barEls[id]` (no full re-render): `updateBarElementsDirect()` moves the bar rects, cp/overdue rings, and progress fill; `updateDepArrowsDirect()` recomputes all connected arrow paths from current `barEls` positions. `snapToWorkDay()` keeps start/end on configured work days. A floating `#gantt-drag-label` shows new dates + work day counts. Full re-render fires on `mouseup`. Milestone bars use a diamond element stored as `barEls[id].diamond`.
 - **Row reorder** — Hover a sub-task WBS cell to reveal the `⠿` affordance and a `grab` cursor. The entire `.g-wbs-wrap` div (class `g-wbs-draggable`) is the mousedown target — not the tiny `⠿` span, which has `pointer-events:none`. `startRowDrag()` sets `rowDrag.active = true`, stores `rowDrag.lb`, and appends a `position:fixed` ghost + indicator to `document.body`. The existing document-level listeners in `initGanttPan` call `doRowDragMove()` on mousemove and `endRowDrag()` on mouseup, which commit the splice and call `recalcWBS()` to renumber sequentially within phases. Phase headers (no dot, or ending `.0`) never get `g-wbs-draggable`. Disabled when either filter is active.
 - **Inline name edit** — Click `.g-name` → `startTaskNameEdit()` replaces span with `<input>`; Enter/blur confirms (non-empty only), Escape cancels.
 - **Team dropdown** — Click `.g-team` → `startTaskTeamEdit()` replaces span with `<select>` populated from unique sorted teams; change commits, Escape/blur-without-change restores.
@@ -219,8 +217,8 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 
 **Topbar buttons (right group):**
 - `#generate-sample-btn` — hidden after first file load
-- `#save-excel-btn` — shown after first file load
-- `#proj-info-btn` — shown after first file load; opens project info editor in side panel
+- `#save-excel-btn` — shown after first file load; label "Export to Excel"
+- `#proj-info-btn` — shown after first file load; label "Project Info"; opens project info editor in side panel
 - `#theme-toggle` — always visible (☀ / 🌙)
 
 **Event handling pattern (v2.6.0+):** No `onclick` attributes anywhere in the codebase — including dynamically-generated HTML. After setting `innerHTML`, wire buttons immediately via `querySelector`/`querySelectorAll`. Named filter helpers (`clearGanttFilters()`, `clearSpecsFilters()`) and class-based selectors (`.empty-help-btn`, `.gantt-clear-filter-btn`, `.specs-clear-filter-btn`) are used for post-render wiring. Calendar nav/close use `data-nav` / `data-close-cal` attributes and are wired alongside `data-date` day cells after each `cal.innerHTML` rebuild. Exception: `.onclick` property assignment (not HTML attribute) is acceptable when a closure must be replaced on each call (e.g. date picker `apply` function, toast undo button).
@@ -238,8 +236,8 @@ Each tab has its own zoom state and `±` toolbar buttons:
 ### Side Panel
 
 `#side-panel` slides in from the right (fixed, 420px). Has `role="dialog"` + `aria-modal="true"`. Entry points render into `#sp-body`:
-- `openSpecPanel(id)` — spec detail + linked tasks with risk warnings; all fields inline-editable
-- `openTaskPanel(id)` — task detail + linked specs; also shows work days total and remaining; all fields inline-editable
+- `openSpecPanel(id)` — spec detail + linked tasks with risk warnings; static view with "Edit Spec" button that opens inline edit form
+- `openTaskPanel(id)` — task detail + linked specs; also shows work days total and remaining; static view with "Edit Task" button that opens inline edit form
 - `openOrgPanel(name)` — person's profile + their team's tasks; "Edit Person" button opens `openOrgEditPanel(name)`
 - `openOrgEditPanel(name|null)` — edit form for org person fields; null = add new person; `saveOrgPerson(oldName)` / `deleteOrgPerson(name)`
 - `openWeightPanel(idx)` — edit form for a weight budget row at array index; `saveWeightRow(idx)` / `deleteWeightRow(idx)` / `addWeightRow()`
@@ -297,9 +295,15 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 
 **Two sync points per release** (both must be updated):
 1. Line 1 HTML comment: `<!-- Program Dashboard Suite vX.Y.Z — YYYY-MM-DD -->`
-2. `APP_VERSION` JS constant (~line 1182): `const APP_VERSION = 'vX.Y.Z';`
+2. `APP_VERSION` JS constant (~line 69 of `src/main.js`): `const APP_VERSION = 'vX.Y.Z';`
 
-**Git tag every release**: `git tag vX.Y.Z <commit-sha>` on the version-bump commit.
+**Git tag every release**:
+```bash
+git tag vX.Y.Z <commit-sha>
+git push origin vX.Y.Z
+npm run build
+gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --notes "..."
+```
 
 ### Release History
 
@@ -325,4 +329,6 @@ Format: `vMAJOR.MINOR.PATCH` (semantic versioning).
 | **v4.0.0** | Milestone Gate: full module split (main.js 1434 lines), 170 tests, Gantt row ARIA announcements | Done |
 | **v4.1.0** | Org profile inline editing — remove "Edit Person" step, fields editable directly in panel (spec pattern) | Done |
 | **v4.2.0** | Unified explicit edit buttons — "Edit Task", "Edit Spec", "Edit Person" forms replace all inline panel editing | Done |
-| **v4.3.0** | Header reorganization — two-band layout (topbar + tab-nav), underline tab style, version in help modal footer | Done — current |
+| **v4.3.0** | Header reorganization — two-band layout (topbar + tab-nav), underline tab style, version in help modal footer | Done |
+| **v4.3.1** | Fix live drag: dependency arrows, CP ring, overdue ring update in real time during bar drag | Done |
+| **v4.3.2** | Rename build output to `ProgramDashboardSuite.html`; compact tooltip (4 lines, dep count) | Done — current |
