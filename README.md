@@ -10,7 +10,7 @@ A client-side program dashboard for aerospace and vehicle development programs. 
 
 ## Getting Started
 
-**Distributed as a single HTML file.** Download `dist/index.html` from the [latest release](https://github.com/kalkisharma/ProgramDashboardSuite/releases) and open it in any modern browser — no install, no server, no internet connection required.
+**Distributed as a single HTML file.** Download `dist/ProgramDashboardSuite.html` from the [latest release](https://github.com/kalkisharma/ProgramDashboardSuite/releases) and open it in any modern browser — no install, no server, no internet connection required.
 
 ### Load your data
 
@@ -101,7 +101,7 @@ All edits are tracked in an undo/redo stack (max 50 entries). An auto-save draft
 
 ## Offline Use
 
-The tool runs entirely offline. The distributed `dist/index.html` is fully self-contained — all JS and CSS are inlined. No internet connection is required or used.
+The tool runs entirely offline. The distributed `dist/ProgramDashboardSuite.html` is fully self-contained — all JS and CSS are inlined. No internet connection is required or used.
 
 ---
 
@@ -115,7 +115,7 @@ cd ProgramDashboardSuite
 npm install
 npm run dev       # dev server at http://localhost:5173
 npm test          # run unit tests (170 tests, ~700ms)
-npm run build     # outputs dist/index.html (single inlined file)
+npm run build     # outputs dist/ProgramDashboardSuite.html (single inlined file)
 ```
 
 ### Project structure
@@ -153,10 +153,10 @@ docs/
   TOUR.md                  # guided codebase walkthrough for new contributors
   FLOW.md                  # key data flows as Mermaid diagrams
 index.html                 # HTML shell
-dist/index.html            # build output — single self-contained file (git-ignored)
+dist/ProgramDashboardSuite.html            # build output — single self-contained file (git-ignored)
 ```
 
-The build uses [vite-plugin-singlefile](https://github.com/richardtallent/vite-plugin-singlefile) to inline all JS and CSS into one `dist/index.html`. This is what gets distributed to end users.
+The build uses [vite-plugin-singlefile](https://github.com/richardtallent/vite-plugin-singlefile) to inline all JS and CSS into one `dist/ProgramDashboardSuite.html`. This is what gets distributed to end users.
 
 ### Architecture primer
 
