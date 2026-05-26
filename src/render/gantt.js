@@ -89,9 +89,35 @@ function updateBarElementsDirect(taskId, newStart, newEnd) {
     }
   } else {
     if (els.bgRect)      { els.bgRect.setAttribute('x', x); els.bgRect.setAttribute('width', w); }
-    if (els.progRect)    { els.progRect.setAttribute('x', x); }
+    if (els.progRect)    { els.progRect.setAttribute('x', x); els.progRect.setAttribute('width', w * (t.pct / 100)); }
     if (els.outlineRect) { els.outlineRect.setAttribute('x', x); els.outlineRect.setAttribute('width', w); }
+    if (els.cpRing)      { els.cpRing.setAttribute('x', x - 1); els.cpRing.setAttribute('width', w + 2); }
+    if (els.overRing)    { els.overRing.setAttribute('x', x - 1); els.overRing.setAttribute('width', w + 2); }
   }
+}
+
+function updateDepArrowsDirect() {
+  state.depArrowEls.forEach(({ el, predId, succId }) => {
+    const predEls = state.barEls[predId];
+    const succEls = state.barEls[succId];
+    if (!predEls || !succEls) return;
+    let x1, x2;
+    if (predEls.diamond) {
+      const pts = predEls.diamond.getAttribute('points').split(' ');
+      x1 = parseFloat(pts[1].split(',')[0]); // rightmost point = mx+sz
+    } else if (predEls.bgRect) {
+      x1 = parseFloat(predEls.bgRect.getAttribute('x')) + parseFloat(predEls.bgRect.getAttribute('width'));
+    }
+    if (succEls.diamond) {
+      const pts = succEls.diamond.getAttribute('points').split(' ');
+      x2 = parseFloat(pts[3].split(',')[0]); // leftmost point = mx-sz
+    } else if (succEls.bgRect) {
+      x2 = parseFloat(succEls.bgRect.getAttribute('x'));
+    }
+    if (x1 == null || x2 == null) return;
+    const ox = Math.max(x1 + 8, x2 - 8);
+    el.setAttribute('d', `M ${x1} ${predEls.midY} L ${ox} ${predEls.midY} L ${ox} ${succEls.midY} L ${x2} ${succEls.midY}`);
+  });
 }
 
 function doBarDragMove(e) {
@@ -131,6 +157,7 @@ function doBarDragMove(e) {
   const t = state.ProjectData.tasks.find(t => t.id === state.barDrag.taskId);
   if (t) { t.start = newStart; t.end = newEnd; }
   updateBarElementsDirect(state.barDrag.taskId, newStart, newEnd);
+  updateDepArrowsDirect();
 
   const label = document.getElementById('gantt-drag-label');
   const total = countWorkDays(newStart, newEnd, state.ganttWorkDays);
@@ -1165,6 +1192,7 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
         ring.setAttribute('stroke', '#e06c75'); ring.setAttribute('stroke-width', 2);
         ring.style.pointerEvents = 'none';
         svg.appendChild(ring);
+        state.barEls[t.id].cpRing = ring;
       }
       // Overdue ring (non-milestone, past end date, not complete)
       if (t.end && t.end < TODAY && (t.pct || 0) < 100) {
@@ -1177,6 +1205,7 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
         overRing.setAttribute('stroke-dasharray', '3 2');
         overRing.style.pointerEvents = 'none';
         svg.appendChild(overRing);
+        state.barEls[t.id].overRing = overRing;
       }
     }
   });
