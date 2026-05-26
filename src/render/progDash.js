@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { esc, daysBetween, TODAY } from '../utils.js';
+import { esc, daysBetween, getToday } from '../utils.js';
 import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
 
@@ -36,7 +36,7 @@ export function renderProgDash() {
     .filter(t => t.pct < 100)
     // Use start date for ordering; fall back to end for milestones where only end is set.
     .sort((a, b) => (a.start||a.end) - (b.start||b.end))[0];
-  const daysToNext = nextMs ? daysBetween(TODAY, nextMs.start) : null;
+  const daysToNext = nextMs ? daysBetween(getToday(), nextMs.start) : null;
 
   // Sort descending by end (fall back to start) to find the last milestone in the program.
   const finalMs = milestones.slice().sort((a, b) => (b.end || b.start) - (a.end || a.start))[0];
@@ -44,12 +44,12 @@ export function renderProgDash() {
   const finalMsDateStr = finalMsDate
     ? finalMsDate.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' })
     : 'TBD';
-  const daysToFinal = finalMsDate ? daysBetween(TODAY, finalMsDate) : null;
+  const daysToFinal = finalMsDate ? daysBetween(getToday(), finalMsDate) : null;
   const daysToFinalStr = daysToFinal === null ? '' :
     daysToFinal > 0 ? `${daysToFinal} days remaining` :
     daysToFinal === 0 ? 'Today' : 'Completed';
 
-  const overdueTasks = state.ProjectData.tasks.filter(t => t.end && t.end < TODAY && (t.pct || 0) < 100 && !t.milestone).length;
+  const overdueTasks = state.ProjectData.tasks.filter(t => t.end && t.end < getToday() && (t.pct || 0) < 100 && !t.milestone).length;
 
   const specAchieved = state.ProjectData.specs.filter(s => s.status === 'Achieved').length;
   const specTarget   = state.ProjectData.specs.filter(s => s.status === 'Target').length;

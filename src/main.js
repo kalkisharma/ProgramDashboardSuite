@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 import "./styles.css";
 import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from './constants.js';
 import { GANTT_COLORS, PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, ganttColor, teamColor, clearColorCache } from './colors.js';
-import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, TODAY } from './utils.js';
+import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from './utils.js';
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
 import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
@@ -64,9 +64,9 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 // state.ProjectData, state.originalTasks, state.ganttWorkDays, state.spCurrent*, state.undoStack, state.redoStack,
 // state.isDirty, state.barDrag, state.barEls, state.rowDrag, zoom indices, filters, and view state
 // are all in src/state.js — import { state } from './state.js'
-// TODAY imported from ./utils.js
+// getToday() imported from ./utils.js
 
-const APP_VERSION = 'v4.3.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v4.4.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -716,7 +716,7 @@ function openSpecPanel(specId) {
 
   const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
     const t = state.ProjectData.tasks.find(t => t.id === id);
-    return t && t.start && t.start <= TODAY;
+    return t && t.start && t.start <= getToday();
   });
   if (hasRisk) html += `<div class="risk-alert">⚠ BLOCKED RISK — Spec is TBD but dependent task(s) have started</div>`;
   html += `<div class="sp-section-label">Dependent Tasks${s.depIds.length ? ` (${s.depIds.length})` : ''}</div>`;
@@ -729,7 +729,7 @@ function openSpecPanel(specId) {
         html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-spec-dep="${id}" aria-label="Remove task ${id}" title="Remove">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found in Schedule</div></div>`;
         return;
       }
-      const started = t.start && t.start <= TODAY;
+      const started = t.start && t.start <= getToday();
       const done    = t.pct === 100;
       const cardCls = done ? 'done' : started && t.pct > 0 ? 'warn' : started ? 'risk' : 'future';
       const gc      = ganttColor(t.category);
@@ -844,7 +844,7 @@ function openTaskPanel(taskId) {
   const gc = ganttColor(t.category);
   document.getElementById('sp-title').textContent = t.name;
 
-  const started = t.start && t.start <= TODAY;
+  const started = t.start && t.start <= getToday();
   const done = t.pct === 100;
   const statusBadge = done
     ? `<span class="badge badge-achieved">Complete</span>`
@@ -853,7 +853,7 @@ function openTaskPanel(taskId) {
       : `<span class="badge badge-tbd">Not Started</span>`;
 
   const totalWd = countWorkDays(t.start, t.end, state.ganttWorkDays);
-  const remWd   = workDaysRemaining(t.end, state.ganttWorkDays, TODAY);
+  const remWd   = workDaysRemaining(t.end, state.ganttWorkDays, getToday());
   let html = `<div class="sp-meta">
     <div class="sp-meta-id">
       <code style="color:${gc}">Task ${t.id}</code> · WBS ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span>
@@ -1044,7 +1044,7 @@ function openOrgPanel(name) {
     myTasks.forEach(t => {
       const gc = ganttColor(t.category);
       const done2 = t.pct === 100;
-      const started2 = t.start && t.start <= TODAY;
+      const started2 = t.start && t.start <= getToday();
       const cardCls = done2 ? 'done' : started2 && t.pct > 0 ? 'warn' : started2 ? 'risk' : 'future';
       html += `<div class="task-card clickable ${cardCls}" data-task-id="${t.id}">
         <div class="tc-id">Task ${t.id} · ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span></div>
@@ -1408,7 +1408,10 @@ window.addEventListener('beforeunload', e => {
   if (!raw) return;
   let draft;
   try { draft = JSON.parse(raw); } catch { localStorage.removeItem('vh-draft'); return; }
-  if (!draft.snapshot || !draft.snapshot.tasks) { localStorage.removeItem('vh-draft'); return; }
+  if (!draft.snapshot || !Array.isArray(draft.snapshot.tasks)) { localStorage.removeItem('vh-draft'); return; }
+  // Basic schema guard — each task must have a numeric id and a name string
+  const tasksValid = draft.snapshot.tasks.every(t => typeof t.id === 'number' && typeof t.name === 'string');
+  if (!tasksValid) { localStorage.removeItem('vh-draft'); return; }
 
   const banner = document.getElementById('draft-banner');
   const mins = Math.round((Date.now() - draft.savedAt) / 60000);

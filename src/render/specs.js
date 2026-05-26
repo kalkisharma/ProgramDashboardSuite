@@ -1,7 +1,8 @@
 import { state } from '../state.js';
-import { esc, TODAY } from '../utils.js';
+import { esc, getToday } from '../utils.js';
 import { SPEC_COLORS } from '../colors.js';
 import { safeSetItem } from '../ui/toast.js';
+import { pushUndo } from '../core/undo.js';
 
 export function renderSpecs() {
   const sel = document.getElementById('specs-filter');
@@ -17,7 +18,7 @@ export function renderSpecs() {
 
 function specStatusRank(s) {
   if (s.status === 'TBD') {
-    const risk = s.depIds.some(id => { const t = state.ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY; });
+    const risk = s.depIds.some(id => { const t = state.ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= getToday(); });
     return risk ? 0 : 1;
   }
   return s.status === 'Target' ? 2 : s.status === 'Achieved' ? 3 : 4;
@@ -69,7 +70,7 @@ export function renderSpecTable() {
   const specRow = (s, col) => {
     const sc = s.status==='Achieved' ? 'badge-achieved' : s.status==='Target' ? 'badge-target' : 'badge-tbd';
     const hasRisk = s.status === 'TBD' && s.depIds.some(id => {
-      const t = state.ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= TODAY;
+      const t = state.ProjectData.tasks.find(t => t.id === id); return t && t.start && t.start <= getToday();
     });
     const riskDesc = hasRisk ? ' — risk: dependent task already started' : '';
     const depText = s.depIds.length
@@ -166,6 +167,7 @@ export function renderSpecTable() {
 export function cycleSpecStatus(specId) {
   const s = state.ProjectData.specs.find(s => s.id === specId);
   if (!s) return;
+  pushUndo('spec status');
   const cycle = { 'Achieved': 'Target', 'Target': 'TBD', 'TBD': 'Achieved' };
   s.status = cycle[s.status] || 'TBD';
   renderSpecTable();

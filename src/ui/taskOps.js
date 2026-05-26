@@ -33,6 +33,7 @@ export function addNewSpec() {
 }
 
 export function deleteTask(taskId) {
+  taskId = Number(taskId);
   if (!state.ProjectData.tasks.find(t => t.id === taskId)) return;
   const btn = document.getElementById('sp-delete-task-btn');
   if (btn && btn.dataset.confirming !== '1') {
@@ -104,16 +105,18 @@ export function addGanttTask() {
     start: taskStart, end: taskEnd,
     pct: 0, deps: [], team, milestone: false, notes: '',
   };
+  pushUndo('task added');
   state.ProjectData.tasks.push(newTask);
-  renderGantt();
+  safeRender(renderGantt, 'Gantt Chart');
   const phaseNames = getPhaseNames();
   showToast('Task added to ' + (phaseNames[lastPhase] || ('Phase ' + lastPhase)) + '.');
 }
 
 export function resetGanttToImported() {
   if (!state.originalTasks.length) return;
-  const snapshot = state.ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
-  state.ProjectData.tasks = state.originalTasks.map(t => ({ ...t, deps: [...t.deps] }));
-  renderGantt();
-  showToast('Schedule reset to imported state.', () => { state.ProjectData.tasks = snapshot; renderGantt(); }, 30000);
+  const cloneTask = t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] });
+  const snapshot = state.ProjectData.tasks.map(cloneTask);
+  state.ProjectData.tasks = state.originalTasks.map(cloneTask);
+  safeRender(renderGantt, 'Gantt Chart');
+  showToast('Schedule reset to imported state.', () => { state.ProjectData.tasks = snapshot; safeRender(renderGantt, 'Gantt Chart'); }, 30000);
 }

@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { esc, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, TODAY } from '../utils.js';
+import { esc, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from '../utils.js';
 import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from '../constants.js';
 import { phaseColor, ganttColor, GANTT_COLORS, PHASE_COLORS } from '../colors.js';
 import { computeCriticalPath } from '../compute/criticalPath.js';
@@ -161,7 +161,7 @@ function doBarDragMove(e) {
 
   const label = document.getElementById('gantt-drag-label');
   const total = countWorkDays(newStart, newEnd, state.ganttWorkDays);
-  const rem   = workDaysRemaining(newEnd, state.ganttWorkDays, TODAY);
+  const rem   = workDaysRemaining(newEnd, state.ganttWorkDays, getToday());
   label.textContent = `${fmt(newStart)} → ${fmt(newEnd)}  ·  ${total} wd total  ·  ${rem} wd left`;
   label.style.display = 'block';
   label.style.left = Math.min(e.clientX + 16, window.innerWidth - label.offsetWidth - 10) + 'px';
@@ -941,7 +941,7 @@ export function prepareGanttData() {
   const exportPngBtn = document.getElementById('gantt-export-png-btn');
   if (exportPngBtn) exportPngBtn.disabled = false;
 
-  const tx = daysBetween(minD, TODAY) * state.ganttZoom;
+  const tx = daysBetween(minD, getToday()) * state.ganttZoom;
   state.ganttTodayX = (tx > 0 && tx < W) ? tx : null;
 
   const isFiltered = state.ganttPhaseFilter !== 'all' || state.ganttTeamFilter !== 'all';
@@ -956,7 +956,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
-    const wd = wdDisplay(t, state.ganttWorkDays, TODAY);
+    const wd = wdDisplay(t, state.ganttWorkDays, getToday());
     const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
     const phaseNum = parseInt(t.wbs.split('.')[0]) || 1;
     const isCollapsed = isPhaseHeader && state.collapsedPhases.has(phaseNum);
@@ -1078,7 +1078,7 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
   svg.setAttribute('width', W); svg.setAttribute('height', bodyH);
   svg.setAttribute('viewBox', `0 0 ${W} ${bodyH}`);
   svg.setAttribute('role', 'application');
-  svg.setAttribute('aria-label', `Gantt chart — drag bars to adjust dates and duration. Today is ${TODAY.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' })}`);
+  svg.setAttribute('aria-label', `Gantt chart — drag bars to adjust dates and duration. Today is ${getToday().toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' })}`);
   svg.style.display = 'block';
   if (state.showCriticalPath) svg.classList.add('cp-active');
 
@@ -1195,7 +1195,7 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
         state.barEls[t.id].cpRing = ring;
       }
       // Overdue ring (non-milestone, past end date, not complete)
-      if (t.end && t.end < TODAY && (t.pct || 0) < 100) {
+      if (t.end && t.end < getToday() && (t.pct || 0) < 100) {
         const overRing = document.createElementNS(NS, 'rect');
         overRing.setAttribute('x', x - 1); overRing.setAttribute('y', by - 1);
         overRing.setAttribute('width', w + 2); overRing.setAttribute('height', bh + 2);

@@ -87,7 +87,8 @@ export function renderWeightBudget() {
           if (!grouped[g]) grouped[g] = [];
           grouped[g].push(w);
         });
-        const collapsedGroups = JSON.parse(localStorage.getItem('vh-wt-collapsed') || '[]');
+        const _wtParsed = (() => { try { return JSON.parse(localStorage.getItem('vh-wt-collapsed') || '[]'); } catch { return []; } })();
+        const collapsedGroups = Array.isArray(_wtParsed) ? _wtParsed : [];
         return Object.entries(grouped).map(([grpName, items], n) => {
           const gEst    = items.reduce((s, w) => s + w.estimated, 0);
           const gTgt    = items.reduce((s, w) => s + w.target, 0);
