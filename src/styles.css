@@ -408,7 +408,7 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 0.8rem;
-  max-width: 280px;
+  max-width: 240px;
   pointer-events: none;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   line-height: 1.5;
