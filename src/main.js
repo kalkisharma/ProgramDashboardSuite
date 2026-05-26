@@ -1180,7 +1180,7 @@ function openInfoPanel() {
   document.getElementById('sp-title').textContent = 'Project Info';
 
   const STANDARD = ['Project Title','Project Subtitle','File Administrator','Program Start','Program End','Work Days','Weight Unit'];
-  const PHASES   = Array.from({ length: 10 }, (_, i) => `Phase ${i + 1} Name`);
+  const PHASES   = Array.from({ length: 20 }, (_, i) => `Phase ${i + 1} Name`);
   const extraKeys = Object.keys(state.ProjectData.info).filter(k => !STANDARD.includes(k) && !PHASES.includes(k));
 
   const field = (key) => `<div class="sp-form-group" data-info-key="${esc(key)}">

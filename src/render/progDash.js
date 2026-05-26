@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { esc, daysBetween, getToday } from '../utils.js';
+import { esc, daysBetween, getToday, countWorkDays } from '../utils.js';
 import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
 
@@ -10,6 +10,18 @@ export function getPhaseNames() {
     if (v) names[i] = String(v);
   }
   return names;
+}
+
+function weightedPct(tasks) {
+  if (!tasks.length) return 0;
+  let sumWeight = 0, sumPct = 0;
+  tasks.forEach(t => {
+    const w = (t.start && t.end) ? countWorkDays(t.start, t.end, state.ganttWorkDays) : 1;
+    const weight = Math.max(1, w);
+    sumWeight += weight;
+    sumPct += (t.pct || 0) * weight;
+  });
+  return sumWeight ? Math.round(sumPct / sumWeight) : 0;
 }
 
 function toggleTeamRow(el) {
@@ -25,9 +37,7 @@ export function renderProgDash() {
   if (!body) return;
 
   const totalTasks = state.ProjectData.tasks.length;
-  const overallPct = totalTasks
-    ? Math.round(state.ProjectData.tasks.reduce((s, t) => s + (t.pct || 0), 0) / totalTasks)
-    : 0;
+  const overallPct = weightedPct(state.ProjectData.tasks);
   const doneTasks = state.ProjectData.tasks.filter(t => t.pct >= 100).length;
 
   const milestones = state.ProjectData.tasks.filter(t => t.milestone);
@@ -139,7 +149,7 @@ export function renderProgDash() {
         <div class="dash-section-title">Phase Progress</div>
         ${phaseNums.map(ph => {
           const pts  = phaseMap[ph];
-          const avg  = Math.round(pts.reduce((s, t) => s + (t.pct || 0), 0) / pts.length);
+          const avg  = weightedPct(pts);
           const phaseNames = getPhaseNames();
           const name = phaseNames[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
           const color = phaseColor(ph + '.0');
