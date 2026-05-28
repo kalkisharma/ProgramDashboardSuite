@@ -27,9 +27,9 @@ function weightedPct(tasks) {
 function toggleTeamRow(el) {
   const dd    = el.nextElementSibling;
   const arrow = el.querySelector('.team-row-arrow');
-  const open  = dd.style.display !== 'none';
-  dd.style.display      = open ? 'none' : 'block';
-  arrow.style.transform = open ? ''     : 'rotate(90deg)';
+  const open  = dd.classList.contains('open');
+  dd.classList.toggle('open', !open);
+  arrow.style.transform = open ? '' : 'rotate(90deg)';
   el.setAttribute('aria-expanded', String(!open));
 }
 

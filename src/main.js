@@ -161,15 +161,17 @@ let _helpFocusTrapActive = false;
 function toggleHelp() {
   const overlay = document.getElementById('help-overlay');
   const modal   = document.getElementById('help-modal');
-  const open = overlay.style.display === 'flex';
+  const open = overlay.classList.contains('open');
   if (open) {
-    overlay.style.display = 'none';
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
     modal.removeEventListener('keydown', _trapHelpFocus);
     _helpFocusTrapActive = false;
     if (_helpOpener) { _helpOpener.focus(); _helpOpener = null; }
   } else {
     _helpOpener = document.activeElement;
-    overlay.style.display = 'flex';
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
     const first = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
     if (first) first.focus();
     if (!_helpFocusTrapActive) {
@@ -210,7 +212,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (e.key === 'Escape') {
-    if (document.getElementById('help-overlay').style.display === 'flex') { toggleHelp(); return; }
+    if (document.getElementById('help-overlay').classList.contains('open')) { toggleHelp(); return; }
     const picker = document.getElementById('workdays-picker');
     const wdBtn  = document.getElementById('workdays-btn');
     if (picker && picker.style.display !== 'none') {

@@ -431,7 +431,11 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
 }
 @media (prefers-reduced-motion: no-preference) {
   #side-panel { transition: right 0.28s cubic-bezier(.4,0,.2,1); }
+  #gantt-right-col { transition: margin-right 0.28s cubic-bezier(.4,0,.2,1); }
+  #org-container  { transition: padding-right 0.28s cubic-bezier(.4,0,.2,1); }
+  #help-overlay { transition: opacity 0.18s ease, visibility 0.18s ease; }
 }
+#help-overlay.open { visibility: visible; opacity: 1; pointer-events: auto; }
 #side-panel.open { right: 0; }
 
 #sp-header {
@@ -641,9 +645,15 @@ select.sp-form-input { cursor: pointer; }
   .team-row-arrow { transition: transform 0.18s; }
 }
 .team-dropdown {
-  display: none; margin: 0 6px 10px 6px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 6px; padding: 6px 10px;
+  max-height: 0; overflow: hidden; margin: 0 6px; padding: 0 10px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .team-dropdown { transition: max-height 0.22s ease, padding 0.22s ease, margin 0.22s ease, visibility 0.22s ease; }
+}
+.team-dropdown.open {
+  max-height: 600px; padding: 6px 10px; margin: 0 6px 10px 6px; visibility: visible;
 }
 .team-task-item {
   display: flex; align-items: center; gap: 8px;
