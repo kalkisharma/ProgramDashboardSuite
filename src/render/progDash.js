@@ -28,8 +28,9 @@ function toggleTeamRow(el) {
   const dd    = el.nextElementSibling;
   const arrow = el.querySelector('.team-row-arrow');
   const open  = dd.style.display !== 'none';
-  dd.style.display       = open ? 'none' : 'block';
-  arrow.style.transform  = open ? ''     : 'rotate(90deg)';
+  dd.style.display      = open ? 'none' : 'block';
+  arrow.style.transform = open ? ''     : 'rotate(90deg)';
+  el.setAttribute('aria-expanded', String(!open));
 }
 
 export function renderProgDash() {
@@ -109,7 +110,7 @@ export function renderProgDash() {
       </div>`;
     }).join('');
     return `
-      <div class="team-row">
+      <div class="team-row" role="button" tabindex="0" aria-expanded="false" aria-label="${esc(team)}: ${count} tasks">
         <div class="prog-bar-label" title="${esc(team)}">${esc(team)}</div>
         <div class="prog-bar-track"><div class="prog-bar-fill" style="width:${barW}%;background:var(--accent)"></div></div>
         <div class="prog-bar-pct">${count}</div>
@@ -179,5 +180,8 @@ export function renderProgDash() {
   `;
   body.querySelectorAll('.team-row').forEach(row => {
     row.addEventListener('click', () => toggleTeamRow(row));
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTeamRow(row); }
+    });
   });
 }

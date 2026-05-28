@@ -101,12 +101,12 @@
       </div>
       <div id="gantt-container">
         <div id="gantt-left">
-          <div id="gantt-left-header">
-            <span>WBS</span><span style="position:relative">Task Name<div id="gantt-name-col-handle" aria-hidden="true"></div></span>
-            <span style="text-align:right">Team</span>
-            <span style="text-align:right" title="Work days remaining until task end date">WD Left</span>
-            <span style="text-align:right">%</span>
-            <span></span>
+          <div id="gantt-left-header" role="row">
+            <span role="columnheader">WBS</span><span role="columnheader" style="position:relative">Task Name<div id="gantt-name-col-handle" aria-hidden="true"></div></span>
+            <span role="columnheader" style="text-align:right">Team</span>
+            <span role="columnheader" style="text-align:right" title="Work days remaining until task end date">WD Left</span>
+            <span role="columnheader" style="text-align:right">%</span>
+            <span role="columnheader" aria-label="Conflicts"></span>
           </div>
           <div id="gantt-left-body" role="grid" aria-label="Task list"></div>
           <div id="gantt-row-announce" aria-live="polite" aria-atomic="true" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap"></div>
@@ -269,7 +269,7 @@
 </div>
 
 <div id="app-toast" role="status" aria-live="polite"><span id="app-toast-msg"></span><button id="app-toast-undo" style="display:none">Undo</button></div>
-<div id="gantt-date-picker" style="display:none;position:fixed;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.35);min-width:200px">
+<div id="gantt-date-picker" role="dialog" aria-label="Edit dates" style="display:none;position:fixed;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.35);min-width:200px">
   <div style="font-size:0.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
     <span id="gdp-label">Edit Dates</span>
     <button id="gdp-close" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:0;line-height:1">✕</button>

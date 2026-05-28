@@ -972,16 +972,16 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const _rowEnd   = t.end   ? t.end.toISOString().split('T')[0]   : 'no date';
     div.setAttribute('aria-label', `${t.wbs}: ${t.name}, ${t.team} team, ${t.pct}% complete, ${_rowStart} to ${_rowEnd}${state.conflictSet.has(t.id) ? ', scheduling conflict' : ''}${isCollapsed ? ', collapsed' : ''}`);
     div.innerHTML = `
-      <div class="g-wbs-wrap" style="color:${color}">
+      <div class="g-wbs-wrap" role="gridcell" style="color:${color}">
         ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
         ${showCollapseBtn ? `<button class="gantt-collapse-btn" aria-label="${isCollapsed ? 'Expand phase' : 'Collapse phase'}" title="${isCollapsed ? 'Expand phase' : 'Collapse phase'}">${isCollapsed ? '▶' : '▼'}</button>` : ''}
         <span class="g-wbs-text">${esc(t.wbs)}</span>
       </div>
-      <span class="g-name" style="padding-left:${depth*10}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
-      <span class="g-team" title="${esc(t.team)}">${esc(t.team)}</span>
-      <span class="g-wd ${wd.cls}">${wd.text}</span>
-      <span class="g-pct" style="color:${pctColor}">${t.pct}%</span>
-      <span class="g-conflict${state.conflictSet.has(t.id) ? ' active' : ''}" aria-label="Scheduling conflict" title="Scheduling conflict: starts before a predecessor ends">⚠</span>`;
+      <span class="g-name" role="gridcell" style="padding-left:${depth*10}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
+      <span class="g-team" role="gridcell" title="${esc(t.team)}">${esc(t.team)}</span>
+      <span class="g-wd ${wd.cls}" role="gridcell">${wd.text}</span>
+      <span class="g-pct" role="gridcell" style="color:${pctColor}">${t.pct}%</span>
+      <span class="g-conflict${state.conflictSet.has(t.id) ? ' active' : ''}" role="gridcell" aria-label="Scheduling conflict" title="Scheduling conflict: starts before a predecessor ends">⚠</span>`;
 
     // WBS drag handle — whole cell is the hit target, ⠿ is visual only
     if (showHandle) {
