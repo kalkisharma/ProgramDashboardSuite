@@ -170,7 +170,7 @@ export function renderOrgChart() {
     if (isLightOrg) rect.setAttribute('filter', 'url(#card-shadow)');
     card.appendChild(rect);
 
-    const cardBgHover = isLightOrg ? col + '14' : '#1c2128';
+    const cardBgHover = isLightOrg ? col + '14' : getComputedStyle(document.body).getPropertyValue('--surface-overlay').trim();
     card.addEventListener('mouseenter', () => rect.setAttribute('fill', cardBgHover));
     card.addEventListener('mouseleave', () => rect.setAttribute('fill', cardBg));
 

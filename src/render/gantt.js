@@ -981,7 +981,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
       <span class="g-team" role="gridcell" title="${esc(t.team)}">${esc(t.team)}</span>
       <span class="g-wd ${wd.cls}" role="gridcell">${wd.text}</span>
       <span class="g-pct" role="gridcell" style="color:${pctColor}">${t.pct}%</span>
-      <span class="g-conflict${state.conflictSet.has(t.id) ? ' active' : ''}" role="gridcell" aria-label="Scheduling conflict" title="Scheduling conflict: starts before a predecessor ends">⚠</span>`;
+      <span class="g-conflict${state.conflictSet.has(t.id) ? ' active' : ''}" role="gridcell" aria-hidden="${state.conflictSet.has(t.id) ? 'false' : 'true'}" aria-label="Schedule overlap: starts before predecessor ends" title="Schedule overlap: starts before a predecessor ends">⚠</span>`;
 
     // WBS drag handle — whole cell is the hit target, ⠿ is visual only
     if (showHandle) {
