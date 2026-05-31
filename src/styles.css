@@ -973,8 +973,8 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
 }
 .reqs-table thead tr:first-child th:hover { color: var(--accent); }
 .reqs-filter-row th {
-  position: sticky; top: 32px; z-index: 2;
-  background: var(--bg); border-bottom: 1px solid var(--border);
+  position: sticky; top: 32px; z-index: 2; /* top matches header th height */
+  background: var(--surface); border-bottom: 1px solid var(--border);
   padding: 3px 6px;
 }
 .reqs-table td {
@@ -982,8 +982,16 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .reqs-table tr:hover td { background: rgba(88,166,255,0.05); }
-.reqs-filter-row select, .reqs-filter-row input {
+.reqs-filter-row input {
   width: 100%; box-sizing: border-box; font-size: 0.72rem;
   background: var(--surface); color: var(--text);
   border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px;
 }
+.reqs-filter-btn {
+  width: 100%; box-sizing: border-box; text-align: left;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  font-size: 0.72rem; padding: 2px 6px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.reqs-filter-btn:hover { border-color: var(--accent); }

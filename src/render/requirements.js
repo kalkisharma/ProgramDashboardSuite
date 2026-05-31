@@ -43,13 +43,6 @@ function generateSampleReqsCSV() {
     'Rationale', 'Verification Status', 'Notes'
   ];
 
-  const types   = ['Functional', 'Performance', 'Interface', 'Safety'];
-  const status  = ['Draft', 'Approved', 'In Review', 'Rejected', 'Closed'];
-  const priority= ['High', 'Medium', 'Low'];
-  const verif   = ['Test', 'Analysis', 'Inspection', 'Demonstration'];
-  const alloc   = ['Propulsion', 'Flight Controls', 'Structures', 'Avionics', 'Systems Integration', 'Safety'];
-  const vstat   = ['Not Started', 'In Progress', 'Passed', 'Failed'];
-
   const rows = [
     // Propulsion
     ['TW2-SYS-001', 'Takeoff Thrust', 'The propulsion system shall produce a minimum static thrust of 8,500 lbf at sea level ISA conditions.', 'Performance', 'Approved', 'High', 'Test', 'Propulsion', 'FAA AC 25-7D', 'Minimum thrust derived from MTOW plus 20% margin.', 'Passed', ''],
@@ -139,8 +132,8 @@ function renderReqsEmpty() {
   body.innerHTML = `
     <div class="reqs-drop-zone" id="reqs-drop-zone">
       <div class="drop-icon">📋</div>
-      <div class="drop-title">Drop a CSV file here — or try with sample data</div>
-      <div class="drop-sub">Drop any CSV — first row is read as column headers, all columns rendered as-is</div>
+      <div class="drop-title">Drop a requirements CSV — or try with sample data</div>
+      <div class="drop-sub">Independent of your project Excel — drop any CSV where the first row is column headers</div>
       <div id="reqs-load-error" class="reqs-load-error" style="display:none"></div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center">
         <label for="reqs-file-input" class="btn-primary">Browse for CSV</label>
@@ -162,7 +155,7 @@ function wireDropZone() {
   const input = document.getElementById('reqs-file-input');
   if (!zone || !input) return;
 
-  zone.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragover',  e => { e.preventDefault(); e.stopPropagation(); zone.classList.add('drag-over'); });
   zone.addEventListener('dragleave', e => { e.stopPropagation(); zone.classList.remove('drag-over'); });
   zone.addEventListener('drop', e => {
     e.preventDefault();
@@ -173,6 +166,104 @@ function wireDropZone() {
   input.addEventListener('change', e => {
     if (e.target.files[0]) { loadReqsFile(e.target.files[0]); e.target.value = ''; }
   });
+}
+
+// ── Filter popover (shared singleton, appended to body) ──────────────────────
+
+let _filterPopover         = null;
+let _filterPopoverCol      = null;
+let _filterPopoverOnOutside = null;
+
+function _getFilterPopover() {
+  if (!_filterPopover) {
+    _filterPopover = document.createElement('div');
+    _filterPopover.setAttribute('role', 'dialog');
+    _filterPopover.setAttribute('aria-label', 'Column filter');
+    _filterPopover.style.cssText =
+      'display:none;position:fixed;z-index:500;background:var(--surface);' +
+      'border:1px solid var(--border);border-radius:8px;padding:6px 0;' +
+      'box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:160px;max-height:260px;overflow-y:auto';
+    document.body.appendChild(_filterPopover);
+  }
+  return _filterPopover;
+}
+
+function _syncOutsideClick() {
+  if (_filterPopoverOnOutside) {
+    document.removeEventListener('click', _filterPopoverOnOutside);
+    _filterPopoverOnOutside = null;
+  }
+  if (_filterPopoverCol === null) return;
+  const col = _filterPopoverCol;
+  _filterPopoverOnOutside = e => {
+    if (!_filterPopover.contains(e.target) && !e.target.closest(`button[data-filter-col="${col}"]`)) {
+      closeFilterPopover();
+    }
+  };
+  document.addEventListener('click', _filterPopoverOnOutside);
+}
+
+function closeFilterPopover() {
+  if (_filterPopover) _filterPopover.style.display = 'none';
+  _filterPopoverCol = null;
+  _syncOutsideClick();
+}
+
+function openFilterPopover(colIdx, anchorBtn) {
+  const popover  = _getFilterPopover();
+  const { rows } = state.reqsData;
+  const distinct = getDistinctValues(colValues(rows, colIdx));
+  if (!distinct) return;
+
+  const active = state.reqsState.colFilters[colIdx]?.values ?? [];
+  const items  = distinct.map(v => `
+    <label style="display:flex;align-items:center;gap:7px;padding:4px 12px;cursor:pointer;
+      font-size:0.8rem;color:var(--text);white-space:nowrap">
+      <input type="checkbox" value="${esc(v)}" ${active.includes(v) ? 'checked' : ''}
+        style="cursor:pointer"> ${esc(v || '(empty)')}
+    </label>`).join('');
+
+  popover.innerHTML = `
+    <div style="padding:4px 12px 6px;border-bottom:1px solid var(--border);margin-bottom:4px">
+      <button id="reqs-fp-clear" style="background:none;border:none;color:var(--accent);
+        cursor:pointer;font-size:0.78rem;padding:0;line-height:1.5">Clear filter</button>
+    </div>
+    ${items}`;
+
+  popover.style.display = 'block';
+  const rect = anchorBtn.getBoundingClientRect();
+  const pw   = popover.offsetWidth;
+  const ph   = popover.offsetHeight;
+  let left   = rect.left;
+  let top    = rect.bottom + 4;
+  if (left + pw > window.innerWidth  - 8) left = window.innerWidth  - pw - 8;
+  if (top  + ph > window.innerHeight - 8) top  = rect.top - ph - 4;
+  popover.style.left = Math.max(8, left) + 'px';
+  popover.style.top  = Math.max(8, top)  + 'px';
+
+  _filterPopoverCol = colIdx;
+  _syncOutsideClick();
+
+  popover.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = Array.from(popover.querySelectorAll('input[type=checkbox]:checked')).map(c => c.value);
+      if (checked.length) state.reqsState.colFilters[colIdx] = { type: 'select', values: checked };
+      else                delete state.reqsState.colFilters[colIdx];
+      renderReqsTable();
+    });
+  });
+
+  popover.querySelector('#reqs-fp-clear').addEventListener('click', () => {
+    delete state.reqsState.colFilters[colIdx];
+    closeFilterPopover();
+    renderReqsTable();
+  });
+}
+
+function _updateFilterBtn(btn, colIdx) {
+  const f = state.reqsState.colFilters[colIdx];
+  btn.textContent = f?.values?.length ? `${f.values.length} ✓` : 'All';
+  btn.style.color = f?.values?.length ? 'var(--accent)' : '';
 }
 
 // ── Toolbar ──────────────────────────────────────────────────────────────────
@@ -225,21 +316,26 @@ function renderReqsToolbar() {
     renderReqsTable();
   });
 
-  // Columns toggle panel
+  // Columns toggle panel — fixed outside-click pattern (no stacking listeners)
   const colsBtn   = toolbar.querySelector('#reqs-cols-btn');
   const colsPanel = toolbar.querySelector('#reqs-cols-panel');
+
+  function onColsOutside(e) {
+    if (!colsBtn.contains(e.target) && !colsPanel.contains(e.target)) {
+      colsPanel.style.display = 'none';
+      colsBtn.setAttribute('aria-expanded', 'false');
+      document.removeEventListener('click', onColsOutside);
+    }
+  }
+
   colsBtn.addEventListener('click', () => {
     const open = colsPanel.style.display !== 'none';
     colsPanel.style.display = open ? 'none' : 'block';
     colsBtn.setAttribute('aria-expanded', String(!open));
+    if (!open) document.addEventListener('click', onColsOutside);
+    else        document.removeEventListener('click', onColsOutside);
   });
-  document.addEventListener('click', function onOutside(e) {
-    if (!colsBtn.contains(e.target) && !colsPanel.contains(e.target)) {
-      colsPanel.style.display = 'none';
-      colsBtn.setAttribute('aria-expanded', 'false');
-      document.removeEventListener('click', onOutside);
-    }
-  });
+
   colsPanel.querySelectorAll('input[type=checkbox]').forEach(cb => {
     cb.addEventListener('change', () => {
       const idx = +cb.dataset.colIdx;
@@ -250,12 +346,14 @@ function renderReqsToolbar() {
     });
   });
 
-  // Clear filters
+  // Clear filters — resets sort, search, column filters, and column visibility
   toolbar.querySelector('#reqs-clear-btn').addEventListener('click', () => {
     state.reqsState.searchQuery = '';
     state.reqsState.sortCol     = null;
     state.reqsState.sortDir     = 'asc';
     state.reqsState.colFilters  = {};
+    state.reqsState.hiddenCols  = [];
+    closeFilterPopover();
     renderRequirements();
   });
 
@@ -263,6 +361,7 @@ function renderReqsToolbar() {
   toolbar.querySelector('#reqs-reload-btn').addEventListener('click', () => {
     state.reqsData  = { headers: [], rows: [] };
     state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+    closeFilterPopover();
     renderRequirements();
   });
 }
@@ -278,20 +377,18 @@ function renderReqsTable() {
 
   // Precompute column metadata (type + cardinality) from full unfiltered data
   const colMeta = headers.map((_, i) => {
-    const vals    = colValues(rows, i);
-    const type    = inferColType(vals);
+    const vals     = colValues(rows, i);
+    const type     = inferColType(vals);
     const distinct = getDistinctValues(vals);
-    return { type, distinct }; // distinct===null means high-cardinality
+    return { type, distinct };
   });
 
   // Filter rows
   const q = searchQuery.trim().toLowerCase();
   let filtered = rows.filter(row => {
-    // Global search across visible columns
     if (q && !visibleCols.some(i => String(row[i] ?? '').toLowerCase().includes(q))) return false;
-    // Per-column filters (AND)
     for (const [idxStr, filter] of Object.entries(colFilters)) {
-      const i = +idxStr;
+      const i    = +idxStr;
       const cell = String(row[i] ?? '');
       if (filter.type === 'select') {
         if (filter.values.length && !filter.values.includes(cell)) return false;
@@ -329,21 +426,18 @@ function renderReqsTable() {
 
   // Build per-column filter cells
   const filterCells = visibleCols.map(i => {
-    const filter  = colFilters[i];
     const { distinct } = colMeta[i];
     if (distinct) {
-      // Low-cardinality: multi-select
-      const selected = filter?.type === 'select' ? filter.values : [];
-      const opts = distinct.map(v =>
-        `<option value="${esc(v)}" ${selected.includes(v) ? 'selected' : ''}>${esc(v)}</option>`
-      ).join('');
-      return `<th><select multiple data-filter-col="${i}" size="1" style="width:100%;font-size:0.72rem;
-        background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:1px 3px">
-        <option value="">All</option>${opts}</select></th>`;
+      // Low-cardinality: button opens checkbox popover
+      return `<th><button class="reqs-filter-btn" data-filter-col="${i}"
+        aria-label="Filter ${esc(headers[i] || '(empty)')}"
+        aria-expanded="false" aria-haspopup="true">All</button></th>`;
     } else {
       // High-cardinality: text input
+      const filter = colFilters[i];
       const val = filter?.type === 'text' ? filter.value : '';
       return `<th><input type="text" data-filter-col="${i}" value="${esc(val)}" placeholder="Filter…"
+        aria-label="Filter ${esc(headers[i] || '(empty)')}"
         style="width:100%;font-size:0.72rem;background:var(--surface);color:var(--text);
                border:1px solid var(--border);border-radius:4px;padding:2px 4px;box-sizing:border-box"></th>`;
     }
@@ -366,7 +460,7 @@ function renderReqsTable() {
     : rowsHTML;
 
   body.innerHTML = `
-    <table class="reqs-table" role="grid" aria-label="Requirements">
+    <table class="reqs-table" role="table" aria-label="Requirements">
       <thead>
         <tr role="row">${headerCells}</tr>
         <tr class="reqs-filter-row" role="row">${filterCells}</tr>
@@ -388,16 +482,21 @@ function renderReqsTable() {
     });
   });
 
-  // Wire column filter controls
-  body.querySelectorAll('select[data-filter-col]').forEach(sel => {
-    sel.addEventListener('change', () => {
-      const i = +sel.dataset.filterCol;
-      const selected = Array.from(sel.selectedOptions).map(o => o.value).filter(v => v !== '');
-      if (selected.length) state.reqsState.colFilters[i] = { type: 'select', values: selected };
-      else                 delete state.reqsState.colFilters[i];
-      renderReqsTable();
+  // Wire low-cardinality filter buttons
+  body.querySelectorAll('button[data-filter-col]').forEach(btn => {
+    const i = +btn.dataset.filterCol;
+    _updateFilterBtn(btn, i);
+    btn.addEventListener('click', () => {
+      if (_filterPopoverCol === i) {
+        closeFilterPopover();
+      } else {
+        if (_filterPopoverCol !== null) closeFilterPopover();
+        openFilterPopover(i, btn);
+      }
     });
   });
+
+  // Wire high-cardinality text inputs
   body.querySelectorAll('input[data-filter-col]').forEach(inp => {
     inp.addEventListener('input', () => {
       const i = +inp.dataset.filterCol;
@@ -407,6 +506,17 @@ function renderReqsTable() {
     });
   });
 
+  // Sync open popover with rebuilt DOM after table re-render
+  if (_filterPopoverCol !== null) {
+    const activeBtn = body.querySelector(`button[data-filter-col="${_filterPopoverCol}"]`);
+    if (activeBtn) {
+      activeBtn.setAttribute('aria-expanded', 'true');
+      _syncOutsideClick();
+    } else {
+      closeFilterPopover();
+    }
+  }
+
   // Wire inline clear button
   const inlineClear = body.querySelector('#reqs-clear-inline');
   if (inlineClear) {
@@ -415,6 +525,7 @@ function renderReqsTable() {
       state.reqsState.sortCol     = null;
       state.reqsState.sortDir     = 'asc';
       state.reqsState.colFilters  = {};
+      closeFilterPopover();
       renderRequirements();
     });
   }
@@ -423,6 +534,7 @@ function renderReqsTable() {
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 export function renderRequirements() {
+  closeFilterPopover();
   const body    = document.getElementById('reqs-body');
   const toolbar = document.getElementById('reqs-toolbar');
   if (!body || !toolbar) return;
