@@ -422,15 +422,6 @@ function renderReqsTable() {
 
 // ── Entry point ──────────────────────────────────────────────────────────────
 
-export function initReqsSampleData() {
-  if (state.reqsData.headers.length) return; // already populated (user loaded their own)
-  const { headers, rows, error } = parseReqsCSV(generateSampleReqsCSV());
-  if (!error && headers.length) {
-    state.reqsData  = { headers, rows };
-    state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
-  }
-}
-
 export function renderRequirements() {
   const body    = document.getElementById('reqs-body');
   const toolbar = document.getElementById('reqs-toolbar');
