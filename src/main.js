@@ -53,8 +53,8 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 //   render/progDash.js      — renderProgDash, getPhaseNames
 //   render/weightBudget.js  — renderWeightBudget, getWeightUnit
 //   render/orgChart.js      — renderOrgChart
+//   render/requirements.js  — renderRequirements; CSV viewer, filter popover, column visibility
 //   ui/rowReorder.js        — startRowDrag, doRowDragMove, endRowDrag
-//   ui/specEdits.js         — startSpec*Edit functions
 //   ui/taskOps.js           — addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported
 //   ui/panelBase.js         — showSidePanel, closeSidePanel
 //   ui/tooltip.js           — showTooltip, hideTooltip, positionTooltip

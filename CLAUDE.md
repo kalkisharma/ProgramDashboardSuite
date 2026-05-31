@@ -14,7 +14,7 @@ npm test         # Vitest unit tests
 
 ## Architecture
 
-**Vite + ES Modules** (`src/main.js`, ~1462 lines) built into a single-file `dist/ProgramDashboardSuite.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
+**Vite + ES Modules** (`src/main.js`, ~1470 lines) built into a single-file `dist/ProgramDashboardSuite.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
 
 ### Source Module Layout
 
@@ -36,6 +36,7 @@ npm test         # Vitest unit tests
 | `src/render/progDash.js` | `renderProgDash`, `getPhaseNames` |
 | `src/render/weightBudget.js` | `renderWeightBudget`, `getWeightUnit` |
 | `src/render/orgChart.js` | `renderOrgChart` |
+| `src/render/requirements.js` | `renderRequirements` — standalone CSV viewer; filter popover, column visibility, sort, search |
 | `src/ui/panelBase.js` | `showSidePanel`, `closeSidePanel` |
 | `src/ui/tooltip.js` | `showTooltip`, `hideTooltip`, `positionTooltip` |
 | `src/ui/toast.js` | `showToast`, `safeSetItem`, `safeRender` |
@@ -47,7 +48,7 @@ npm test         # Vitest unit tests
 
 ### Test Suite
 
-Tests live in `src/__tests__/`. Coverage: 170 tests across 7 files.
+Tests live in `src/__tests__/`. Coverage: 170 tests across 7 source files (Vitest v4 reports higher counts due to worker parallelism — source file count is authoritative).
 - `utils.test.js` — utils exports (esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay)
 - `criticalPath.test.js` — critical path algorithm correctness
 - `conflicts.test.js` — conflict detection edge cases
@@ -80,12 +81,18 @@ export const state = {
   zoomIdx:          3, ganttZoom: 4,
   ganttPhaseFilter: 'all', ganttTeamFilter: 'all',
   showCriticalPath: false, showGanttLegend: false, ganttKeyFocusIdx: -1,
+  ganttMinDateRef:  null, // set by renderGantt; used by adjustZoom scroll math
+  ganttTodayX:      null, // px offset of Today line; null when out of range
+  depArrowEls:      [],   // { el, predId, succId } — rebuilt each renderGantt()
+  conflictSet:      new Set(),
   specsZoomIdx: 2, specSortState: { col: null, dir: 'asc' }, specSearchQuery: '',
   orgZoomIdx: 4, orgSearchQuery: '',
+  reqsData:  { headers: [], rows: [] }, // raw parsed CSV: headers string[], rows string[][]
+  reqsState: { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} },
 };
 ```
 
-Implementation-local state that stays in `src/main.js`: `_draftTimer`, `_exportReminderTimer`, `_justLoaded`, `ganttMinDateRef`, `ganttTodayX`, org/Gantt pan state, toast timers, help modal state, zoom debounce timers. Note: `state.conflictSet` and `state.depArrowEls` live in `state`, not in main.js.
+Implementation-local state that stays in `src/main.js`: `_draftTimer`, `_exportReminderTimer`, `_justLoaded`, org/Gantt pan state, toast timers, help modal state, zoom debounce timers.
 
 - `ProjectData.info` — key/value pairs from the "Project Info" sheet
 - `ProjectData.tasks[]` — `{ id, wbs, name, category, start, end, pct, deps, team, milestone, notes }`
@@ -149,6 +156,7 @@ Phase names from `Phase N Name` rows override the built-in `PHASE_NAMES_FALLBACK
 | Program Dashboard | `#prog-panel` | Always | `renderProgDash()` |
 | Weight Budget | `#weight-panel` | Only if `ProjectData.weights.length` | `renderWeightBudget()` |
 | Org Chart | `#org-panel` | Only if `ProjectData.org.length` | `renderOrgChart()` |
+| Requirements | `#reqs-panel` | Always | `renderRequirements()` — independent of Excel; loads a separate CSV |
 
 `switchTab(btn, id)` toggles `.active` on both `.tab-btn` and `.tab-panel` elements, and closes the side panel.
 
@@ -331,4 +339,8 @@ gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --note
 | **v4.2.0** | Unified explicit edit buttons — "Edit Task", "Edit Spec", "Edit Person" forms replace all inline panel editing | Done |
 | **v4.3.0** | Header reorganization — two-band layout (topbar + tab-nav), underline tab style, version in help modal footer | Done |
 | **v4.3.1** | Fix live drag: dependency arrows, CP ring, overdue ring update in real time during bar drag | Done |
-| **v4.3.2** | Rename build output to `ProgramDashboardSuite.html`; compact tooltip (4 lines, dep count) | Done — current |
+| **v4.3.2** | Rename build output to `ProgramDashboardSuite.html`; compact tooltip (4 lines, dep count) | Done |
+| **v4.4.0** | Duration-weighted progress %, overdue milestone highlighting, Phase 1–20 support in info panel; motion polish, accessibility fixes | Done |
+| **v4.5.0** | Requirements tab — standalone CSV viewer with sort, search, per-column filters, column visibility | Done |
+| **v4.5.1** | Requirements tab fixes: `role="table"`, filter button popover replacing `<select multiple>`, `aria-label` on all controls, listener leak, "Clear filters" resets column visibility | Done |
+| **v4.5.2** | Fix filter text input losing focus after each keypress; bump version | Done — current |
