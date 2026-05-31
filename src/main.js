@@ -16,7 +16,7 @@ import { showSidePanel, closeSidePanel } from './ui/panelBase.js';
 import { renderProgDash, getPhaseNames } from './render/progDash.js';
 import { renderWeightBudget, getWeightUnit } from './render/weightBudget.js';
 import { renderOrgChart } from './render/orgChart.js';
-import { renderRequirements } from './render/requirements.js';
+import { renderRequirements, initReqsSampleData } from './render/requirements.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
   renderGantt, setGanttPhaseFilter, setGanttTeamFilter, clearGanttFilters, togglePhaseCollapse,
@@ -67,7 +67,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v4.4.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v4.5.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -391,6 +391,7 @@ function renderDashboard() {
   safeRender(renderProgDash,     'Program Dashboard');
   safeRender(renderWeightBudget, 'Weight Budget');
   safeRender(renderOrgChart,     'Org Chart');
+  initReqsSampleData();
   safeRender(renderRequirements, 'Requirements');
   updateUndoRedoBtns();
   if (_justLoaded && state.ProjectData.tasks.length) {

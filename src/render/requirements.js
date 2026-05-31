@@ -33,6 +33,85 @@ function colValues(rows, idx) {
   return rows.map(r => String(r[idx] ?? ''));
 }
 
+// ── Sample data ──────────────────────────────────────────────────────────────
+
+function generateSampleReqsCSV() {
+  const headers = [
+    'Req ID', 'Title', 'Requirement Text',
+    'Type', 'Status', 'Priority',
+    'Verification Method', 'Allocated To', 'Source',
+    'Rationale', 'Verification Status', 'Notes'
+  ];
+
+  const types   = ['Functional', 'Performance', 'Interface', 'Safety'];
+  const status  = ['Draft', 'Approved', 'In Review', 'Rejected', 'Closed'];
+  const priority= ['High', 'Medium', 'Low'];
+  const verif   = ['Test', 'Analysis', 'Inspection', 'Demonstration'];
+  const alloc   = ['Propulsion', 'Flight Controls', 'Structures', 'Avionics', 'Systems Integration', 'Safety'];
+  const vstat   = ['Not Started', 'In Progress', 'Passed', 'Failed'];
+
+  const rows = [
+    // Propulsion
+    ['TW2-SYS-001', 'Takeoff Thrust', 'The propulsion system shall produce a minimum static thrust of 8,500 lbf at sea level ISA conditions.', 'Performance', 'Approved', 'High', 'Test', 'Propulsion', 'FAA AC 25-7D', 'Minimum thrust derived from MTOW plus 20% margin.', 'Passed', ''],
+    ['TW2-SYS-002', 'Hover Endurance', 'The aircraft shall sustain hover for a minimum of 60 seconds at MTOW.', 'Performance', 'Approved', 'High', 'Test', 'Propulsion', 'Customer Spec Rev B', 'Required for urban helipad approach and departure phases.', 'Passed', ''],
+    ['TW2-SYS-003', 'Battery Charge Time', 'The battery system shall reach 80% state of charge within 20 minutes using ground support equipment.', 'Performance', 'In Review', 'Medium', 'Test', 'Propulsion', 'Ops Concept Doc 3.2', 'Supports 30-minute turnaround target.', 'Not Started', 'Charger spec TBD'],
+    ['TW2-SYS-004', 'Motor MTBF', 'Each propulsion motor shall have a demonstrated MTBF of no less than 5,000 flight hours.', 'Performance', 'Draft', 'High', 'Analysis', 'Propulsion', 'Safety Analysis SA-04', 'Drives single motor failure probability below 1×10⁻⁵/hour.', 'Not Started', 'Vendor data required'],
+    ['TW2-SYS-005', 'Tilt Transition Time', 'The tilt-wing mechanism shall complete the VTOL-to-cruise transition in ≤ 30 seconds.', 'Performance', 'Approved', 'Medium', 'Test', 'Flight Controls', 'Customer Spec Rev B', 'Passenger comfort and airspace efficiency requirement.', 'In Progress', ''],
+    // Flight Controls
+    ['TW2-FC-001', 'Fly-by-Wire Redundancy', 'The flight control system shall implement triple-redundant fly-by-wire architecture with no single-point failure mode.', 'Safety', 'Approved', 'High', 'Analysis', 'Flight Controls', 'FAR Part 23 §23.1309', 'Required for catastrophic failure probability < 1×10⁻⁹/hr.', 'In Progress', ''],
+    ['TW2-FC-002', 'Control Surface Authority', 'Elevons shall provide ±20° deflection range with no less than 50 lbf of sustained aerodynamic authority at Vmo.', 'Performance', 'Approved', 'High', 'Test', 'Flight Controls', 'Aerodynamics Report AER-12', 'Sized from worst-case asymmetric rotor failure scenario.', 'Not Started', ''],
+    ['TW2-FC-003', 'Autopilot Modes', 'The autopilot shall provide Hover Hold, Altitude Hold, Navigation, and Approach modes.', 'Functional', 'Approved', 'Medium', 'Demonstration', 'Avionics', 'Customer Spec Rev B', 'Required for single-pilot IFR operation.', 'Not Started', ''],
+    ['TW2-FC-004', 'Control Law Update Rate', 'Primary flight control laws shall execute at a minimum rate of 200 Hz.', 'Performance', 'Approved', 'High', 'Inspection', 'FC Architecture Doc', 'Required for rotor control bandwidth margin.', 'Passed', ''],
+    ['TW2-FC-005', 'Failure Response Time', 'Upon detection of a flight-critical fault, the system shall engage reversionary mode within 50 ms.', 'Safety', 'In Review', 'High', 'Test', 'Flight Controls', 'Safety Analysis SA-07', 'Derived from pilot reaction time budget.', 'Not Started', 'Test procedure under review'],
+    // Structures
+    ['TW2-STR-001', 'Limit Load Factor', 'The primary structure shall withstand a limit load factor of +3.8g / -1.5g without permanent deformation.', 'Performance', 'Approved', 'High', 'Analysis', 'Structures', 'FAR Part 23 §23.337', 'Standard utility category load factors.', 'Passed', ''],
+    ['TW2-STR-002', 'Ultimate Load Factor', 'The primary structure shall withstand 1.5× limit load (ultimate) without failure.', 'Safety', 'Approved', 'High', 'Test', 'Structures', 'FAR Part 23 §23.303', 'Required safety factor per regulation.', 'In Progress', ''],
+    ['TW2-STR-003', 'Wing MTOW', 'The wing assembly shall carry the full MTOW of 6,000 lb in 1g level flight with < 0.5% elastic twist.', 'Performance', 'Approved', 'Medium', 'Analysis', 'Structures', 'Aerodynamics Report AER-12', 'Twist limit to maintain rotor shaft alignment.', 'Passed', ''],
+    ['TW2-STR-004', 'Fuselage Pressurization', 'The fuselage shall maintain a cabin altitude of 8,000 ft MSL at a cruise altitude of 25,000 ft MSL.', 'Performance', 'Draft', 'Medium', 'Test', 'Structures', 'Customer Spec Rev B', 'Crew/passenger comfort and physiological requirement.', 'Not Started', 'Optional pressurization — pending config decision'],
+    ['TW2-STR-005', 'Corrosion Protection', 'All primary structure shall meet or exceed ASTM B117 salt-fog corrosion resistance for 500 hours.', 'Functional', 'Approved', 'Low', 'Test', 'Structures', 'Material Spec MS-02', 'Supports operations in coastal and maritime environments.', 'Passed', ''],
+    // Avionics
+    ['TW2-AV-001', 'Navigation Accuracy', 'The integrated navigation system shall provide position accuracy of ≤ 3 m CEP (95%) in GPS-available environments.', 'Performance', 'Approved', 'High', 'Test', 'Avionics', 'Customer Spec Rev B', 'Required for urban air corridor precision.', 'In Progress', ''],
+    ['TW2-AV-002', 'Sensor Fusion Latency', 'The sensor fusion pipeline shall maintain end-to-end latency below 10 ms from sensor input to FCC output.', 'Performance', 'Approved', 'High', 'Test', 'Avionics', 'FC Architecture Doc', 'Driven by control law stability margin analysis.', 'Not Started', ''],
+    ['TW2-AV-003', 'DAA System Range', 'The detect-and-avoid system shall detect non-cooperative intruders at a minimum range of 1 NM.', 'Functional', 'In Review', 'High', 'Test', 'Avionics', 'ASTM F3442', 'Required for BVLOS operations in urban airspace.', 'Not Started', 'Sensor selection pending'],
+    ['TW2-AV-004', 'Cockpit Display Update Rate', 'Primary flight displays shall refresh at a minimum of 30 Hz with ≤ 100 ms of display latency.', 'Performance', 'Approved', 'Medium', 'Inspection', 'DO-315B', 'Pilot situational awareness requirement.', 'Passed', ''],
+    ['TW2-AV-005', 'SATCOM Link Margin', 'The satellite communications link shall maintain ≥ 6 dB of margin at the minimum operational elevation angle of 5°.', 'Performance', 'Draft', 'Low', 'Analysis', 'Comms Link Budget CB-01', 'Ensures reliable voice and data over oceanic routes.', 'Not Started', ''],
+    // Safety
+    ['TW2-SAF-001', 'Emergency Descent Rate', 'In unpowered autorotation/glide, the aircraft shall not exceed a descent rate of 2,000 fpm at MTOW.', 'Safety', 'Approved', 'High', 'Analysis', 'Safety', 'Safety Analysis SA-01', 'Limits touchdown energy to survivable levels.', 'Passed', ''],
+    ['TW2-SAF-002', 'Fire Suppression', 'The battery and engine bays shall be equipped with an automatic fire suppression system activated within 500 ms of fire detection.', 'Safety', 'Approved', 'High', 'Test', 'Safety', 'FAR Part 23 §23.1195', 'Battery thermal runaway mitigation.', 'In Progress', ''],
+    ['TW2-SAF-003', 'Lightning Strike', 'The aircraft shall meet DO-160G Section 22 lightning strike indirect effects requirements for all avionics.', 'Safety', 'Approved', 'High', 'Test', 'Avionics', 'DO-160G §22', 'Required for IFR certification in IMC.', 'Not Started', ''],
+    ['TW2-SAF-004', 'Emergency Egress Time', 'All occupants shall be able to egress the aircraft within 90 seconds of landing in emergency configuration.', 'Safety', 'In Review', 'High', 'Demonstration', 'Safety', 'FAR Part 23 §23.807', 'Emergency egress standard.', 'Not Started', 'Door mechanism design in progress'],
+    ['TW2-SAF-005', 'Bird Strike Resistance', 'The windshield and leading edges shall withstand a 4 lb bird impact at Vc without penetration.', 'Safety', 'Draft', 'Medium', 'Test', 'Structures', 'FAR Part 23 §23.775', 'Required for operations in Class B/C airspace below 10,000 ft.', 'Not Started', ''],
+    // Systems Integration
+    ['TW2-INT-001', 'Power Bus Architecture', 'The electrical power distribution system shall implement a dual-bus architecture with automatic bus tie and load shedding.', 'Functional', 'Approved', 'High', 'Analysis', 'Systems Integration', 'Power Arch Doc PA-03', 'Ensures no single failure removes critical bus.', 'Passed', ''],
+    ['TW2-INT-002', 'Thermal Management', 'The thermal management system shall maintain all electronics within manufacturer-specified operating ranges at ISA+20°C ground conditions.', 'Performance', 'In Review', 'Medium', 'Test', 'Systems Integration', 'Thermal Analysis TA-02', 'Worst-case ground operations in desert environment.', 'Not Started', 'Cooling architecture TBD'],
+    ['TW2-INT-003', 'Data Bus Bandwidth', 'The MIL-STD-1553B avionics backbone shall not exceed 50% bus utilization under peak load.', 'Performance', 'Approved', 'Low', 'Analysis', 'Avionics', 'ICD-AV-001', 'Headroom for future capability growth.', 'Passed', ''],
+    ['TW2-INT-004', 'Software Configuration Control', 'All airworthiness-critical software shall be developed and controlled in accordance with DO-178C Level B or higher.', 'Functional', 'Approved', 'High', 'Inspection', 'Systems Integration', 'DO-178C', 'Required for flight-critical functions.', 'In Progress', ''],
+    ['TW2-INT-005', 'System Weight Margin', 'The integrated aircraft shall maintain a minimum 5% weight margin relative to MTOW at the CDR configuration.', 'Performance', 'Approved', 'Medium', 'Analysis', 'Systems Integration', 'Weight Report WR-07', 'Preserves growth margin through detail design.', 'In Progress', ''],
+  ];
+
+  return Papa.unparse([headers, ...rows]);
+}
+
+function downloadSampleReqsCSV() {
+  const csv  = generateSampleReqsCSV();
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'TW-2 Sample Requirements.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function loadSampleReqs() {
+  const csv = generateSampleReqsCSV();
+  const { headers, rows, error } = parseReqsCSV(csv);
+  if (error || !headers.length) return;
+  state.reqsData  = { headers, rows };
+  state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+  renderRequirements();
+}
+
 // ── File loading ─────────────────────────────────────────────────────────────
 
 function loadReqsFile(file) {
@@ -60,13 +139,17 @@ function renderReqsEmpty() {
   body.innerHTML = `
     <div class="reqs-drop-zone" id="reqs-drop-zone">
       <div class="drop-icon">📋</div>
-      <div class="drop-title">Drop a CSV file to load requirements</div>
-      <div class="drop-sub">Any CSV — headers are read from row 1, all columns rendered as-is</div>
+      <div class="drop-title">Drop a CSV file here — or try with sample data</div>
+      <div class="drop-sub">Drop any CSV — first row is read as column headers, all columns rendered as-is</div>
       <div id="reqs-load-error" class="reqs-load-error" style="display:none"></div>
-      <label for="reqs-file-input" class="btn-primary" style="margin-top:12px">Browse for CSV</label>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center">
+        <label for="reqs-file-input" class="btn-primary">Browse for CSV</label>
+        <button class="btn-secondary" id="reqs-sample-btn">Try with sample data</button>
+      </div>
       <input type="file" id="reqs-file-input" accept=".csv" style="display:none">
     </div>`;
   wireDropZone();
+  document.getElementById('reqs-sample-btn').addEventListener('click', loadSampleReqs);
 }
 
 function renderReqsError(msg) {
@@ -338,6 +421,15 @@ function renderReqsTable() {
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
+
+export function initReqsSampleData() {
+  if (state.reqsData.headers.length) return; // already populated (user loaded their own)
+  const { headers, rows, error } = parseReqsCSV(generateSampleReqsCSV());
+  if (!error && headers.length) {
+    state.reqsData  = { headers, rows };
+    state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+  }
+}
 
 export function renderRequirements() {
   const body    = document.getElementById('reqs-body');

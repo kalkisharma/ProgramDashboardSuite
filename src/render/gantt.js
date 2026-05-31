@@ -310,7 +310,7 @@ export function initGanttColumnResize() {
   if (!handle || !left) return;
 
   const saved = localStorage.getItem('vh-gantt-left-width');
-  if (saved) left.style.width = saved;
+  if (saved && /^\d+px$/.test(saved)) left.style.width = saved;
 
   handle.addEventListener('mousedown', e => {
     e.preventDefault();
@@ -343,7 +343,7 @@ export function initGanttNameColResize() {
   if (!handle) return;
 
   const saved = localStorage.getItem('vh-gantt-name-col-width');
-  if (saved) document.documentElement.style.setProperty('--gantt-name-col-w', saved);
+  if (saved && /^\d+px$/.test(saved)) document.documentElement.style.setProperty('--gantt-name-col-w', saved);
 
   handle.addEventListener('mousedown', e => {
     e.preventDefault();
