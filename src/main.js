@@ -16,6 +16,7 @@ import { showSidePanel, closeSidePanel } from './ui/panelBase.js';
 import { renderProgDash, getPhaseNames } from './render/progDash.js';
 import { renderWeightBudget, getWeightUnit } from './render/weightBudget.js';
 import { renderOrgChart } from './render/orgChart.js';
+import { renderRequirements } from './render/requirements.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
   renderGantt, setGanttPhaseFilter, setGanttTeamFilter, clearGanttFilters, togglePhaseCollapse,
@@ -390,6 +391,7 @@ function renderDashboard() {
   safeRender(renderProgDash,     'Program Dashboard');
   safeRender(renderWeightBudget, 'Weight Budget');
   safeRender(renderOrgChart,     'Org Chart');
+  safeRender(renderRequirements, 'Requirements');
   updateUndoRedoBtns();
   if (_justLoaded && state.ProjectData.tasks.length) {
     const badDates   = state.ProjectData.tasks.filter(t => !t.milestone && (!t.start || !t.end));

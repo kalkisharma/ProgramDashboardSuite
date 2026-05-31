@@ -58,6 +58,16 @@ export const state = {
   orgZoomIdx:    4, // index into ORG_ZOOM_STEPS; default 1.0
   orgSearchQuery: '',
 
+  // ── Requirements view ───────────────────────────────────────────────────────
+  reqsData:  { headers: [], rows: [] }, // raw parsed CSV: headers string[], rows string[][]
+  reqsState: {
+    sortCol:     null,  // column index (number) or null
+    sortDir:     'asc',
+    searchQuery: '',
+    hiddenCols:  [],    // array of column indices that are hidden
+    colFilters:  {},    // { colIdx: { type:'select', values:string[] } | { type:'text', value:string } }
+  },
+
   // ── Handler registry (avoids circular imports between render/* and ui/*) ────
   // Populated by main.js after all functions are defined. Render modules call
   // these instead of importing from main.js directly.
@@ -106,6 +116,8 @@ export function resetState() {
   state.specSearchQuery = '';
   state.orgZoomIdx    = 4;
   state.orgSearchQuery = '';
+  state.reqsData  = { headers: [], rows: [] };
+  state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
   state.ganttMinDateRef = null;
   state.ganttTodayX     = null;
   state.depArrowEls     = [];

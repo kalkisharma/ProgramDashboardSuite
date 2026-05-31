@@ -28,6 +28,7 @@
   <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="prog-panel"   data-tab="prog">Program Dashboard</button>
   <button class="tab-btn" id="weight-tab-btn" role="tab" aria-selected="false" aria-controls="weight-panel" data-tab="weight" style="display:none">Weight Budget</button>
   <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    style="display:none">Org Chart</button>
+  <button class="tab-btn" id="reqs-tab-btn"  role="tab" aria-selected="false" aria-controls="reqs-panel"   data-tab="reqs">Requirements</button>
 </nav>
 
 <!-- MAIN -->
@@ -189,6 +190,12 @@
       <div id="org-container">
         <div id="org-svg-wrap"></div>
       </div>
+    </div>
+
+    <!-- REQUIREMENTS TAB -->
+    <div class="tab-panel" id="reqs-panel" role="tabpanel" aria-labelledby="reqs-tab-btn">
+      <div id="reqs-toolbar"></div>
+      <div id="reqs-body"></div>
     </div>
 
   </div><!-- /dashboard -->

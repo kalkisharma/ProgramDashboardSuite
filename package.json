@@ -27,6 +27,7 @@
     "vitest": "^4.1.6"
   },
   "dependencies": {
+    "papaparse": "^5.5.3",
     "xlsx": "^0.18.5"
   }
 }
