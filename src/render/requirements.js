@@ -503,6 +503,9 @@ function renderReqsTable() {
       if (inp.value) state.reqsState.colFilters[i] = { type: 'text', value: inp.value };
       else           delete state.reqsState.colFilters[i];
       renderReqsTable();
+      // Restore focus after DOM rebuild — input element is replaced on every render
+      const refocused = body.querySelector(`input[data-filter-col="${i}"]`);
+      if (refocused) { refocused.focus(); const len = refocused.value.length; refocused.setSelectionRange(len, len); }
     });
   });
 
