@@ -128,7 +128,7 @@ export function resetGanttToImported() {
     }, 3000);
     return;
   }
-  if (btn) { btn.dataset.confirming = ''; btn.style.borderColor = ''; btn.style.color = ''; }
+  if (btn) { btn.dataset.confirming = ''; btn.textContent = '↺ Reset to Imported'; btn.style.borderColor = ''; btn.style.color = ''; }
   const cloneTask = t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] });
   const snapshot = state.ProjectData.tasks.map(cloneTask);
   state.ProjectData.tasks = state.originalTasks.map(cloneTask);
