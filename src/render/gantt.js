@@ -30,6 +30,8 @@ export function togglePhaseCollapse(phaseNum) {
 
 // Drag-pan state for gantt-right
 let ganttDragging = false, ganttDragDidMove = false, ganttDragStartX, ganttDragScrollLeft;
+// Tracks whether a bar drag actually moved — persists through the post-mouseup click event
+let _barDragWasActive = false;
 
 export function getBarZone(svgX, t) {
   const barX = daysBetween(state.ganttMinDateRef, t.start) * state.ganttZoom;
@@ -52,6 +54,7 @@ export function startBarDrag(e, taskId) {
   const svgX = e.clientX - right.getBoundingClientRect().left + right.scrollLeft;
   const zone = getBarZone(svgX, t);
   if (!zone) { startPanDrag(e); return; }
+  _barDragWasActive = false;
   state.barDragPreSnapshot = fullSnapshot();
   state.barDrag.pending = true; state.barDrag.taskId = taskId; state.barDrag.mode = zone;
   state.barDrag.startClientX = e.clientX; state.barDrag.startScrollLeft = right.scrollLeft;
@@ -126,7 +129,7 @@ function doBarDragMove(e) {
     const spatialOk  = Math.abs(e.clientX - state.barDrag.startClientX) > (isMoveZone ? 4 : 8);
     const temporalOk = isMoveZone ? state.barDrag.holdReady : (Date.now() - state.barDrag.downTime) > 80;
     if (spatialOk && temporalOk) {
-      state.barDrag.pending = false; state.barDrag.active = true;
+      state.barDrag.pending = false; state.barDrag.active = true; _barDragWasActive = true;
       const right = document.getElementById('gantt-right');
       right.style.cursor = isMoveZone ? 'grabbing' : 'ew-resize';
     }
@@ -1146,7 +1149,7 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
         state.depArrowEls.forEach(({ el }) => { el.style.opacity = ''; });
       }
     });
-    hit.addEventListener('click', () => { if (!ganttDragDidMove && !state.barDrag.active && state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); });
+    hit.addEventListener('click', () => { if (!ganttDragDidMove && !_barDragWasActive && state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); });
     hit.addEventListener('dblclick', e => { e.stopPropagation(); openGanttDatePicker(t, e.clientX, e.clientY); });
     svg.appendChild(hit);
 
