@@ -32,6 +32,8 @@ export function togglePhaseCollapse(phaseNum) {
 let ganttDragging = false, ganttDragDidMove = false, ganttDragStartX, ganttDragScrollLeft;
 // Tracks whether a bar drag actually moved — persists through the post-mouseup click event
 let _barDragWasActive = false;
+// Delay timer for Gantt tooltip — prevents tooltip firing during quick scans
+let _tooltipTimer = null;
 
 export function getBarZone(svgX, t) {
   const barX = daysBetween(state.ganttMinDateRef, t.start) * state.ganttZoom;
@@ -1126,20 +1128,25 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
     hit.setAttribute('aria-label', `${t.milestone ? 'Milestone' : 'Task'} ${t.wbs}: ${t.name}, ${t.pct}% complete${_hitStart ? ', ' + _hitStart + ' to ' + _hitEnd : ''}`);
     hit.dataset.taskid = t.id;
     hit.addEventListener('mouseenter', e => {
-      if (!state.barDrag.active && !state.rowDrag.active) {
-        showTooltip(t, e);
-        if (state.showCriticalPath) {
-          Object.entries(state.barEls).forEach(([id, els]) => {
-            const op = cpSet.has(t.id) ? (cpSet.has(+id) ? '1' : '0.2') : (+id === t.id ? '1' : '0.2');
-            ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = op; });
-          });
-          state.depArrowEls.forEach(({ el, predId, succId }) => {
-            el.style.opacity = cpSet.has(t.id) ? ((cpSet.has(predId) && cpSet.has(succId)) ? '1' : '0.08') : '0.15';
-          });
+      clearTimeout(_tooltipTimer);
+      _tooltipTimer = setTimeout(() => {
+        if (!state.barDrag.active && !state.rowDrag.active) {
+          showTooltip(t, e);
+          if (state.showCriticalPath) {
+            Object.entries(state.barEls).forEach(([id, els]) => {
+              const op = cpSet.has(t.id) ? (cpSet.has(+id) ? '1' : '0.2') : (+id === t.id ? '1' : '0.2');
+              ['bgRect','progRect','outlineRect','diamond'].forEach(k => { if (els[k]) els[k].style.opacity = op; });
+            });
+            state.depArrowEls.forEach(({ el, predId, succId }) => {
+              el.style.opacity = cpSet.has(t.id) ? ((cpSet.has(predId) && cpSet.has(succId)) ? '1' : '0.08') : '0.15';
+            });
+          }
         }
-      }
+      }, 400);
     });
     hit.addEventListener('mouseleave', () => {
+      clearTimeout(_tooltipTimer);
+      _tooltipTimer = null;
       hideTooltip();
       if (state.showCriticalPath) {
         Object.entries(state.barEls).forEach(([id, els]) => {
