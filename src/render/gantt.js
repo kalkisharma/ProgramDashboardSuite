@@ -205,6 +205,9 @@ export function endBarDrag() {
         showToast('Date adjusted', state.handlers.applyUndo, 12000);
       }
     }
+    // Defer reset so the immediate post-drag click event is handled first,
+    // then the flag clears for all subsequent clicks (e.g. after a filter change).
+    setTimeout(() => { _barDragWasActive = false; }, 0);
   }
 }
 
