@@ -849,6 +849,9 @@ body.light-mode {
 }
 .gantt-collapse-btn:hover { opacity: 1; }
 .gantt-row.phase-collapsed { opacity: 0.75; }
+.gantt-row.gantt-phase-hdr { background: rgba(88,166,255,0.06); cursor: default; }
+.gantt-row.gantt-phase-hdr .g-name { font-weight: 700; letter-spacing: 0.01em; }
+.gantt-row.gantt-phase-hdr:hover { background: rgba(88,166,255,0.09); }
 .gantt-row-ghost {
   position: fixed; pointer-events: none; z-index: 800;
   background: var(--surface); border: 1px solid var(--accent);

@@ -218,6 +218,8 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `vh-zoom-gantt` / `vh-zoom-specs` / `vh-zoom-org` — per-tab zoom index
 - `vh-draft` — auto-saved draft JSON (fullSnapshot + title + timestamp); removed on export/import
 - `vh-gantt-name-col-width` — Task Name column pixel width (e.g. "180px"); default `1fr`
+- `vh-gantt-legend` — legend open state (`'1'` = open)
+- `vh-reqs-data` — serialized requirements CSV data (`{ data: { headers, rows }, reqsState }`); cleared on "Load different CSV"
 
 **Body grid lines:** `renderBodyGrid(svg, NS, minD, maxD, W, bodyH)` draws month boundary vertical lines (full body height) and, when `ganttZoom >= 5`, week sub-lines at reduced opacity. Non-work-day column shading has been removed.
 

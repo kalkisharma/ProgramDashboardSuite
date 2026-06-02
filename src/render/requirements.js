@@ -1,6 +1,7 @@
 import Papa from 'papaparse';
 import { state } from '../state.js';
 import { esc } from '../utils.js';
+import { safeSetItem } from '../ui/toast.js';
 
 // ── CSV parsing ──────────────────────────────────────────────────────────────
 
@@ -102,7 +103,30 @@ function loadSampleReqs() {
   if (error || !headers.length) return;
   state.reqsData  = { headers, rows };
   state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+  saveReqsToStorage();
   renderRequirements();
+}
+
+// ── localStorage persistence ─────────────────────────────────────────────────
+
+function saveReqsToStorage() {
+  safeSetItem('vh-reqs-data', JSON.stringify({ data: state.reqsData, reqsState: state.reqsState }));
+}
+
+function clearReqsStorage() {
+  try { localStorage.removeItem('vh-reqs-data'); } catch (_) {}
+}
+
+function restoreReqsFromStorage() {
+  try {
+    const raw = localStorage.getItem('vh-reqs-data');
+    if (!raw) return false;
+    const { data, reqsState } = JSON.parse(raw);
+    if (!data?.headers?.length) return false;
+    state.reqsData  = data;
+    state.reqsState = reqsState || { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+    return true;
+  } catch (_) { return false; }
 }
 
 // ── File loading ─────────────────────────────────────────────────────────────
@@ -118,6 +142,7 @@ function loadReqsFile(file) {
     }
     state.reqsData  = { headers, rows };
     state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+    saveReqsToStorage();
     renderRequirements();
   };
   r.readAsText(file);
@@ -363,6 +388,7 @@ function renderReqsToolbar() {
   toolbar.querySelector('#reqs-reload-btn').addEventListener('click', () => {
     state.reqsData  = { headers: [], rows: [] };
     state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+    clearReqsStorage();
     closeFilterPopover();
     renderRequirements();
   });
@@ -545,6 +571,11 @@ export function renderRequirements() {
   if (!body || !toolbar) return;
 
   if (!state.reqsData.headers.length) {
+    if (restoreReqsFromStorage()) {
+      renderReqsToolbar();
+      renderReqsTable();
+      return;
+    }
     renderReqsEmpty();
     return;
   }

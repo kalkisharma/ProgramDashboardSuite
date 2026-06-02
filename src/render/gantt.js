@@ -980,7 +980,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const showHandle = !isFiltered && !isPhaseHeader;
     const showCollapseBtn = isPhaseHeader && state.ganttPhaseFilter === 'all';
     const div = document.createElement('div');
-    div.className = 'gantt-row' + (isCollapsed ? ' phase-collapsed' : '');
+    div.className = 'gantt-row' + (isPhaseHeader ? ' gantt-phase-hdr' : '') + (isCollapsed ? ' phase-collapsed' : '');
     div.dataset.taskid = t.id;
     div.setAttribute('role', 'row');
     div.setAttribute('tabindex', '-1');
