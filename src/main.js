@@ -674,6 +674,11 @@ function saveWeightRow(idx) {
   document.getElementById('sp-title').textContent = w.subsystem || 'Weight Row';
   safeRender(renderWeightBudget, 'Weight Budget');
   showToast('Weight row saved');
+  const btn = document.getElementById('wt-save-btn');
+  if (btn) {
+    btn.textContent = '✓ Saved'; btn.style.background = '#238636'; btn.style.color = '#fff'; btn.disabled = true;
+    setTimeout(() => { btn.textContent = 'Save Changes'; btn.style.background = ''; btn.style.color = ''; btn.disabled = false; }, 1500);
+  }
 }
 
 function deleteWeightRow(idx) {
@@ -835,8 +840,10 @@ function saveSpecEdits(specId) {
   s.units = newUnits; s.group = newGroup; s.status = newStatus; s.notes = newNotes;
   if (newId !== specId) state.spCurrentId = newId;
   renderSpecTable();
-  state.spCurrentType = null; openSpecPanel(newId);
   showToast('Spec updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+  const btn = document.getElementById('spec-save-btn');
+  if (btn) { btn.textContent = '✓ Saved'; btn.style.background = '#238636'; btn.style.color = '#fff'; btn.disabled = true; }
+  setTimeout(() => { state.spCurrentType = null; openSpecPanel(newId); }, 600);
 }
 
 // ─── SIDE PANEL – TASK ───────────────────────────────────────────────────────
@@ -1009,8 +1016,10 @@ function saveTaskEdits(taskId) {
   pushUndo('edit task');
   t.name = name; t.team = team; t.start = newStart; t.end = newEnd; t.pct = pct; t.notes = notes;
   renderGantt();
-  state.spCurrentType = null; openTaskPanel(taskId);
   showToast('Task updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+  const btn = document.getElementById('task-save-btn');
+  if (btn) { btn.textContent = '✓ Saved'; btn.style.background = '#238636'; btn.style.color = '#fff'; btn.disabled = true; }
+  setTimeout(() => { state.spCurrentType = null; openTaskPanel(taskId); }, 600);
 }
 
 // ─── SIDE PANEL – ORG PERSON ─────────────────────────────────────────────────
