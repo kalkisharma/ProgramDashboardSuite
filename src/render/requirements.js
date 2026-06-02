@@ -85,7 +85,7 @@ function generateSampleReqsCSV() {
   return Papa.unparse([headers, ...rows]);
 }
 
-function downloadSampleReqsCSV() {
+export function downloadSampleReqsCSV() {
   const csv  = generateSampleReqsCSV();
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url  = URL.createObjectURL(blob);
@@ -138,11 +138,13 @@ function renderReqsEmpty() {
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center">
         <label for="reqs-file-input" class="btn-primary">Browse for CSV</label>
         <button class="btn-secondary" id="reqs-sample-btn">Try with sample data</button>
+        <button class="btn-secondary" id="reqs-download-btn">Download sample CSV</button>
       </div>
       <input type="file" id="reqs-file-input" accept=".csv" style="display:none">
     </div>`;
   wireDropZone();
   document.getElementById('reqs-sample-btn').addEventListener('click', loadSampleReqs);
+  document.getElementById('reqs-download-btn').addEventListener('click', downloadSampleReqsCSV);
 }
 
 function renderReqsError(msg) {

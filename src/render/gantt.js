@@ -738,6 +738,7 @@ export function toggleCriticalPath() {
 
 export function toggleGanttLegend() {
   state.showGanttLegend = !state.showGanttLegend;
+  safeSetItem('vh-gantt-legend', state.showGanttLegend ? '1' : '');
   const btn = document.getElementById('legend-btn');
   const panel = document.getElementById('gantt-legend');
   if (!btn || !panel) return;
@@ -859,10 +860,18 @@ export function exportGanttPNG() {
 
 /** Full re-render of the Gantt chart (left task list + SVG bars + header). Called after every data mutation. */
 export function renderGantt() {
+  const right = document.getElementById('gantt-right');
+  const lb    = document.getElementById('gantt-left-body');
+  const savedScrollLeft = right ? right.scrollLeft : 0;
+  const savedScrollTop  = lb   ? lb.scrollTop      : 0;
+
   const data = prepareGanttData();
   if (!data) return;
   renderGanttLeft(data);
   renderGanttSVG(data);
+
+  if (right) right.scrollLeft = savedScrollLeft;
+  if (lb)    lb.scrollTop     = savedScrollTop;
 }
 
 export function prepareGanttData() {
@@ -964,7 +973,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const color = phaseColor(t.wbs);
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
-    const wd = wdDisplay(t, state.ganttWorkDays, getToday());
+    const wd = t.milestone ? { text: '◆', cls: '' } : wdDisplay(t, state.ganttWorkDays, getToday());
     const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
     const phaseNum = parseInt(t.wbs.split('.')[0]) || 1;
     const isCollapsed = isPhaseHeader && state.collapsedPhases.has(phaseNum);
@@ -1010,30 +1019,35 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
       if (colBtn) colBtn.addEventListener('click', e => { e.stopPropagation(); togglePhaseCollapse(phaseNum); });
     }
 
-    // Task name inline edit
-    const nameEl = div.querySelector('.g-name');
-    nameEl.style.cursor = 'text';
-    nameEl.setAttribute('tabindex', '0');
-    nameEl.addEventListener('click',   e => { e.stopPropagation(); startTaskNameEdit(nameEl, t); });
-    nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskNameEdit(nameEl, t); } });
+    if (!isPhaseHeader) {
+      // Task name inline edit
+      const nameEl = div.querySelector('.g-name');
+      nameEl.style.cursor = 'text';
+      nameEl.setAttribute('tabindex', '0');
+      nameEl.addEventListener('click',   e => { e.stopPropagation(); startTaskNameEdit(nameEl, t); });
+      nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskNameEdit(nameEl, t); } });
 
-    // Team inline edit
-    const teamEl = div.querySelector('.g-team');
-    teamEl.style.cursor = 'pointer';
-    teamEl.setAttribute('tabindex', '0');
-    teamEl.addEventListener('click',   e => { e.stopPropagation(); startTaskTeamEdit(teamEl, t); });
-    teamEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskTeamEdit(teamEl, t); } });
+      // Team inline edit
+      const teamEl = div.querySelector('.g-team');
+      teamEl.style.cursor = 'pointer';
+      teamEl.setAttribute('tabindex', '0');
+      teamEl.addEventListener('click',   e => { e.stopPropagation(); startTaskTeamEdit(teamEl, t); });
+      teamEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskTeamEdit(teamEl, t); } });
 
-    // Pct inline edit
-    const pctEl = div.querySelector('.g-pct');
-    pctEl.style.cursor = 'text';
-    pctEl.setAttribute('tabindex', '0');
-    pctEl.addEventListener('click',   e => { e.stopPropagation(); startTaskPctEdit(pctEl, t); });
-    pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskPctEdit(pctEl, t); } });
+      // Pct inline edit
+      const pctEl = div.querySelector('.g-pct');
+      pctEl.style.cursor = 'text';
+      pctEl.setAttribute('tabindex', '0');
+      pctEl.addEventListener('click',   e => { e.stopPropagation(); startTaskPctEdit(pctEl, t); });
+      pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskPctEdit(pctEl, t); } });
 
-    div.addEventListener('click', () => { if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); });
-    div.addEventListener('mouseenter', e => { if (!state.barDrag.active && !state.rowDrag.active) showTooltip(t, e); });
-    div.addEventListener('mouseleave', hideTooltip);
+      div.addEventListener('click', () => { if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); });
+    }
+    div.addEventListener('mouseenter', e => {
+      clearTimeout(_tooltipTimer);
+      _tooltipTimer = setTimeout(() => { if (!state.barDrag.active && !state.rowDrag.active) showTooltip(t, e); }, 400);
+    });
+    div.addEventListener('mouseleave', () => { clearTimeout(_tooltipTimer); _tooltipTimer = null; hideTooltip(); });
     lb.appendChild(div);
   });
 
@@ -1159,8 +1173,18 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
         state.depArrowEls.forEach(({ el }) => { el.style.opacity = ''; });
       }
     });
-    hit.addEventListener('click', () => { if (!ganttDragDidMove && !_barDragWasActive && state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); });
-    hit.addEventListener('dblclick', e => { e.stopPropagation(); openGanttDatePicker(t, e.clientX, e.clientY); });
+    const _isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
+    let _clickTimer = null;
+    hit.addEventListener('click', () => {
+      if (_isPhaseHeader || ganttDragDidMove || _barDragWasActive || !state.handlers.openTaskPanel) return;
+      clearTimeout(_clickTimer);
+      _clickTimer = setTimeout(() => { _clickTimer = null; state.handlers.openTaskPanel(t.id); }, 220);
+    });
+    hit.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      clearTimeout(_clickTimer); _clickTimer = null;
+      if (!_isPhaseHeader) openGanttDatePicker(t, e.clientX, e.clientY);
+    });
     svg.appendChild(hit);
 
     if (t.milestone) {
@@ -1253,16 +1277,19 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
       });
       const predTaskName = predTask ? predTask.name : 'Task ' + did;
       p.addEventListener('mouseenter', e => {
-        tooltip.innerHTML = `<div style="font-weight:700;margin-bottom:4px;font-size:0.8rem">Dependency</div>
-          <div style="display:flex;align-items:center;gap:8px;font-size:0.82rem">
-            <span style="color:var(--muted)">${esc(predTaskName)}</span>
-            <span style="color:var(--accent)">→</span>
-            <span>${esc(t.name)}</span>
-          </div>`;
-        tooltip.style.display = 'block'; positionTooltip(e);
+        clearTimeout(_tooltipTimer);
+        _tooltipTimer = setTimeout(() => {
+          tooltip.innerHTML = `<div style="font-weight:700;margin-bottom:4px;font-size:0.8rem">Dependency</div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:0.82rem">
+              <span style="color:var(--muted)">${esc(predTaskName)}</span>
+              <span style="color:var(--accent)">→</span>
+              <span>${esc(t.name)}</span>
+            </div>`;
+          tooltip.style.display = 'block'; positionTooltip(e);
+        }, 400);
       });
       p.addEventListener('mousemove', positionTooltip);
-      p.addEventListener('mouseleave', hideTooltip);
+      p.addEventListener('mouseleave', () => { clearTimeout(_tooltipTimer); _tooltipTimer = null; hideTooltip(); });
       state.depArrowEls.push({ el: p, predId: did, succId: t.id });
       svg.appendChild(p);
     });

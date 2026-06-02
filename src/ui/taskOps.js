@@ -1,6 +1,6 @@
 import { state } from '../state.js';
 import { SPEC_COLORS } from '../colors.js';
-import { addDays, snapToWorkDay } from '../utils.js';
+import { addDays, snapToWorkDay, getToday } from '../utils.js';
 import { renderGantt } from '../render/gantt.js';
 import { renderSpecs } from '../render/specs.js';
 import { getPhaseNames } from '../render/progDash.js';
@@ -83,8 +83,10 @@ export function deleteSpec(specId) {
 
 export function addGanttTask() {
   if (!state.ProjectData.tasks.length) return;
+  // When a phase filter is active, add to that phase; otherwise add to the last phase
+  const filteredPhase = state.ganttPhaseFilter !== 'all' ? parseInt(state.ganttPhaseFilter) : null;
   const lastTask = state.ProjectData.tasks[state.ProjectData.tasks.length - 1];
-  const lastPhase = parseInt(String(lastTask.wbs).split('.')[0]) || 1;
+  const lastPhase = filteredPhase || (parseInt(String(lastTask.wbs).split('.')[0]) || 1);
   const phaseTasks = state.ProjectData.tasks.filter(t => parseInt(String(t.wbs).split('.')[0]) === lastPhase && t.wbs.includes('.') && !t.wbs.endsWith('.0'));
   const nextNum = phaseTasks.length + 1;
   const newWbs = lastPhase + '.' + nextNum;
@@ -92,9 +94,7 @@ export function addGanttTask() {
   const teams = [...new Set(state.ProjectData.tasks.map(t => t.team).filter(Boolean))].sort();
   const team = teams[0] || '';
 
-  const dates = state.ProjectData.tasks.flatMap(t => [t.start, t.end]).filter(Boolean);
-  const progStart = new Date(Math.min(...dates));
-  const taskStart = snapToWorkDay(progStart, state.ganttWorkDays, 1);
+  const taskStart = snapToWorkDay(getToday(), state.ganttWorkDays, 1);
   const taskEnd   = snapToWorkDay(addDays(taskStart, 4), state.ganttWorkDays, 1);
 
   const newId = Math.max(...state.ProjectData.tasks.map(t => t.id), 0) + 1;
@@ -114,6 +114,7 @@ export function addGanttTask() {
 
 export function resetGanttToImported() {
   if (!state.originalTasks.length) return;
+  if (!state.isDirty) { showToast('No changes to reset — schedule matches imported state.', null, 3000); return; }
   const btn = document.getElementById('gantt-reset-btn');
   if (btn && btn.dataset.confirming !== '1') {
     const origText = btn.textContent;

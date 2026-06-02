@@ -254,6 +254,8 @@ document.getElementById('help-overlay').addEventListener('click', e => {
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 /** @param {HTMLElement} btn - The clicked tab button. @param {string} id - Tab key ('gantt'|'specs'|'prog'|'weight'|'org'). */
 function switchTab(btn, id) {
+  const saveBtn = document.querySelector('#sp-body [id$="-save-btn"]');
+  if (saveBtn) { showToast('Unsaved changes — save or cancel before switching tabs.', null, 3500); return; }
   document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');
@@ -1274,6 +1276,12 @@ function saveInfoPanel() {
     state.showCriticalPath = true;
     const cpBtn = document.getElementById('gantt-cp-btn');
     if (cpBtn) cpBtn.setAttribute('aria-pressed', 'true');
+  }
+  // Restore legend toggle state
+  if (localStorage.getItem('vh-gantt-legend') === '1') {
+    state.showGanttLegend = true;
+    const legendBtn = document.getElementById('legend-btn');
+    if (legendBtn) legendBtn.setAttribute('aria-expanded', 'true');
   }
 
   // Sync work days button label
