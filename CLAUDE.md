@@ -343,4 +343,5 @@ gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --note
 | **v4.4.0** | Duration-weighted progress %, overdue milestone highlighting, Phase 1–20 support in info panel; motion polish, accessibility fixes | Done |
 | **v4.5.0** | Requirements tab — standalone CSV viewer with sort, search, per-column filters, column visibility | Done |
 | **v4.5.1** | Requirements tab fixes: `role="table"`, filter button popover replacing `<select multiple>`, `aria-label` on all controls, listener leak, "Clear filters" resets column visibility | Done |
-| **v4.5.2** | Fix filter text input losing focus after each keypress; bump version | Done — current |
+| **v4.5.2** | Fix filter text input losing focus after each keypress | Done |
+| **v4.5.3** | Fix help modal broken since v4.4.0 (inline styles blocked CSS .open class); side panel no longer opens after bar drag; 400ms Gantt tooltip delay; reset button label fix; user guide content and formatting pass | Done — current |
