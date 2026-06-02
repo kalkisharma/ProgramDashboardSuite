@@ -345,4 +345,5 @@ gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --note
 | **v4.5.1** | Requirements tab fixes: `role="table"`, filter button popover replacing `<select multiple>`, `aria-label` on all controls, listener leak, "Clear filters" resets column visibility | Done |
 | **v4.5.2** | Fix filter text input losing focus after each keypress | Done |
 | **v4.5.3** | Fix help modal broken since v4.4.0 (inline styles blocked CSS .open class); side panel no longer opens after bar drag; 400ms Gantt tooltip delay; reset button label fix; user guide content and formatting pass | Done |
-| **v4.5.4** | Save Changes button flashes ✓ Saved in green before panel transitions back to detail view | Done — current |
+| **v4.5.4** | Save Changes button flashes ✓ Saved in green before panel transitions back to detail view | Done |
+| **v4.6.0** | Full-team UI review: scroll preservation, double-click disambiguation, tab-switch edit guard, add-task filter awareness, phase header click suppression, tooltip delay consistency, legend persistence, milestone WD display, reset guard, today-default for new tasks, date picker aria fix, requirements download button | Done — current |
