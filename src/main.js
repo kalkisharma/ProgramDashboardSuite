@@ -17,6 +17,7 @@ import { renderProgDash, getPhaseNames } from './render/progDash.js';
 import { renderWeightBudget, getWeightUnit } from './render/weightBudget.js';
 import { renderOrgChart } from './render/orgChart.js';
 import { renderRequirements } from './render/requirements.js';
+import { renderStatusReport } from './render/statusReport.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
   renderGantt, setGanttPhaseFilter, setGanttTeamFilter, clearGanttFilters, togglePhaseCollapse,
@@ -130,6 +131,7 @@ function _restoreSnapshot(snapshot) {
   safeRender(renderProgDash, 'Program Dashboard');
   if (state.ProjectData.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
   if (state.ProjectData.org.length)     safeRender(renderOrgChart,     'Org Chart');
+  safeRender(renderStatusReport, 'Status Report');
   if (state.spCurrentType === 'task') { state.spCurrentType = null; openTaskPanel(state.spCurrentId); }
   else if (state.spCurrentType === 'spec') { state.spCurrentType = null; openSpecPanel(state.spCurrentId); }
   else if (state.spCurrentType === 'org') { const n = state.spCurrentId; state.spCurrentType = null; if (state.ProjectData.org.find(p => p.name === n)) openOrgPanel(n); else closeSidePanel(); }
@@ -370,6 +372,7 @@ function renderDashboard() {
   document.getElementById('tab-nav').style.display = 'flex';
   document.getElementById('org-tab-btn').style.display = state.ProjectData.org.length ? '' : 'none';
   document.getElementById('weight-tab-btn').style.display = state.ProjectData.weights.length ? '' : 'none';
+  document.getElementById('status-tab-btn').style.display = '';
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
   document.getElementById('proj-info-btn').style.display = '';
@@ -391,8 +394,9 @@ function renderDashboard() {
   safeRender(renderGantt,        'Gantt Chart');
   safeRender(renderSpecs,        'Specifications');
   safeRender(renderProgDash,     'Program Dashboard');
-  safeRender(renderWeightBudget, 'Weight Budget');
-  safeRender(renderOrgChart,     'Org Chart');
+  safeRender(renderWeightBudget,  'Weight Budget');
+  safeRender(renderOrgChart,      'Org Chart');
+  safeRender(renderStatusReport,  'Status Report');
   safeRender(renderRequirements, 'Requirements');
   updateUndoRedoBtns();
   if (_justLoaded && state.ProjectData.tasks.length) {

@@ -36,6 +36,7 @@ npm test         # Vitest unit tests
 | `src/render/progDash.js` | `renderProgDash`, `getPhaseNames` |
 | `src/render/weightBudget.js` | `renderWeightBudget`, `getWeightUnit` |
 | `src/render/orgChart.js` | `renderOrgChart` |
+| `src/render/statusReport.js` | `renderStatusReport` — open task table with RAG status; 3-slide PowerPoint export via pptxgenjs |
 | `src/render/requirements.js` | `renderRequirements` — standalone CSV viewer; filter popover, column visibility, sort, search |
 | `src/ui/panelBase.js` | `showSidePanel`, `closeSidePanel` |
 | `src/ui/tooltip.js` | `showTooltip`, `hideTooltip`, `positionTooltip` |
@@ -87,6 +88,8 @@ export const state = {
   conflictSet:      new Set(),
   specsZoomIdx: 2, specSortState: { col: null, dir: 'asc' }, specSearchQuery: '',
   orgZoomIdx: 4, orgSearchQuery: '',
+  statusReportFilter: 'all',          // 'all' | 'concerns'
+  statusReportSort:   { col: null, dir: 'asc' },
   reqsData:  { headers: [], rows: [] }, // raw parsed CSV: headers string[], rows string[][]
   reqsState: { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} },
 };
@@ -156,6 +159,7 @@ Phase names from `Phase N Name` rows override the built-in `PHASE_NAMES_FALLBACK
 | Program Dashboard | `#prog-panel` | Always | `renderProgDash()` |
 | Weight Budget | `#weight-panel` | Only if `ProjectData.weights.length` | `renderWeightBudget()` |
 | Org Chart | `#org-panel` | Only if `ProjectData.org.length` | `renderOrgChart()` |
+| Status Report | `#status-panel` | Always (after load) | `renderStatusReport()` — open task table with RAG status + PowerPoint export |
 | Requirements | `#reqs-panel` | Always | `renderRequirements()` — independent of Excel; loads a separate CSV |
 
 `switchTab(btn, id)` toggles `.active` on both `.tab-btn` and `.tab-panel` elements, and closes the side panel.
@@ -349,4 +353,5 @@ gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --note
 | **v4.5.3** | Fix help modal broken since v4.4.0 (inline styles blocked CSS .open class); side panel no longer opens after bar drag; 400ms Gantt tooltip delay; reset button label fix; user guide content and formatting pass | Done |
 | **v4.5.4** | Save Changes button flashes ✓ Saved in green before panel transitions back to detail view | Done |
 | **v4.6.0** | Full-team UI review: scroll preservation, double-click disambiguation, tab-switch edit guard, add-task filter awareness, phase header click suppression, tooltip delay consistency, legend persistence, milestone WD display, reset guard, today-default for new tasks, date picker aria fix, requirements download button | Done |
-| **v4.6.1** | Phase header rows visually distinct (tinted background, bold name); Requirements CSV persisted to localStorage across page reload | Done — current |
+| **v4.6.1** | Phase header rows visually distinct (tinted background, bold name); Requirements CSV persisted to localStorage across page reload | Done |
+| **v4.7.0** | Status Report tab — open task table with RAG (Red/Amber/Green) status, sort, filter by concerns; one-click 3-slide PowerPoint export (KPI summary + phase breakdown + task table) via pptxgenjs | Done — current |

@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "papaparse": "^5.5.3",
+    "pptxgenjs": "^4.0.1",
     "xlsx": "^0.18.5"
   }
 }

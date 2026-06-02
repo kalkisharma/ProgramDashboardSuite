@@ -58,6 +58,10 @@ export const state = {
   orgZoomIdx:    4, // index into ORG_ZOOM_STEPS; default 1.0
   orgSearchQuery: '',
 
+  // ── Status Report view ──────────────────────────────────────────────────────
+  statusReportFilter: 'all',          // 'all' | 'concerns'
+  statusReportSort:   { col: null, dir: 'asc' },
+
   // ── Requirements view ───────────────────────────────────────────────────────
   reqsData:  { headers: [], rows: [] }, // raw parsed CSV: headers string[], rows string[][]
   reqsState: {
@@ -118,6 +122,8 @@ export function resetState() {
   state.orgSearchQuery = '';
   state.reqsData  = { headers: [], rows: [] };
   state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
+  state.statusReportFilter = 'all';
+  state.statusReportSort   = { col: null, dir: 'asc' };
   state.ganttMinDateRef = null;
   state.ganttTodayX     = null;
   state.depArrowEls     = [];

@@ -947,6 +947,30 @@ path[data-succ-id]:focus-visible { stroke: var(--accent) !important; stroke-widt
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
+/* ── STATUS REPORT TAB ───────────────────────────────────────── */
+#status-panel { flex-direction: column; height: 100%; overflow: hidden; }
+#status-toolbar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 16px; flex-shrink: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap;
+}
+#status-body { flex: 1; overflow: auto; }
+
+.status-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; table-layout: auto; }
+.status-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface); border-bottom: 2px solid var(--border);
+  padding: 7px 10px; text-align: left; white-space: nowrap; font-weight: 700;
+}
+.status-table thead th:hover { color: var(--accent); }
+.status-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.sr-row:hover td { background: rgba(88,166,255,0.05); }
+.sr-row { transition: background 0.1s; }
+
+.rag-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.74rem; font-weight: 700; white-space: nowrap; }
+.rag-red   { background: rgba(248,81,73,0.15);  color: #f85149; }
+.rag-amber { background: rgba(210,153,34,0.15); color: #d29922; }
+.rag-green { background: rgba(63,185,80,0.15);  color: #3fb950; }
+
 /* ── REQUIREMENTS TAB ────────────────────────────────────────── */
 #reqs-panel { flex-direction: column; height: 100%; overflow: hidden; }
 #reqs-toolbar {
