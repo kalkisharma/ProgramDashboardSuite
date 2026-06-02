@@ -435,6 +435,7 @@ svg.cp-active rect, svg.cp-active polygon { transition: opacity 60ms ease; }
   #org-container  { transition: padding-right 0.28s cubic-bezier(.4,0,.2,1); }
   #help-overlay { transition: opacity 0.18s ease, visibility 0.18s ease; }
 }
+#help-overlay { visibility: hidden; opacity: 0; pointer-events: none; }
 #help-overlay.open { visibility: visible; opacity: 1; pointer-events: auto; }
 #side-panel.open { right: 0; }
 
