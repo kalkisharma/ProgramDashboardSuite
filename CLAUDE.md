@@ -14,7 +14,7 @@ npm test         # Vitest unit tests
 
 ## Architecture
 
-**Vite + ES Modules** (`src/main.js`, ~1470 lines) built into a single-file `dist/ProgramDashboardSuite.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`).
+**Vite + ES Modules** (`src/main.js`, ~1491 lines) built into a single-file `dist/ProgramDashboardSuite.html` via `vite-plugin-singlefile`. SheetJS is imported as an npm package (`xlsx`). PowerPoint export uses `pptxgenjs` (adds ~387KB to the bundle).
 
 ### Source Module Layout
 
@@ -36,7 +36,7 @@ npm test         # Vitest unit tests
 | `src/render/progDash.js` | `renderProgDash`, `getPhaseNames` |
 | `src/render/weightBudget.js` | `renderWeightBudget`, `getWeightUnit` |
 | `src/render/orgChart.js` | `renderOrgChart` |
-| `src/render/statusReport.js` | `renderStatusReport` — open task table with RAG status; 3-slide PowerPoint export via pptxgenjs |
+| `src/render/statusReport.js` | `renderStatusReport` — open task table with RAG (red/amber/green) status; 3-slide `.pptx` export via `pptxgenjs` |
 | `src/render/requirements.js` | `renderRequirements` — standalone CSV viewer; filter popover, column visibility, sort, search |
 | `src/ui/panelBase.js` | `showSidePanel`, `closeSidePanel` |
 | `src/ui/tooltip.js` | `showTooltip`, `hideTooltip`, `positionTooltip` |

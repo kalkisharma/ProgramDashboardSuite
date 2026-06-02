@@ -54,6 +54,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 //   render/progDash.js      — renderProgDash, getPhaseNames
 //   render/weightBudget.js  — renderWeightBudget, getWeightUnit
 //   render/orgChart.js      — renderOrgChart
+//   render/statusReport.js  — renderStatusReport; RAG task table, PowerPoint export (pptxgenjs)
 //   render/requirements.js  — renderRequirements; CSV viewer, filter popover, column visibility
 //   ui/rowReorder.js        — startRowDrag, doRowDragMove, endRowDrag
 //   ui/taskOps.js           — addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported
