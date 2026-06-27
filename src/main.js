@@ -386,7 +386,15 @@ function renderDashboard() {
   state.ganttTeamFilter  = 'all';
   state.specSearchQuery  = '';
   state.collapsedPhases.clear();
-  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases']
+  // Status Report view resets on new file load (a new file may have different phases/teams).
+  state.statusReportFilter        = 'open';
+  state.statusReportSort          = { col: null, dir: 'asc' };
+  state.statusReportHiddenCols    = [];
+  state.statusReportPhases        = null;
+  state.statusReportPocTeams      = null;
+  state.statusReportCustomerTeams = null;
+  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases',
+   'vh-sr-cols','vh-sr-phases','vh-sr-poc-teams','vh-sr-cust-teams']
     .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';

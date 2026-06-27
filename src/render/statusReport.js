@@ -6,7 +6,7 @@ import { PHASE_NAMES_FALLBACK } from '../constants.js';
 import { computeConflicts } from '../compute/conflicts.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { getPhaseNames } from './progDash.js';
-import { showToast } from '../ui/toast.js';
+import { showToast, safeSetItem } from '../ui/toast.js';
 import { toggleCheckboxDropdown, closeCheckboxDropdown } from '../ui/checkboxDropdown.js';
 
 // Column order for the Status Report table. POC/Customer Team are derived from the org
@@ -19,6 +19,57 @@ const SR_LABELS = {
 };
 const SR_NOSORT = new Set(['notes']);
 function srVisibleCols() { return SR_COLS.filter(c => !state.statusReportHiddenCols.includes(c)); }
+
+// ── Persisted Status Report preferences (column visibility + phase/team filters) ──
+// Restored once at module load; survive page reload. Reset on new file load (main.js).
+(function restoreSrPrefs() {
+  try {
+    const g = k => { const v = localStorage.getItem(k); return v == null ? undefined : JSON.parse(v); };
+    const cols = g('vh-sr-cols');         if (Array.isArray(cols)) state.statusReportHiddenCols = cols;
+    const ph   = g('vh-sr-phases');       if (ph   !== undefined)  state.statusReportPhases = ph;
+    const pt   = g('vh-sr-poc-teams');    if (pt   !== undefined)  state.statusReportPocTeams = pt;
+    const ct   = g('vh-sr-cust-teams');   if (ct   !== undefined)  state.statusReportCustomerTeams = ct;
+  } catch { /* ignore malformed prefs */ }
+})();
+
+function persistSrPrefs() {
+  safeSetItem('vh-sr-cols',       JSON.stringify(state.statusReportHiddenCols));
+  safeSetItem('vh-sr-phases',     JSON.stringify(state.statusReportPhases));
+  safeSetItem('vh-sr-poc-teams',  JSON.stringify(state.statusReportPocTeams));
+  safeSetItem('vh-sr-cust-teams', JSON.stringify(state.statusReportCustomerTeams));
+}
+
+// Distinct phase numbers / POC teams / Customer teams across non-header tasks. Tasks with
+// no resolvable team contribute 'Unassigned' so they remain filterable.
+function srUniverses(orgIndex) {
+  const phases = new Set(), poc = new Set(), cust = new Set();
+  state.ProjectData.tasks.filter(t => !isPhaseHeader(t)).forEach(t => {
+    phases.add(String(parseInt(String(t.wbs).split('.')[0]) || 1));
+    const pt = resolveNames(t.poc, orgIndex).teams;      (pt.length ? pt : ['Unassigned']).forEach(x => poc.add(x));
+    const ct = resolveNames(t.customer, orgIndex).teams; (ct.length ? ct : ['Unassigned']).forEach(x => cust.add(x));
+  });
+  return {
+    phases:    [...phases].sort((a, b) => +a - +b),
+    pocTeams:  [...poc].sort(),
+    custTeams: [...cust].sort(),
+  };
+}
+
+// A task passes the phase/team multi-selects (null selection = all; OR within a control,
+// AND across the three controls).
+function srPassesFilters(t, orgIndex) {
+  const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
+  if (state.statusReportPhases && !state.statusReportPhases.includes(ph)) return false;
+  if (state.statusReportPocTeams) {
+    const tm = resolveNames(t.poc, orgIndex).teams; const eff = tm.length ? tm : ['Unassigned'];
+    if (!eff.some(x => state.statusReportPocTeams.includes(x))) return false;
+  }
+  if (state.statusReportCustomerTeams) {
+    const tm = resolveNames(t.customer, orgIndex).teams; const eff = tm.length ? tm : ['Unassigned'];
+    if (!eff.some(x => state.statusReportCustomerTeams.includes(x))) return false;
+  }
+  return true;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -99,7 +150,15 @@ function srFilterBtn(id, value, label, count, extra) {
     style="${active ? 'border-color:var(--accent);color:var(--accent)' : ''}">${label} (${count})</button>`;
 }
 
-function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount) {
+function srMultiBtnHtml(id, label, selected, universe) {
+  const all = !selected || selected.length === universe.length;
+  const txt = all ? label : `${label} (${selected.length}/${universe.length})`;
+  return `<button class="btn-secondary btn-sm" id="${id}" aria-haspopup="true" aria-expanded="false"
+    style="${all ? '' : 'border-color:var(--accent);color:var(--accent)'}">${esc(txt)}</button>`;
+}
+
+function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount, orgIndex) {
+  const uni = srUniverses(orgIndex);
   toolbar.innerHTML = `
     ${srFilterBtn('sr-filter-tasks', 'tasks', 'All tasks', tasksCount,
       'title="Every task regardless of completion or status"')}
@@ -107,6 +166,10 @@ function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount) {
       'title="Incomplete tasks only"')}
     ${srFilterBtn('sr-filter-concerns', 'concerns', 'Concerns only', concernCount,
       'title="Overdue + at-risk tasks" aria-label="Concerns only — overdue and at-risk tasks"')}
+    <span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>
+    ${srMultiBtnHtml('sr-phase-btn', 'Phase', state.statusReportPhases, uni.phases)}
+    ${srMultiBtnHtml('sr-poc-btn', 'POC Team', state.statusReportPocTeams, uni.pocTeams)}
+    ${srMultiBtnHtml('sr-cust-btn', 'Customer Team', state.statusReportCustomerTeams, uni.custTeams)}
     <span style="margin-left:auto"></span>
     <button class="btn-secondary btn-sm" id="sr-cols-btn" aria-haspopup="true" aria-expanded="false">Columns (${srVisibleCols().length}/${SR_COLS.length})</button>
     <button class="btn-secondary" id="sr-export-btn">Export to PowerPoint</button>`;
@@ -124,9 +187,48 @@ function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount) {
     selected: srVisibleCols(),
     onChange: sel => {
       state.statusReportHiddenCols = SR_COLS.filter(c => !sel.includes(c));
+      persistSrPrefs();
       refreshStatusTable();
     },
   }));
+
+  wireSrMultiSelect(toolbar, orgIndex);
+}
+
+// Wire the Phase / POC Team / Customer Team multi-select dropdown buttons. Selection of
+// `null` means "all"; once narrowed it holds an explicit array. OR within, AND across.
+function wireSrMultiSelect(toolbar, orgIndex) {
+  const uni = srUniverses(orgIndex);
+  const defs = [
+    { id: 'sr-phase-btn', title: 'Phase', universe: uni.phases,
+      items: uni.phases.map(p => ({ value: p, label: `${p}. ${esc(srPhaseName(p))}` })),
+      get: () => state.statusReportPhases, set: v => state.statusReportPhases = v },
+    { id: 'sr-poc-btn', title: 'POC Team', universe: uni.pocTeams,
+      items: uni.pocTeams.map(x => ({ value: x, label: x })),
+      get: () => state.statusReportPocTeams, set: v => state.statusReportPocTeams = v },
+    { id: 'sr-cust-btn', title: 'Customer Team', universe: uni.custTeams,
+      items: uni.custTeams.map(x => ({ value: x, label: x })),
+      get: () => state.statusReportCustomerTeams, set: v => state.statusReportCustomerTeams = v },
+  ];
+  defs.forEach(d => {
+    const btn = toolbar.querySelector('#' + d.id);
+    if (!btn) return;
+    btn.addEventListener('click', () => toggleCheckboxDropdown(btn, {
+      title: d.title,
+      items: d.items,
+      selected: d.get() || d.universe,   // null = all selected
+      onChange: sel => {
+        d.set(sel.length === d.universe.length ? null : sel);
+        persistSrPrefs();
+        refreshStatusTable();
+      },
+    }));
+  });
+}
+
+function srPhaseName(ph) {
+  const names = getPhaseNames();
+  return names[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
@@ -242,17 +344,32 @@ function srComputeDisplay() {
   const base        = state.statusReportFilter === 'concerns' ? concerns
                     : state.statusReportFilter === 'tasks'    ? nonHeaders
                     : allOpen;
-  const display     = sortTasks(base, conflictSet, orgIndex);
+  const filtered    = base.filter(t => srPassesFilters(t, orgIndex));
+  const display     = sortTasks(filtered, conflictSet, orgIndex);
   return { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display };
 }
 
 // Re-render just the table (and the Columns button label) without rebuilding the toolbar,
 // so an open Columns popover survives a column toggle.
+function setSrMultiLabel(id, label, selected, universe) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  const all = !selected || selected.length === universe.length;
+  b.textContent = all ? label : `${label} (${selected.length}/${universe.length})`;
+  b.style.borderColor = all ? '' : 'var(--accent)';
+  b.style.color = all ? '' : 'var(--accent)';
+}
+
 function refreshStatusTable() {
   const body = document.getElementById('status-body');
   if (!body) return;
   const { conflictSet, orgIndex, display } = srComputeDisplay();
   renderStatusTable(body, display, conflictSet, orgIndex);
+  // Toolbar isn't rebuilt (so open popovers survive) — sync the dropdown labels in place.
+  const uni = srUniverses(orgIndex);
+  setSrMultiLabel('sr-phase-btn', 'Phase', state.statusReportPhases, uni.phases);
+  setSrMultiLabel('sr-poc-btn', 'POC Team', state.statusReportPocTeams, uni.pocTeams);
+  setSrMultiLabel('sr-cust-btn', 'Customer Team', state.statusReportCustomerTeams, uni.custTeams);
   const colsBtn = document.getElementById('sr-cols-btn');
   if (colsBtn) colsBtn.textContent = `Columns (${srVisibleCols().length}/${SR_COLS.length})`;
 }
@@ -275,7 +392,7 @@ export function renderStatusReport() {
   }
 
   const { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display } = srComputeDisplay();
-  renderStatusToolbar(toolbar, nonHeaders.length, allOpen.length, concerns.length);
+  renderStatusToolbar(toolbar, nonHeaders.length, allOpen.length, concerns.length, orgIndex);
   renderStatusTable(body, display, conflictSet, orgIndex);
 }
 
