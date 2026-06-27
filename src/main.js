@@ -29,7 +29,7 @@ import {
   navigateCalendar, renderGanttCalendar, jumpToGanttDate,
   toggleCriticalPath, toggleGanttLegend, exportGanttSVG, exportGanttPNG,
   startTaskNameEdit, startTaskPctEdit,
-  startPanDrag, updateTodayFloat,
+  startPanDrag, updateTodayFloat, scrollGanttToToday,
 } from './render/gantt.js';
 import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported } from './ui/taskOps.js';
 
@@ -266,6 +266,9 @@ function switchTab(btn, id) {
   btn.setAttribute('aria-selected', 'true');
   document.getElementById(id + '-panel').classList.add('active');
   closeSidePanel();
+  // Gantt renders hidden when it isn't the default tab, so its scroll-to-today is
+  // deferred until the tab is first shown.
+  if (id === 'gantt') scrollGanttToToday();
 }
 
 // ─── Drag & Drop file loading ─────────────────────────────────────────────────
@@ -414,6 +417,9 @@ function renderDashboard() {
     const hasWarnings = badDates.length || dupTaskIds.size || dupSpecIds.size;
     showToast('Loaded: ' + parts.join(' · '), null, hasWarnings ? 10000 : 6000);
   }
+  // Default to Program Dashboard on file load / draft-restore.
+  const progBtn = document.querySelector('.tab-btn[data-tab="prog"]');
+  if (progBtn) switchTab(progBtn, 'prog');
 }
 
 // renderGantt and all gantt functions — imported from ./render/gantt.js

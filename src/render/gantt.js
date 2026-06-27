@@ -1311,11 +1311,26 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
     if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(+p.getAttribute('data-succ-id'));
   });
 
+  // Only auto-scroll when the panel is actually visible (clientWidth > 0). When the Gantt
+  // isn't the default tab it renders hidden, so defer the scroll to scrollGanttToToday()
+  // on first switch to the tab (see switchTab) rather than burning the one-shot here.
   const right = document.getElementById('gantt-right');
-  if (!ganttScrolledToday && tx > right.clientWidth / 2) {
+  if (!ganttScrolledToday && right.clientWidth > 0 && tx > right.clientWidth / 2) {
     right.scrollLeft = tx - right.clientWidth / 2;
     ganttScrolledToday = true;
   }
+  updateTodayFloat();
+}
+
+// Scroll the Gantt to the Today line the first time its tab becomes visible. Uses the
+// today offset cached by the prepare pass (state.ganttTodayX). One-shot per file load.
+export function scrollGanttToToday() {
+  if (ganttScrolledToday) return;
+  const right = document.getElementById('gantt-right');
+  const tx = state.ganttTodayX;
+  if (!right || right.clientWidth === 0) return;
+  if (tx != null && tx > right.clientWidth / 2) right.scrollLeft = tx - right.clientWidth / 2;
+  ganttScrolledToday = true;
   updateTodayFloat();
 }
 
