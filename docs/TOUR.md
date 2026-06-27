@@ -6,9 +6,9 @@ A guided walkthrough for developers new to this codebase. Read this before CLAUD
 
 ## What the app does
 
-Program Dashboard Suite is a single-page web app for managing aerospace/vehicle development programs. A user uploads an Excel workbook; the app parses it into an in-memory data model and renders four views: a drag-and-drop Gantt chart, a specifications table, a program dashboard, and an org chart. All edits happen in-browser with undo/redo, and the user can export back to Excel.
+Program Dashboard Suite is a single-page web app for managing aerospace/vehicle development programs. A user uploads an Excel workbook; the app parses it into an in-memory data model and renders several views: a drag-and-drop Gantt chart, a specifications table, a program dashboard, a weight budget, an org chart, and a status report (with PowerPoint export). A separate Requirements tab is a standalone CSV viewer, independent of the Excel workbook. All edits happen in-browser with undo/redo, and the user can export back to Excel.
 
-There is no server. All logic is client-side JavaScript (ES modules, built with Vite into a single `dist/index.html`).
+There is no server. All logic is client-side JavaScript (ES modules, built with Vite into a single `dist/ProgramDashboardSuite.html`).
 
 ---
 
@@ -17,11 +17,11 @@ There is no server. All logic is client-side JavaScript (ES modules, built with 
 ```
 npm install
 npm run dev     # dev server at http://localhost:5173
-npm run build   # outputs dist/index.html (single self-contained file)
+npm run build   # outputs dist/ProgramDashboardSuite.html (single self-contained file)
 npm test        # Vitest unit tests
 ```
 
-Load sample data with the "Generate Sample" button to see all four tabs populated.
+Load sample data with the "Generate Sample" button to see the Excel-driven tabs populated.
 
 ---
 
@@ -51,13 +51,14 @@ src/
     progDash.js         ← Program Dashboard KPIs and phase/team bars
     weightBudget.js     ← Weight Budget chart and group collapse
     orgChart.js         ← Org chart SVG layout (tree algorithm)
+    statusReport.js     ← RAG open-task table + PowerPoint export (pptxgenjs)
+    requirements.js     ← standalone requirements CSV viewer
 
   ui/
     panelBase.js        ← showSidePanel / closeSidePanel (shared shell)
     tooltip.js          ← shared tooltip element (show/hide/position)
     toast.js            ← toast notifications + safeRender + safeSetItem
     rowReorder.js       ← Gantt row drag-and-drop reorder
-    specEdits.js        ← inline field editors for the spec side panel
     taskOps.js          ← add/delete tasks and specs
 
   core/
@@ -136,7 +137,7 @@ Opening the same item a second time closes the panel (toggle). This is managed b
 
 ## The inline-edit pattern
 
-Inline edits (Gantt bar drag, task name click-to-edit, spec field edits) all follow this shape:
+Gantt inline edits (bar drag, and click-to-edit on the task name / team / % cells) all follow this shape:
 
 1. User interaction replaces a DOM element with an `<input>` or `<select>`
 2. A `commit()` closure captures the original value for cancel/escape
@@ -144,6 +145,8 @@ Inline edits (Gantt bar drag, task name click-to-edit, spec field edits) all fol
 4. The render function rebuilds the element from the updated data, replacing the input
 
 Tab/Enter confirms; Escape restores the original and re-renders without pushing undo.
+
+Task and spec *detail* editing (notes, dependencies, spec value/status, etc.) instead uses explicit edit forms in the side panel: the static detail view has an **Edit Task** / **Edit Spec** button that swaps `#sp-body` for a form, and a **Save Changes** button commits via `pushUndo` → mutate → re-render → reopen the panel. See `openSpecEditPanel` / `saveSpecEdits` and `openTaskEditPanel` / `saveTaskEdits` in `main.js`.
 
 ---
 

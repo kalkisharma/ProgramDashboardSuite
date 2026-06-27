@@ -1,6 +1,6 @@
 # Program Dashboard Suite
 
-A client-side program dashboard for aerospace and vehicle development programs. Drop an Excel file into a browser and get an interactive Gantt chart, specifications tracker, program dashboard, weight budget, and org chart — no server, no install, no login.
+A client-side program dashboard for aerospace and vehicle development programs. Drop an Excel file into a browser and get an interactive Gantt chart, specifications tracker, program dashboard, weight budget, org chart, and status report (with one-click PowerPoint export) — plus a standalone requirements (CSV) viewer. No server, no install, no login.
 
 **Intended audiences:** Program managers, engineers, and leadership stakeholders.
 
@@ -16,7 +16,7 @@ A client-side program dashboard for aerospace and vehicle development programs. 
 
 Drag your `.xlsx` file anywhere onto the page, or click **Browse for File**. The dashboard auto-populates immediately.
 
-To try the tool before building your own Excel file, click **Generate Sample Excel** on the landing page. This downloads a complete sample program (TW-2 Hybrid-Electric Tilt-Wing UAM) that exercises all five tabs.
+To try the tool before building your own Excel file, click **Generate Sample Excel** on the landing page. This downloads a complete sample program (TW-2 Hybrid-Electric Tilt-Wing UAM) that populates every Excel-driven tab — Gantt, Specifications, Program Dashboard, Weight Budget, Org Chart, and Status Report. The Requirements tab is independent; it loads its own CSV (see below).
 
 ---
 
@@ -55,6 +55,8 @@ Sheet names are **case-sensitive**. The tool silently skips unrecognized sheets 
 | **Program Dashboard** | Leadership, PMs | KPI cards, phase progress bars, spec status summary, and team workload |
 | **Weight Budget** | Engineers | Subsystem mass budget bar chart vs. targets (shown only when sheet is present) |
 | **Org Chart** | PMs, Leadership | Reporting hierarchy with team task lookup (shown only when sheet is present) |
+| **Status Report** | Leadership, PMs | Open-task table with RAG status (Overdue / At Risk / On Track), sortable and filterable; one-click 3-slide PowerPoint export |
+| **Requirements** | Engineers, Systems | Standalone CSV viewer with search, sort, per-column filters, and column visibility — works independently of your Excel file |
 
 Click the `?` button in the top-right for a built-in guide covering each tab, the full Excel schema, and troubleshooting steps.
 
@@ -140,6 +142,8 @@ src/
     progDash.js            # Program Dashboard KPIs and phase/team bars
     weightBudget.js        # Weight Budget chart
     orgChart.js            # Org chart SVG layout
+    statusReport.js        # RAG open-task table + PowerPoint export (pptxgenjs)
+    requirements.js        # standalone requirements CSV viewer
   ui/
     panelBase.js           # showSidePanel / closeSidePanel
     tooltip.js             # shared tooltip element

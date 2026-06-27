@@ -16,13 +16,18 @@ flowchart TD
     D --> E[state.ProjectData populated\nstate.originalTasks deep-copied\nstate.ganttWorkDays set]
     E --> F[clearDraft\nresetState partial\nisDirty = false]
     F --> G[renderDashboard]
-    G --> H[safeRender × 5]
+    G --> H[safeRender per tab]
     H --> I[renderGantt]
     H --> J[renderSpecs]
     H --> K[renderProgDash]
     H --> L[renderWeightBudget]
     H --> M[renderOrgChart]
+    H --> N[renderStatusReport]
+    H --> O[renderRequirements]
 ```
+
+> `renderRequirements` repaints from `state.reqsData`, which is loaded separately from a
+> CSV the user drops on the Requirements tab — it is independent of the Excel workbook.
 
 ---
 
@@ -78,28 +83,32 @@ flowchart LR
 
 ---
 
-## 4. Inline field edit (spec panel)
+## 4. Spec detail edit (side panel form)
 
-The pattern used by all seven `startSpec*Edit` functions.
+Spec editing uses an explicit **Edit Spec** form in the side panel (the old per-cell
+`startSpec*Edit` inline editors were removed in v4.2.0). All of this lives in `main.js`.
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant specEdits.js
+    participant main.js
     participant state
     participant undo.js
     participant specs.js
 
-    User->>specEdits.js: click on spec name cell
-    specEdits.js->>specEdits.js: replace <span> with <input>\nfocus + select all
-    User->>specEdits.js: types new name, presses Enter
-    specEdits.js->>undo.js: pushUndo('spec name change')
-    specEdits.js->>state: spec.name = newValue
-    specEdits.js->>specs.js: renderSpecTable()
-    specEdits.js->>state: spCurrentType = null
-    specEdits.js->>state.handlers: openSpecPanel(spec.id)
-    Note over specEdits.js: Panel re-renders with updated value.\nspCurrentType nulled so it's a fresh\nopen, not a toggle-close.
+    User->>main.js: openSpecPanel(id) — static detail view
+    User->>main.js: click "Edit Spec" → openSpecEditPanel(id)
+    main.js->>main.js: render edit form into #sp-body
+    User->>main.js: edit fields, click "Save Changes" → saveSpecEdits(id)
+    main.js->>undo.js: pushUndo('edit spec')
+    main.js->>state: mutate spec fields
+    main.js->>specs.js: renderSpecTable()
+    main.js->>state: spCurrentType = null
+    main.js->>main.js: openSpecPanel(id)
+    Note over main.js: Panel reopens on the updated detail view.\nspCurrentType nulled so it's a fresh\nopen, not a toggle-close.
 ```
+
+Task detail editing follows the same shape via `openTaskEditPanel` / `saveTaskEdits`.
 
 ---
 
@@ -145,6 +154,8 @@ flowchart TD
         prog["render/progDash.js"]
         wt["render/weightBudget.js"]
         org["render/orgChart.js"]
+        status["render/statusReport.js"]
+        reqs["render/requirements.js"]
     end
 
     subgraph ui
@@ -152,7 +163,6 @@ flowchart TD
         tooltip["ui/tooltip.js"]
         toast["ui/toast.js"]
         rowReorder["ui/rowReorder.js"]
-        specEdits["ui/specEdits.js"]
         taskOps["ui/taskOps.js"]
     end
 
@@ -173,8 +183,8 @@ flowchart TD
     parseJs["parse.js"]
     excelJs["excel.js"]
 
-    main --> gantt & specs & prog & wt & org
-    main --> panelBase & tooltip & toast & specEdits & taskOps
+    main --> gantt & specs & prog & wt & org & status & reqs
+    main --> panelBase & tooltip & toast & taskOps
     main --> undo & state & utils & colors & constants & parseJs & excelJs
 
     gantt --> state & utils & colors & constants & cp & cf & wbs & prog & tooltip & toast & undo & rowReorder
@@ -182,10 +192,11 @@ flowchart TD
     prog --> state & utils & colors & constants
     wt --> state & colors & toast
     org --> state & colors
+    status --> state & utils & colors & constants & cf & prog & toast
+    reqs --> state & utils & toast
 
     rowReorder --> state & constants & gantt & undo & wbs & toast
-    specEdits --> state & colors & specs & undo & toast
-    taskOps --> state & colors & utils & gantt & specs & prog & undo & toast & panelBase & wbs & specEdits
+    taskOps --> state & colors & utils & gantt & specs & prog & undo & toast & panelBase & wbs
 
     undo --> state
     panelBase --> state
