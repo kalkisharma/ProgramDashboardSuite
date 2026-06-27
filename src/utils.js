@@ -21,6 +21,18 @@ export function parseDeps(v) {
 
 export function fmt(d) { return d ? d.toISOString().slice(0,10) : '—'; }
 
+// Sanitize a Reference-Files URL/Path for use as a link href. Allows http(s)/file/mailto
+// schemes, Windows drive paths (C:\…), UNC paths (\\server\share), and relative paths;
+// blocks dangerous schemes (javascript:, data:, vbscript:, …). Returns null if unusable.
+export function safeUrl(raw) {
+  const s = String(raw == null ? '' : raw).trim();
+  if (!s) return null;
+  if (/^[a-zA-Z]:[\\/]/.test(s) || /^\\\\/.test(s)) return s; // Windows drive / UNC path
+  const m = s.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);            // has a URL scheme?
+  if (m && !['http', 'https', 'file', 'mailto'].includes(m[1].toLowerCase())) return null;
+  return s;
+}
+
 export function daysBetween(a, b) { return Math.round((b - a) / 86400000); }
 
 export function parseWorkDays(str) {
