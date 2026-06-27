@@ -82,6 +82,7 @@ function renderStatusToolbar(toolbar, allCount, concernCount, conflictSet) {
       All open (${allCount})
     </button>
     <button class="btn-secondary btn-sm" id="sr-filter-concerns"
+      title="Overdue + at-risk tasks" aria-label="Concerns only — overdue and at-risk tasks"
       style="${!showAll ? 'border-color:var(--accent);color:var(--accent)' : ''}">
       Concerns only (${concernCount})
     </button>
@@ -124,7 +125,8 @@ function renderStatusTable(body, tasks, conflictSet) {
     const isSorted = sortCol === c;
     const ind = isSorted ? (sortDir === 'asc' ? '↑' : '↓') : '<span style="opacity:0.3">↕</span>';
     const noSort = c === 'notes';
-    return `<th ${noSort ? '' : `data-sort="${c}" style="cursor:pointer;user-select:none"`}
+    const ariaSort = noSort ? '' : ` aria-sort="${isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}"`;
+    return `<th${ariaSort} ${noSort ? '' : `data-sort="${c}" style="cursor:pointer;user-select:none"`}
       title="${noSort ? '' : 'Click to sort'}">${labels[c]} ${noSort ? '' : ind}</th>`;
   }).join('');
 

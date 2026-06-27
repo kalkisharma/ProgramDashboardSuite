@@ -449,7 +449,8 @@ function renderReqsTable() {
   const headerCells = visibleCols.map(i => {
     const isSorted = sortCol === i;
     const ind = isSorted ? (sortDir === 'asc' ? '↑' : '↓') : '<span style="opacity:0.3">↕</span>';
-    return `<th data-col-idx="${i}" style="cursor:pointer;user-select:none" title="Click to sort">${esc(headers[i] || '(empty)')} ${ind}</th>`;
+    const ariaSort = isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+    return `<th aria-sort="${ariaSort}" data-col-idx="${i}" style="cursor:pointer;user-select:none" title="Click to sort">${esc(headers[i] || '(empty)')} ${ind}</th>`;
   }).join('');
 
   // Build per-column filter cells

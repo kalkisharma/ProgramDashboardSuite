@@ -69,7 +69,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v4.7.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v4.7.1'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -435,7 +435,18 @@ function addDep(t, depId) {
   state.spCurrentType = null; openTaskPanel(t.id); state.spOpener = origOpener;
 }
 
+// Active dependency-picker outside-click handlers. A single panel can wire more than
+// one picker (e.g. openTaskPanel: deps + spec-link), so this is a list, not a scalar.
+let _pickerDocClicks = []; // [{ handler, picker }]
+
 function wirePicker({ btnId, pickerId, listId, buildFn, ref, itemSelector }) {
+  // Drop handlers whose picker is no longer in the DOM — these were stranded by a prior
+  // panel render or a close path (Escape / toggle-shut) that never fired outside-click.
+  // Sibling pickers from the *current* render stay in the DOM, so they are preserved.
+  _pickerDocClicks = _pickerDocClicks.filter(({ handler, picker }) => {
+    if (!document.body.contains(picker)) { document.removeEventListener('click', handler); return false; }
+    return true;
+  });
   const sel    = itemSelector || '.sp-dep-item[tabindex]';
   const btn    = document.getElementById(btnId);
   const picker = document.getElementById(pickerId);
@@ -452,6 +463,10 @@ function wirePicker({ btnId, pickerId, listId, buildFn, ref, itemSelector }) {
   const close = () => {
     picker.style.display = 'none';
     btn.setAttribute('aria-expanded', 'false');
+    _pickerDocClicks = _pickerDocClicks.filter(({ handler }) => {
+      if (handler === onDocClick) { document.removeEventListener('click', handler); return false; }
+      return true;
+    });
   };
   btn.addEventListener('click', () => picker.style.display === 'none' ? open() : close());
   input.addEventListener('input', () => buildFn(input, ref, list));
@@ -467,10 +482,11 @@ function wirePicker({ btnId, pickerId, listId, buildFn, ref, itemSelector }) {
     if (e.key === 'Escape')    { close(); btn.focus(); }
     if (e.key === 'Enter' && idx >= 0) { e.preventDefault(); items[idx].click(); }
   });
-  const _onDocClick = e => {
-    if (!picker.contains(e.target) && e.target !== btn) { close(); document.removeEventListener('click', _onDocClick); }
+  const onDocClick = e => {
+    if (!picker.contains(e.target) && e.target !== btn) { close(); }
   };
-  document.addEventListener('click', _onDocClick);
+  document.addEventListener('click', onDocClick);
+  _pickerDocClicks.push({ handler: onDocClick, picker });
 }
 
 function buildDepPickerList(input, t, listEl) {
