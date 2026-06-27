@@ -6,7 +6,7 @@ import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, 
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
 import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
-import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, extractWorkDays } from './parse.js';
+import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, extractWorkDays } from './parse.js';
 import { buildOrgIndex, resolveNames } from './compute/orgLookup.js';
 import { buildWorkbook, generateSampleExcel } from './excel.js';
 import { state } from './state.js';
@@ -19,6 +19,7 @@ import { renderWeightBudget, getWeightUnit } from './render/weightBudget.js';
 import { renderOrgChart } from './render/orgChart.js';
 import { renderRequirements } from './render/requirements.js';
 import { renderStatusReport } from './render/statusReport.js';
+import { renderReferenceFiles } from './render/referenceFiles.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
   renderGantt, setGanttPhaseFilter, setGanttTeamFilter, clearGanttFilters, togglePhaseCollapse,
@@ -126,6 +127,7 @@ function _restoreSnapshot(snapshot) {
   state.ProjectData.specs   = snapshot.specs;
   state.ProjectData.org     = snapshot.org     || state.ProjectData.org;
   state.ProjectData.weights = snapshot.weights || state.ProjectData.weights;
+  state.ProjectData.referenceFiles = snapshot.referenceFiles || state.ProjectData.referenceFiles;
   if (snapshot.info) state.ProjectData.info = snapshot.info;
   recalcWBS(state.ProjectData.tasks);
   safeRender(renderGantt,    'Gantt Chart');
@@ -134,6 +136,7 @@ function _restoreSnapshot(snapshot) {
   if (state.ProjectData.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
   if (state.ProjectData.org.length)     safeRender(renderOrgChart,     'Org Chart');
   safeRender(renderStatusReport, 'Status Report');
+  if (state.ProjectData.referenceFiles.length) safeRender(renderReferenceFiles, 'Reference Files');
   if (state.spCurrentType === 'task') { state.spCurrentType = null; openTaskPanel(state.spCurrentId); }
   else if (state.spCurrentType === 'spec') { state.spCurrentType = null; openSpecPanel(state.spCurrentId); }
   else if (state.spCurrentType === 'org') { const n = state.spCurrentId; state.spCurrentType = null; if (state.ProjectData.org.find(p => p.name === n)) openOrgPanel(n); else closeSidePanel(); }
@@ -330,7 +333,7 @@ function loadFile(file) {
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
 /** @param {object} wb - SheetJS workbook object. Resets all state.ProjectData collections and populates from sheets. */
 function parseWorkbook(wb) {
-  state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = [];
+  state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = []; state.ProjectData.referenceFiles = [];
   state.undoStack = []; state.redoStack = [];
   state.collapsedPhases  = new Set();
   state.calDisplayMonth  = null;
@@ -345,6 +348,7 @@ function parseWorkbook(wb) {
   state.ProjectData.specs   = parseSpecsSheet(wb.Sheets['Specifications']);
   state.ProjectData.org     = parseOrgSheet(wb.Sheets['Org Chart']);
   state.ProjectData.weights = parseWeightSheet(wb.Sheets['Weight Budget']);
+  state.ProjectData.referenceFiles = parseReferenceSheet(wb.Sheets['Reference Files']);
 
   const wds = extractWorkDays(state.ProjectData.info);
   if (wds) {
@@ -377,6 +381,7 @@ function renderDashboard() {
   document.getElementById('org-tab-btn').style.display = state.ProjectData.org.length ? '' : 'none';
   document.getElementById('weight-tab-btn').style.display = state.ProjectData.weights.length ? '' : 'none';
   document.getElementById('status-tab-btn').style.display = '';
+  document.getElementById('reference-tab-btn').style.display = state.ProjectData.referenceFiles.length ? '' : 'none';
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
   document.getElementById('proj-info-btn').style.display = '';
@@ -409,6 +414,7 @@ function renderDashboard() {
   safeRender(renderWeightBudget,  'Weight Budget');
   safeRender(renderOrgChart,      'Org Chart');
   safeRender(renderStatusReport,  'Status Report');
+  safeRender(renderReferenceFiles, 'Reference Files');
   safeRender(renderRequirements, 'Requirements');
   updateUndoRedoBtns();
   if (_justLoaded && state.ProjectData.tasks.length) {

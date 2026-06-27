@@ -25,7 +25,7 @@
 <nav id="tab-nav" role="tablist" style="display:none">
   <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="prog-panel"   data-tab="prog">Program Dashboard</button>
   <button class="tab-btn" id="status-tab-btn" role="tab" aria-selected="false" aria-controls="status-panel" data-tab="status" style="display:none">Status Report</button>
-  <!-- Reference Files tab button inserted here in Phase 7 -->
+  <button class="tab-btn" id="reference-tab-btn" role="tab" aria-selected="false" aria-controls="reference-panel" data-tab="reference" style="display:none">Reference Files</button>
   <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="gantt-panel"  data-tab="gantt">Gantt Chart</button>
   <button class="tab-btn" id="org-tab-btn"    role="tab" aria-selected="false" aria-controls="org-panel"    data-tab="org"    style="display:none">Org Chart</button>
   <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="specs-panel"  data-tab="specs">Vehicle Specifications</button>
@@ -198,6 +198,11 @@
     <div class="tab-panel" id="status-panel" role="tabpanel" aria-labelledby="status-tab-btn">
       <div id="status-toolbar"></div>
       <div id="status-body"></div>
+    </div>
+
+    <!-- REFERENCE FILES TAB -->
+    <div class="tab-panel" id="reference-panel" role="tabpanel" aria-labelledby="reference-tab-btn">
+      <div id="reference-body"></div>
     </div>
 
     <!-- REQUIREMENTS TAB -->

@@ -7,7 +7,7 @@ import { ZOOM_STEPS } from './constants.js';
  */
 export const state = {
   // ── Core program data ───────────────────────────────────────────────────────
-  ProjectData:   { info: {}, tasks: [], specs: [], org: [], weights: [] },
+  ProjectData:   { info: {}, tasks: [], specs: [], org: [], weights: [], referenceFiles: [] },
   originalTasks: [],          // deep-copy at parse time; used by resetGanttToImported()
   ganttWorkDays: [1,2,3,4,5], // Mon–Fri default; overridden by Project Info or Work Days UI
 
@@ -94,7 +94,7 @@ export const state = {
  * Call in beforeEach in any test that touches state to prevent bleed-through.
  */
 export function resetState() {
-  state.ProjectData   = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+  state.ProjectData   = { info: {}, tasks: [], specs: [], org: [], weights: [], referenceFiles: [] };
   state.originalTasks = [];
   state.ganttWorkDays = [1, 2, 3, 4, 5];
   state.undoStack     = [];
