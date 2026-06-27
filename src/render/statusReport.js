@@ -39,6 +39,7 @@ function weightedPct(tasks) {
 
 function ragStatus(t, conflictSet) {
   const today = getToday();
+  if (t.pct >= 100) return 'done';                 // completed → never overdue/at-risk
   if (t.end && t.end < today) return 'red';
   if (conflictSet.has(t.id))   return 'amber';
   const wdLeft = t.end ? workDaysRemaining(t.end, state.ganttWorkDays, today) : Infinity;
@@ -47,11 +48,11 @@ function ragStatus(t, conflictSet) {
 }
 
 function ragLabel(rag) {
-  return rag === 'red' ? 'Overdue' : rag === 'amber' ? 'At Risk' : 'On Track';
+  return rag === 'red' ? 'Overdue' : rag === 'amber' ? 'At Risk' : rag === 'done' ? 'Done' : 'On Track';
 }
 
 function ragOrder(rag) {
-  return rag === 'red' ? 0 : rag === 'amber' ? 1 : 2;
+  return rag === 'red' ? 0 : rag === 'amber' ? 1 : rag === 'green' ? 2 : 3;
 }
 
 function sortTasks(tasks, conflictSet, orgIndex) {
@@ -98,9 +99,12 @@ function srFilterBtn(id, value, label, count, extra) {
     style="${active ? 'border-color:var(--accent);color:var(--accent)' : ''}">${label} (${count})</button>`;
 }
 
-function renderStatusToolbar(toolbar, openCount, concernCount) {
+function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount) {
   toolbar.innerHTML = `
-    ${srFilterBtn('sr-filter-open', 'open', 'All open', openCount)}
+    ${srFilterBtn('sr-filter-tasks', 'tasks', 'All tasks', tasksCount,
+      'title="Every task regardless of completion or status"')}
+    ${srFilterBtn('sr-filter-open', 'open', 'All open', openCount,
+      'title="Incomplete tasks only"')}
     ${srFilterBtn('sr-filter-concerns', 'concerns', 'Concerns only', concernCount,
       'title="Overdue + at-risk tasks" aria-label="Concerns only — overdue and at-risk tasks"')}
     <span style="margin-left:auto"></span>
@@ -108,6 +112,7 @@ function renderStatusToolbar(toolbar, openCount, concernCount) {
     <button class="btn-secondary" id="sr-export-btn">Export to PowerPoint</button>`;
 
   const setFilter = v => { state.statusReportFilter = v; closeCheckboxDropdown(); renderStatusReport(); };
+  toolbar.querySelector('#sr-filter-tasks').addEventListener('click', () => setFilter('tasks'));
   toolbar.querySelector('#sr-filter-open').addEventListener('click', () => setFilter('open'));
   toolbar.querySelector('#sr-filter-concerns').addEventListener('click', () => setFilter('concerns'));
   toolbar.querySelector('#sr-export-btn').addEventListener('click', exportStatusReportPPTX);
@@ -231,11 +236,14 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex) {
 function srComputeDisplay() {
   const conflictSet = computeConflicts(state.ProjectData.tasks);
   const orgIndex    = buildOrgIndex(state.ProjectData.org);
-  const allOpen     = state.ProjectData.tasks.filter(t => t.pct < 100 && !isPhaseHeader(t));
-  const concerns    = allOpen.filter(t => ragStatus(t, conflictSet) !== 'green');
-  const base        = state.statusReportFilter === 'concerns' ? concerns : allOpen;
+  const nonHeaders  = state.ProjectData.tasks.filter(t => !isPhaseHeader(t));
+  const allOpen     = nonHeaders.filter(t => t.pct < 100);
+  const concerns    = allOpen.filter(t => { const r = ragStatus(t, conflictSet); return r === 'red' || r === 'amber'; });
+  const base        = state.statusReportFilter === 'concerns' ? concerns
+                    : state.statusReportFilter === 'tasks'    ? nonHeaders
+                    : allOpen;
   const display     = sortTasks(base, conflictSet, orgIndex);
-  return { conflictSet, orgIndex, allOpen, concerns, display };
+  return { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display };
 }
 
 // Re-render just the table (and the Columns button label) without rebuilding the toolbar,
@@ -266,8 +274,8 @@ export function renderStatusReport() {
     return;
   }
 
-  const { conflictSet, orgIndex, allOpen, concerns, display } = srComputeDisplay();
-  renderStatusToolbar(toolbar, allOpen.length, concerns.length);
+  const { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display } = srComputeDisplay();
+  renderStatusToolbar(toolbar, nonHeaders.length, allOpen.length, concerns.length);
   renderStatusTable(body, display, conflictSet, orgIndex);
 }
 
