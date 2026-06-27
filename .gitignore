@@ -2,3 +2,4 @@ node_modules/
 dist/
 xlsx.full.min.js
 *.xlsx
+.claude/

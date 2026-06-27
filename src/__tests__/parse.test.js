@@ -37,13 +37,15 @@ describe('parseScheduleSheet', () => {
 
   it('parses a task row', () => {
     const ws = sheet([
-      ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'],
-      [1, '1.1', 'Design', 'Engineering', new Date(2024,0,1), new Date(2024,1,1), 50, '', 'Systems', '', 'Some notes'],
+      ['Task ID','WBS','Task Name','POC','Customer','Start Date','End Date','% Complete','Dependencies','Milestone','Notes'],
+      [1, '1.1', 'Design', 'A. Singh', 'R. Nakamura', new Date(2024,0,1), new Date(2024,1,1), 50, '', '', 'Some notes'],
     ]);
     const tasks = parseScheduleSheet(ws);
     expect(tasks).toHaveLength(1);
     expect(tasks[0].id).toBe(1);
     expect(tasks[0].name).toBe('Design');
+    expect(tasks[0].poc).toBe('A. Singh');
+    expect(tasks[0].customer).toBe('R. Nakamura');
     expect(tasks[0].pct).toBe(50);
     expect(tasks[0].milestone).toBe(false);
     expect(tasks[0].deps).toEqual([]);
@@ -51,32 +53,32 @@ describe('parseScheduleSheet', () => {
 
   it('parses milestone flag', () => {
     const ws = sheet([
-      ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'],
-      [2, '1.2', 'CDR', '', new Date(2024,2,1), new Date(2024,2,1), 0, '', '', 'Y', ''],
+      ['Task ID','WBS','Task Name','POC','Customer','Start Date','End Date','% Complete','Dependencies','Milestone','Notes'],
+      [2, '1.2', 'CDR', '', '', new Date(2024,2,1), new Date(2024,2,1), 0, '', 'Y', ''],
     ]);
     expect(parseScheduleSheet(ws)[0].milestone).toBe(true);
   });
 
   it('parses dependency list', () => {
     const ws = sheet([
-      ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'],
-      [3, '1.3', 'Test', '', null, null, 0, '1, 2', '', '', ''],
+      ['Task ID','WBS','Task Name','POC','Customer','Start Date','End Date','% Complete','Dependencies','Milestone','Notes'],
+      [3, '1.3', 'Test', '', '', null, null, 0, '1, 2', '', ''],
     ]);
     expect(parseScheduleSheet(ws)[0].deps).toEqual([1, 2]);
   });
 
   it('skips rows without a Task ID', () => {
     const ws = sheet([
-      ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'],
-      [null, '1.1', 'No ID row', '', null, null, 0, '', '', '', ''],
+      ['Task ID','WBS','Task Name','POC','Customer','Start Date','End Date','% Complete','Dependencies','Milestone','Notes'],
+      [null, '1.1', 'No ID row', '', '', null, null, 0, '', '', ''],
     ]);
     expect(parseScheduleSheet(ws)).toHaveLength(0);
   });
 
   it('produces null start/end for missing date values', () => {
     const ws = sheet([
-      ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'],
-      [4, '1.4', 'No Dates', '', null, null, 0, '', '', '', ''],
+      ['Task ID','WBS','Task Name','POC','Customer','Start Date','End Date','% Complete','Dependencies','Milestone','Notes'],
+      [4, '1.4', 'No Dates', '', '', null, null, 0, '', '', ''],
     ]);
     const task = parseScheduleSheet(ws)[0];
     expect(task.start).toBeNull();
@@ -187,28 +189,35 @@ describe('parseInfoSheet — extended', () => {
 });
 
 describe('parseScheduleSheet — extended', () => {
-  const HDR = ['Task ID','WBS','Task Name','Category','Start Date','End Date','% Complete','Dependencies','Responsible Team','Milestone','Notes'];
+  const HDR = ['Task ID','WBS','Task Name','POC','Customer','Start Date','End Date','% Complete','Dependencies','Milestone','Notes'];
 
   it('parses percent complete as a number', () => {
-    const ws = sheet([HDR, [5, '1.5', 'Task', '', new Date(2024,0,1), new Date(2024,0,10), 75, '', 'Eng', '', '']]);
+    const ws = sheet([HDR, [5, '1.5', 'Task', '', '', new Date(2024,0,1), new Date(2024,0,10), 75, '', '', '']]);
     expect(parseScheduleSheet(ws)[0].pct).toBe(75);
   });
 
   it('treats "y" (lowercase) as milestone', () => {
-    const ws = sheet([HDR, [6, '1.6', 'Rev', '', new Date(2024,0,1), new Date(2024,0,1), 0, '', '', 'y', '']]);
+    const ws = sheet([HDR, [6, '1.6', 'Rev', '', '', new Date(2024,0,1), new Date(2024,0,1), 0, '', 'y', '']]);
     expect(parseScheduleSheet(ws)[0].milestone).toBe(true);
   });
 
   it('parses notes string', () => {
-    const ws = sheet([HDR, [7, '1.7', 'Task', '', null, null, 0, '', '', '', 'Important note']]);
+    const ws = sheet([HDR, [7, '1.7', 'Task', '', '', null, null, 0, '', '', 'Important note']]);
     expect(parseScheduleSheet(ws)[0].notes).toBe('Important note');
+  });
+
+  it('parses comma-separated POC and Customer', () => {
+    const ws = sheet([HDR, [8, '1.8', 'Task', 'A. Singh, B. Osei', 'FAA ODA', null, null, 0, '', '', '']]);
+    const task = parseScheduleSheet(ws)[0];
+    expect(task.poc).toBe('A. Singh, B. Osei');
+    expect(task.customer).toBe('FAA ODA');
   });
 
   it('multiple tasks parsed in order', () => {
     const ws = sheet([
       HDR,
-      [1, '1.1', 'Alpha', '', new Date(2024,0,1), new Date(2024,0,5), 0, '', 'A', '', ''],
-      [2, '1.2', 'Beta',  '', new Date(2024,0,6), new Date(2024,0,10), 50, '1', 'B', '', ''],
+      [1, '1.1', 'Alpha', '', '', new Date(2024,0,1), new Date(2024,0,5), 0, '', '', ''],
+      [2, '1.2', 'Beta',  '', '', new Date(2024,0,6), new Date(2024,0,10), 50, '1', '', ''],
     ]);
     const tasks = parseScheduleSheet(ws);
     expect(tasks).toHaveLength(2);

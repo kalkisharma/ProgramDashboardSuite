@@ -10,8 +10,8 @@ const d = (y, m, day) => new Date(y, m - 1, day);
 const minimalData = () => ({
   info: { 'Project Title': 'Test Project', 'Work Days': 'Mon,Tue,Wed,Thu,Fri' },
   tasks: [
-    { id: 1, wbs: '1.0', name: 'Kickoff', category: 'Concept', start: d(2025,1,6), end: d(2025,1,10), pct: 100, deps: [], team: 'All', milestone: true, notes: '' },
-    { id: 2, wbs: '1.1', name: 'Analysis', category: 'Concept', start: d(2025,1,13), end: d(2025,2,28), pct: 50, deps: [1], team: 'Systems', milestone: false, notes: 'Some notes' },
+    { id: 1, wbs: '1.0', name: 'Kickoff', poc: 'All Teams', customer: 'R. Nakamura', start: d(2025,1,6), end: d(2025,1,10), pct: 100, deps: [], milestone: true, notes: '' },
+    { id: 2, wbs: '1.1', name: 'Analysis', poc: 'A. Singh', customer: 'Y. Zhang', start: d(2025,1,13), end: d(2025,2,28), pct: 50, deps: [1], milestone: false, notes: 'Some notes' },
   ],
   specs: [
     { id: 'AE-001', category: 'Aero', name: 'Max Speed', value: 200, units: 'kn', status: 'Target', group: 'Aero', notes: '', depIds: [1, 2] },
@@ -66,8 +66,8 @@ describe('buildWorkbook — Schedule sheet', () => {
   it('writes correct header row', () => {
     const wb = buildWorkbook(minimalData(), 'lb');
     expect(rows(wb, 'Schedule')[0]).toEqual([
-      'Task ID','WBS','Task Name','Category','Start Date','End Date',
-      '% Complete','Dependencies','Responsible Team','Milestone','Notes',
+      'Task ID','WBS','Task Name','POC','Customer','Start Date','End Date',
+      '% Complete','Dependencies','Milestone','Notes',
     ]);
   });
 
@@ -75,27 +75,28 @@ describe('buildWorkbook — Schedule sheet', () => {
     const wb = buildWorkbook(minimalData(), 'lb');
     const data = rows(wb, 'Schedule');
     const task1 = data[1];
-    expect(task1[0]).toBe(1);          // Task ID
-    expect(task1[2]).toBe('Kickoff');   // Task Name
-    expect(task1[6]).toBe(100);         // % Complete
-    expect(task1[8]).toBe('All');       // Responsible Team
-    expect(task1[9]).toBe('Y');         // Milestone
+    expect(task1[0]).toBe(1);              // Task ID
+    expect(task1[2]).toBe('Kickoff');       // Task Name
+    expect(task1[3]).toBe('All Teams');     // POC
+    expect(task1[4]).toBe('R. Nakamura');   // Customer
+    expect(task1[7]).toBe(100);             // % Complete
+    expect(task1[9]).toBe('Y');             // Milestone
   });
 
   it('formats dates as YYYY-MM-DD strings', () => {
     const wb = buildWorkbook(minimalData(), 'lb');
     const data = rows(wb, 'Schedule');
-    expect(data[1][4]).toMatch(/^\d{4}-\d{2}-\d{2}$/); // Start Date
-    expect(data[1][5]).toMatch(/^\d{4}-\d{2}-\d{2}$/); // End Date
+    expect(data[1][5]).toMatch(/^\d{4}-\d{2}-\d{2}$/); // Start Date
+    expect(data[1][6]).toMatch(/^\d{4}-\d{2}-\d{2}$/); // End Date
   });
 
   it('writes empty string for null dates', () => {
     const pd = minimalData();
-    pd.tasks = [{ id: 3, wbs: '1.2', name: 'No Dates', category: '', start: null, end: null, pct: 0, deps: [], team: '', milestone: false, notes: '' }];
+    pd.tasks = [{ id: 3, wbs: '1.2', name: 'No Dates', poc: '', customer: '', start: null, end: null, pct: 0, deps: [], milestone: false, notes: '' }];
     const wb = buildWorkbook(pd, 'lb');
     const row = rows(wb, 'Schedule')[1];
-    expect(row[4]).toBe('');
     expect(row[5]).toBe('');
+    expect(row[6]).toBe('');
   });
 
   it('writes milestone: false as "N"', () => {
@@ -107,7 +108,7 @@ describe('buildWorkbook — Schedule sheet', () => {
     const pd = minimalData();
     pd.tasks[1].deps = [1, 99]; // 99 does not exist
     const wb = buildWorkbook(pd, 'lb');
-    expect(rows(wb, 'Schedule')[2][7]).toBe('1'); // only valid dep
+    expect(rows(wb, 'Schedule')[2][8]).toBe('1'); // only valid dep
   });
 });
 
@@ -218,7 +219,7 @@ describe('buildWorkbook — Schedule sheet extended', () => {
     const wb = buildWorkbook(pd, 'lb');
     const scheduleRows = rows(wb, 'Schedule');
     const row = scheduleRows.find(r => r[0] === 1);
-    expect(row[7]).toBe('');
+    expect(row[8]).toBe('');
   });
 });
 

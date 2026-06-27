@@ -91,9 +91,6 @@ export function addGanttTask() {
   const nextNum = phaseTasks.length + 1;
   const newWbs = lastPhase + '.' + nextNum;
 
-  const teams = [...new Set(state.ProjectData.tasks.map(t => t.team).filter(Boolean))].sort();
-  const team = teams[0] || '';
-
   const taskStart = snapToWorkDay(getToday(), state.ganttWorkDays, 1);
   const taskEnd   = snapToWorkDay(addDays(taskStart, 4), state.ganttWorkDays, 1);
 
@@ -101,9 +98,9 @@ export function addGanttTask() {
   const newTask = {
     id: newId, wbs: newWbs,
     name: 'New Task ' + newId,
-    category: lastTask.category || '',
+    poc: '', customer: '',
     start: taskStart, end: taskEnd,
-    pct: 0, deps: [], team, milestone: false, notes: '',
+    pct: 0, deps: [], milestone: false, notes: '',
   };
   pushUndo('task added');
   state.ProjectData.tasks.push(newTask);

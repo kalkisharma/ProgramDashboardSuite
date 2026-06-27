@@ -1,24 +1,3 @@
-export const GANTT_COLORS = {
-  // Legacy ground-vehicle categories
-  Concept:       '#7c3aed',
-  Engineering:   '#1d6fe8',
-  Prototype:     '#0891b2',
-  Validation:    '#d97706',
-  Launch:        '#dc2626',
-  // Expanded aerospace / tilt-wing categories
-  Aerodynamics:  '#06b6d4',
-  Propulsion:    '#3b82f6',
-  Structures:    '#f59e0b',
-  Avionics:      '#84cc16',
-  Systems:       '#14b8a6',
-  'Ground Test': '#f97316',
-  'Flight Test': '#ec4899',
-  Certification: '#ef4444',
-  Production:    '#8b5cf6',
-  Integration:   '#a78bfa',
-  Testing:       '#fb923c',
-};
-
 export const PHASE_COLORS = [
   '#7c3aed', // Phase 1 – purple
   '#06b6d4', // Phase 2 – cyan
@@ -37,19 +16,6 @@ export const PHASE_COLORS = [
 export function phaseColor(wbs) {
   const phase = (parseInt(String(wbs).split('.')[0]) || 1) - 1;
   return PHASE_COLORS[phase % PHASE_COLORS.length];
-}
-
-const _colorPool = ['#10b981','#6366f1','#f43f5e','#0ea5e9','#a855f7','#22d3ee','#fbbf24','#4ade80','#fb7185','#38bdf8'];
-const _colorCache = {};
-
-export function clearColorCache() { for (const k in _colorCache) delete _colorCache[k]; }
-
-export function ganttColor(category) {
-  if (GANTT_COLORS[category]) return GANTT_COLORS[category];
-  if (!_colorCache[category]) {
-    _colorCache[category] = _colorPool[Object.keys(_colorCache).length % _colorPool.length];
-  }
-  return _colorCache[category];
 }
 
 export const SPEC_COLORS = {

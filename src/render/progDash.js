@@ -2,6 +2,7 @@ import { state } from '../state.js';
 import { esc, daysBetween, getToday, countWorkDays } from '../utils.js';
 import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
+import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 
 export function getPhaseNames() {
   const names = {};
@@ -74,11 +75,16 @@ export function renderProgDash() {
   });
   const phaseNums = Object.keys(phaseMap).map(Number).sort((a, b) => a - b);
 
+  // Group by POC team (derived from the org chart); a task whose POCs span multiple
+  // teams appears under each. 'Unassigned' when no POC team resolves.
+  const orgIndex = buildOrgIndex(state.ProjectData.org);
   const teamTaskMap = {};
   state.ProjectData.tasks.forEach(t => {
-    const team = t.team || 'Unassigned';
-    if (!teamTaskMap[team]) teamTaskMap[team] = [];
-    teamTaskMap[team].push(t);
+    const teams = resolveNames(t.poc, orgIndex).teams;
+    (teams.length ? teams : ['Unassigned']).forEach(team => {
+      if (!teamTaskMap[team]) teamTaskMap[team] = [];
+      teamTaskMap[team].push(t);
+    });
   });
   // Used to normalize bar widths so the largest team always fills 100% of the track.
   const maxTeamCount = Math.max(...Object.values(teamTaskMap).map(v => v.length), 1);
@@ -174,7 +180,7 @@ export function renderProgDash() {
     </div>
 
     <div class="dash-section">
-      <div class="dash-section-title">Team Workload — click a team to see tasks</div>
+      <div class="dash-section-title">POC Team Workload — click a team to see tasks</div>
       ${teamRows}
     </div>
   `;
