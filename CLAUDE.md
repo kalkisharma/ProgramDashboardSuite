@@ -356,3 +356,13 @@ gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --note
 | **v4.6.1** | Phase header rows visually distinct (tinted background, bold name); Requirements CSV persisted to localStorage across page reload | Done |
 | **v4.7.0** | Status Report tab — open task table with RAG (Red/Amber/Green) status, sort, filter by concerns; one-click 3-slide PowerPoint export (KPI summary + phase breakdown + task table) via pptxgenjs | Done |
 | **v4.7.1** | Team-review quick-wins: Status Report row added to help modal; "Concerns only" tooltip/aria-label; `aria-sort` on Status Report + Requirements headers; `.rag-badge` bumped to 0.75rem; fix `wirePicker` document-click listener leak (multi-picker safe). Docs refresh (README/TOUR/FLOW) for Status Report + Requirements tabs | Done — current |
+| **v4.8.0** | Team-review deferred items — see [v4.8.0 Backlog](#v480-backlog) below | Planned |
+
+### v4.8.0 Backlog
+
+Deferred from the v4.7.1 team review (larger or behavior-changing work not suited to a patch):
+
+1. **RAG amber threshold — document and/or make configurable.** The "At Risk" rule is hardcoded as `wdLeft <= 10 && t.pct < 50` (`src/render/statusReport.js:32`) and explained nowhere in the UI. Surface it in the help modal, and consider a `RAG At-Risk Days` / `RAG At-Risk %` Project Info key so programs can tune their own risk profile.
+2. **Accessibility font-size sweep.** Audit `src/styles.css` for the remaining sub-12px labels (~0.68–0.72rem: `.tts`, `#gantt-today-float`, `#project-subtitle`, `.g-wbs`, `.cal-dh`, etc.) and raise essential text to the 0.75rem (12px) floor. (v4.7.1 only fixed `.rag-badge`.)
+3. **Test coverage for the newest render modules.** Add `statusReport.test.js` (RAG threshold edge cases — overdue milestones, exactly-10-WD boundary, 0% tasks) and `requirements.test.js` (CSV parse + XSS/escaping of untrusted cells). Both modules currently have zero coverage.
+4. **Status Report export — signal filter state in the filename.** The PPTX task slide respects the active "Concerns only" filter, but the filename does not reflect it. Either append the filter to the filename or always export all tasks regardless of the on-screen filter.
