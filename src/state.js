@@ -59,8 +59,12 @@ export const state = {
   orgSearchQuery: '',
 
   // ── Status Report view ──────────────────────────────────────────────────────
-  statusReportFilter: 'all',          // 'all' | 'concerns'
+  statusReportFilter: 'open',         // 'tasks' | 'open' | 'concerns'
   statusReportSort:   { col: null, dir: 'asc' },
+  statusReportHiddenCols:     [],     // array of hidden column keys (e.g. 'pocTeam')
+  statusReportPhases:         null,   // null = all phases; else array of selected phase numbers (as strings)
+  statusReportPocTeams:       null,   // null = all; else array of selected POC team names
+  statusReportCustomerTeams:  null,   // null = all; else array of selected Customer team names
 
   // ── Requirements view ───────────────────────────────────────────────────────
   reqsData:  { headers: [], rows: [] }, // raw parsed CSV: headers string[], rows string[][]
@@ -122,8 +126,12 @@ export function resetState() {
   state.orgSearchQuery = '';
   state.reqsData  = { headers: [], rows: [] };
   state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
-  state.statusReportFilter = 'all';
+  state.statusReportFilter = 'open';
   state.statusReportSort   = { col: null, dir: 'asc' };
+  state.statusReportHiddenCols    = [];
+  state.statusReportPhases        = null;
+  state.statusReportPocTeams      = null;
+  state.statusReportCustomerTeams = null;
   state.ganttMinDateRef = null;
   state.ganttTodayX     = null;
   state.depArrowEls     = [];
