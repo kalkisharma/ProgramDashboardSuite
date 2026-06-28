@@ -1065,7 +1065,12 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     // Collapse/expand toggle (any task with children, unless capped by the depth ceiling)
     if (showCollapseBtn && !cappedByDepth) {
       const colBtn = div.querySelector('.gantt-collapse-btn');
-      if (colBtn) colBtn.addEventListener('click', e => { e.stopPropagation(); toggleTaskCollapse(t.id); });
+      if (colBtn) {
+        // The toggle lives inside the draggable WBS cell — stop its mousedown from
+        // starting a row drag, otherwise the click is swallowed.
+        colBtn.addEventListener('mousedown', e => e.stopPropagation());
+        colBtn.addEventListener('click', e => { e.stopPropagation(); toggleTaskCollapse(t.id); });
+      }
     }
 
     if (!isPhaseHeader) {
