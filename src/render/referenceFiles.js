@@ -28,11 +28,14 @@ export function renderReferenceFiles() {
     const nameCell = href
       ? `<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(f.fileName)}</a>`
       : esc(f.fileName || '—');
-    const byAttrs = res.hasUnknown ? ' class="sr-invalid" title="Person not defined in org chart"' : '';
+    const byAttrs = res.hasUnknown
+      ? ` class="sr-invalid" title="Person not defined in org chart" aria-label="${esc(f.generatedBy)} — person not defined in org chart"`
+      : '';
+    const byWarn = res.hasUnknown ? ' <span class="sr-warn" aria-hidden="true">⚠</span>' : '';
     return `<tr>
       <td>${nameCell}</td>
       <td style="color:var(--muted)">${esc(f.generatedDate || '—')}</td>
-      <td${byAttrs}>${esc(f.generatedBy || '—')}</td>
+      <td${byAttrs}>${esc(f.generatedBy || '—')}${byWarn}</td>
       <td style="color:var(--muted)">${esc(res.teams.join(', ') || '—')}</td>
       <td style="color:var(--muted);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
         title="${esc(f.notes || '')}">${esc(f.notes || '—')}</td>

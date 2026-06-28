@@ -20,6 +20,15 @@ function popEl() {
       'display:none;position:fixed;z-index:500;background:var(--surface);' +
       'border:1px solid var(--border);border-radius:8px;padding:6px 0;' +
       'box-shadow:0 4px 16px rgba(0,0,0,0.3);min-width:170px;max-height:320px;overflow-y:auto';
+    // Escape closes the popover and returns focus to its anchor button. Attached once
+    // (the element persists across opens — innerHTML is replaced, not the node).
+    _pop.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        const id = _openForId;
+        closeCheckboxDropdown();
+        if (id) document.getElementById(id)?.focus();
+      }
+    });
     document.body.appendChild(_pop);
   }
   return _pop;
@@ -62,6 +71,7 @@ function openCheckboxDropdown(anchorBtn, { title, items, selected, onChange }) {
   pop.style.top  = Math.max(8, top)  + 'px';
   anchorBtn.setAttribute('aria-expanded', 'true');
   _openForId = anchorBtn.id;
+  pop.querySelector('input[type=checkbox]')?.focus();  // move focus into the dialog
 
   const emit = () => onChange([...sel]);
   pop.querySelectorAll('input[type=checkbox]').forEach(cb => {

@@ -24,11 +24,21 @@ export function fmt(d) { return d ? d.toISOString().slice(0,10) : '—'; }
 // Sanitize a Reference-Files URL/Path for use as a link href. Allows http(s)/file/mailto
 // schemes, Windows drive paths (C:\…), UNC paths (\\server\share), and relative paths;
 // blocks dangerous schemes (javascript:, data:, vbscript:, …). Returns null if unusable.
+//
+// Browsers strip tab/newline/CR from anywhere in a URL and drop leading/trailing C0
+// controls before parsing the scheme. So a value like "java<TAB>script:alert(1)" or a
+// leading 0x01 before "javascript:" would slip past the scheme check below and then be
+// reassembled into a live javascript: URL by the browser on click (XSS). We therefore
+// remove every C0 control char (code < 0x20) before validating, matching what the browser
+// ultimately parses. Internal spaces are preserved so "C:\Program Files\doc.pdf" still works.
 export function safeUrl(raw) {
-  const s = String(raw == null ? '' : raw).trim();
+  const s = Array.from(String(raw == null ? '' : raw))
+    .filter(ch => ch.charCodeAt(0) >= 0x20)   // drop all C0 controls (incl. tab/newline/CR)
+    .join('')
+    .trim();                                  // drop leading/trailing spaces (browser does too)
   if (!s) return null;
   if (/^[a-zA-Z]:[\\/]/.test(s) || /^\\\\/.test(s)) return s; // Windows drive / UNC path
-  const m = s.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);            // has a URL scheme?
+  const m = s.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):/);           // has a URL scheme?
   if (m && !['http', 'https', 'file', 'mailto'].includes(m[1].toLowerCase())) return null;
   return s;
 }

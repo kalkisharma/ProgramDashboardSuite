@@ -274,8 +274,11 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex) {
     const wdColor   = wdObj.cls === 'overdue' ? '#f85149' : wdObj.cls === 'done' ? '#3fb950' : 'var(--text)';
 
     const validCell = (text, res) => {
-      const attrs = res.hasUnknown ? ' class="sr-invalid" title="Person not defined in org chart"' : '';
-      return `<td${attrs}>${esc(text || '—')}</td>`;
+      if (res.hasUnknown) {
+        // Persistent ⚠ marker (not color-alone) + accessible label, plus hover tooltip.
+        return `<td class="sr-invalid" title="Person not defined in org chart" aria-label="${esc(text)} — person not defined in org chart">${esc(text || '—')} <span class="sr-warn" aria-hidden="true">⚠</span></td>`;
+      }
+      return `<td>${esc(text || '—')}</td>`;
     };
     const cell = c => {
       switch (c) {

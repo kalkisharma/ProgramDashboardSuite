@@ -331,6 +331,20 @@ describe('safeUrl', () => {
     expect(safeUrl('data:text/html,<script>x</script>')).toBeNull();
     expect(safeUrl('vbscript:msgbox(1)')).toBeNull();
   });
+  it('blocks schemes smuggled past with control characters', () => {
+    expect(safeUrl('java\tscript:alert(1)')).toBeNull();        // embedded tab
+    expect(safeUrl('java\nscript:alert(1)')).toBeNull();        // embedded newline
+    expect(safeUrl('java\rscript:alert(1)')).toBeNull();        // embedded CR
+    expect(safeUrl('javascript:alert(1)')).toBeNull();    // leading C0 control
+    expect(safeUrl('jav ascript:alert(1)')).toBeNull();    // embedded NUL
+  });
+  it('preserves internal spaces in local paths', () => {
+    expect(safeUrl('C:\\Program Files\\doc.pdf')).toBe('C:\\Program Files\\doc.pdf');
+  });
+  it('treats a percent-encoded pseudo-scheme as a (harmless) relative path', () => {
+    // %6a is not a valid scheme char, so the browser never sees a javascript: scheme
+    expect(safeUrl('%6aavascript:alert(1)')).toBe('%6aavascript:alert(1)');
+  });
   it('trims and rejects empty/null', () => {
     expect(safeUrl('  https://x.com  ')).toBe('https://x.com');
     expect(safeUrl('')).toBeNull();
