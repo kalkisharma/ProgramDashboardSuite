@@ -7,7 +7,7 @@ import { ZOOM_STEPS } from './constants.js';
  */
 export const state = {
   // ── Core program data ───────────────────────────────────────────────────────
-  ProjectData:   { info: {}, tasks: [], specs: [], org: [], weights: [] },
+  ProjectData:   { info: {}, tasks: [], specs: [], org: [], weights: [], referenceFiles: [] },
   originalTasks: [],          // deep-copy at parse time; used by resetGanttToImported()
   ganttWorkDays: [1,2,3,4,5], // Mon–Fri default; overridden by Project Info or Work Days UI
 
@@ -35,6 +35,7 @@ export const state = {
   // ── Gantt render state ──────────────────────────────────────────────────────
   ganttMinDateRef: null, // set by renderGantt; used by adjustZoom scroll math
   ganttTodayX:     null, // px offset of Today line; null when out of range
+  ganttScrolledToday: false, // one-shot: Gantt auto-scrolls to Today on first visible render
   depArrowEls:     [],   // { el, predId, succId } — rebuilt each renderGantt()
   conflictSet:     new Set(), // task IDs with scheduling conflicts
 
@@ -59,8 +60,12 @@ export const state = {
   orgSearchQuery: '',
 
   // ── Status Report view ──────────────────────────────────────────────────────
-  statusReportFilter: 'all',          // 'all' | 'concerns'
+  statusReportFilter: 'open',         // 'tasks' | 'open' | 'concerns'
   statusReportSort:   { col: null, dir: 'asc' },
+  statusReportHiddenCols:     [],     // array of hidden column keys (e.g. 'pocTeam')
+  statusReportPhases:         null,   // null = all phases; else array of selected phase numbers (as strings)
+  statusReportPocTeams:       null,   // null = all; else array of selected POC team names
+  statusReportCustomerTeams:  null,   // null = all; else array of selected Customer team names
 
   // ── Requirements view ───────────────────────────────────────────────────────
   reqsData:  { headers: [], rows: [] }, // raw parsed CSV: headers string[], rows string[][]
@@ -90,7 +95,7 @@ export const state = {
  * Call in beforeEach in any test that touches state to prevent bleed-through.
  */
 export function resetState() {
-  state.ProjectData   = { info: {}, tasks: [], specs: [], org: [], weights: [] };
+  state.ProjectData   = { info: {}, tasks: [], specs: [], org: [], weights: [], referenceFiles: [] };
   state.originalTasks = [];
   state.ganttWorkDays = [1, 2, 3, 4, 5];
   state.undoStack     = [];
@@ -122,10 +127,15 @@ export function resetState() {
   state.orgSearchQuery = '';
   state.reqsData  = { headers: [], rows: [] };
   state.reqsState = { sortCol: null, sortDir: 'asc', searchQuery: '', hiddenCols: [], colFilters: {} };
-  state.statusReportFilter = 'all';
+  state.statusReportFilter = 'open';
   state.statusReportSort   = { col: null, dir: 'asc' };
+  state.statusReportHiddenCols    = [];
+  state.statusReportPhases        = null;
+  state.statusReportPocTeams      = null;
+  state.statusReportCustomerTeams = null;
   state.ganttMinDateRef = null;
   state.ganttTodayX     = null;
+  state.ganttScrolledToday = false;
   state.depArrowEls     = [];
   state.conflictSet     = new Set();
   state.handlers = { openWeightPanel: null, openTaskPanel: null, openSpecPanel: null, openOrgPanel: null, toggleHelp: null, applyUndo: null };

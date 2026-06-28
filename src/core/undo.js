@@ -10,6 +10,7 @@ export function fullSnapshot() {
     specs:   state.ProjectData.specs.map(s => ({ ...s, depIds: [...s.depIds] })),
     org:     state.ProjectData.org.map(p => ({ ...p, reportsTo: [...(p.reportsTo || [])] })),
     weights: state.ProjectData.weights.map(w => ({ ...w })),
+    referenceFiles: (state.ProjectData.referenceFiles || []).map(rf => ({ ...rf })),
     info:    { ...state.ProjectData.info }
   };
 }

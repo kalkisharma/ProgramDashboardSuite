@@ -1,15 +1,17 @@
 import { esc, fmt } from '../utils.js';
-import { ganttColor } from '../colors.js';
-import { state } from '../state.js';
 
 function el() { return document.getElementById('tooltip'); }
 
 export function showTooltip(t, e) {
-  const color = ganttColor(t.category);
   const depText = t.deps.length ? ` · ${t.deps.length} dep${t.deps.length === 1 ? '' : 's'}` : '';
+  const poc  = t.poc      ? `<span style="color:var(--muted)">POC:</span> ${esc(t.poc)}` : '';
+  const cust = t.customer ? `<span style="color:var(--muted)">Cust:</span> ${esc(t.customer)}` : '';
+  const people = (poc || cust)
+    ? `<div class="tt-row">${[poc, cust].filter(Boolean).join('<span style="margin:0 4px;color:var(--border)">·</span>')}</div>`
+    : '';
   el().innerHTML = `
     <div class="tt-title">${t.milestone ? '◆ ' : ''}${esc(t.name)}</div>
-    <div class="tt-row"><strong style="color:${color}">${esc(t.category)}</strong>${t.team ? `<span style="margin:0 4px;color:var(--border)">·</span>${esc(t.team)}` : ''}</div>
+    ${people}
     <div class="tt-row">${fmt(t.start)} → ${fmt(t.end)}</div>
     <div class="tt-row">${t.pct}% complete${depText}</div>`;
   el().style.display = 'block';

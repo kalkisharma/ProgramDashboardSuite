@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   esc, parseDate, parseDeps, fmt, daysBetween,
   parseWorkDays, isWorkDay, addDays, snapToWorkDay,
-  countWorkDays, workDaysRemaining, wdDisplay,
+  countWorkDays, workDaysRemaining, wdDisplay, safeUrl,
 } from '../utils.js';
 
 const WDS = [1, 2, 3, 4, 5]; // Mon–Fri
@@ -304,5 +304,51 @@ describe('parseWorkDays — extended', () => {
     const wds = parseWorkDays('Mon,Mon,Tue');
     expect(wds).toContain(1);
     expect(wds).toContain(2);
+  });
+});
+
+describe('safeUrl', () => {
+  it('allows http and https', () => {
+    expect(safeUrl('http://example.com/x')).toBe('http://example.com/x');
+    expect(safeUrl('https://example.com/x')).toBe('https://example.com/x');
+  });
+  it('allows file and mailto schemes', () => {
+    expect(safeUrl('file:///C:/docs/a.pdf')).toBe('file:///C:/docs/a.pdf');
+    expect(safeUrl('mailto:a@b.com')).toBe('mailto:a@b.com');
+  });
+  it('allows Windows drive paths and UNC paths', () => {
+    expect(safeUrl('C:\\docs\\spec.pdf')).toBe('C:\\docs\\spec.pdf');
+    expect(safeUrl('C:/docs/spec.pdf')).toBe('C:/docs/spec.pdf');
+    expect(safeUrl('\\\\server\\share\\f.txt')).toBe('\\\\server\\share\\f.txt');
+  });
+  it('allows relative paths', () => {
+    expect(safeUrl('docs/spec.pdf')).toBe('docs/spec.pdf');
+    expect(safeUrl('./a/b.txt')).toBe('./a/b.txt');
+  });
+  it('blocks dangerous schemes', () => {
+    expect(safeUrl('javascript:alert(1)')).toBeNull();
+    expect(safeUrl('JavaScript:alert(1)')).toBeNull();
+    expect(safeUrl('data:text/html,<script>x</script>')).toBeNull();
+    expect(safeUrl('vbscript:msgbox(1)')).toBeNull();
+  });
+  it('blocks schemes smuggled past with control characters', () => {
+    expect(safeUrl('java\tscript:alert(1)')).toBeNull();        // embedded tab
+    expect(safeUrl('java\nscript:alert(1)')).toBeNull();        // embedded newline
+    expect(safeUrl('java\rscript:alert(1)')).toBeNull();        // embedded CR
+    expect(safeUrl('javascript:alert(1)')).toBeNull();    // leading C0 control
+    expect(safeUrl('jav ascript:alert(1)')).toBeNull();    // embedded NUL
+  });
+  it('preserves internal spaces in local paths', () => {
+    expect(safeUrl('C:\\Program Files\\doc.pdf')).toBe('C:\\Program Files\\doc.pdf');
+  });
+  it('treats a percent-encoded pseudo-scheme as a (harmless) relative path', () => {
+    // %6a is not a valid scheme char, so the browser never sees a javascript: scheme
+    expect(safeUrl('%6aavascript:alert(1)')).toBe('%6aavascript:alert(1)');
+  });
+  it('trims and rejects empty/null', () => {
+    expect(safeUrl('  https://x.com  ')).toBe('https://x.com');
+    expect(safeUrl('')).toBeNull();
+    expect(safeUrl(null)).toBeNull();
+    expect(safeUrl('   ')).toBeNull();
   });
 });

@@ -1,10 +1,11 @@
 import { state } from '../state.js';
 import { esc, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from '../utils.js';
 import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from '../constants.js';
-import { phaseColor, ganttColor, GANTT_COLORS, PHASE_COLORS } from '../colors.js';
+import { phaseColor, PHASE_COLORS } from '../colors.js';
 import { computeCriticalPath } from '../compute/criticalPath.js';
 import { computeConflicts } from '../compute/conflicts.js';
 import { recalcWBS } from '../compute/wbs.js';
+import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { getPhaseNames } from './progDash.js';
 import { showTooltip, hideTooltip, positionTooltip } from '../ui/tooltip.js';
 import { showToast, safeSetItem } from '../ui/toast.js';
@@ -892,9 +893,12 @@ export function prepareGanttData() {
   }
 
   // ── Populate filter dropdowns ──────────────────────
+  const orgIndex = buildOrgIndex(state.ProjectData.org);
+  // A task's POC team(s), derived from the org chart; 'Unassigned' when none resolve.
+  const pocTeamsOf = t => { const tm = resolveNames(t.poc, orgIndex).teams; return tm.length ? tm : ['Unassigned']; };
   const phaseNamesMap = getPhaseNames();
   const allPhases = [...new Set(state.ProjectData.tasks.map(t => parseInt(String(t.wbs).split('.')[0]) || 1))].sort((a,b)=>a-b);
-  const allTeams  = [...new Set(state.ProjectData.tasks.map(t => t.team || 'Unassigned'))].sort();
+  const allTeams  = [...new Set(state.ProjectData.tasks.flatMap(pocTeamsOf))].sort();
 
   const phaseSel  = document.getElementById('gantt-phase-filter');
   if (phaseSel) {
@@ -926,7 +930,7 @@ export function prepareGanttData() {
     const phNum = parseInt(String(t.wbs).split('.')[0]) || 1;
     const ph    = String(phNum);
     if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
-    if (state.ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== state.ganttTeamFilter) return false;
+    if (state.ganttTeamFilter  !== 'all' && !pocTeamsOf(t).includes(state.ganttTeamFilter)) return false;
     if (state.ganttPhaseFilter === 'all' && state.collapsedPhases.has(phNum)) {
       const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
       if (!isPhaseHeader) return false;
@@ -968,9 +972,11 @@ export function prepareGanttData() {
 
 export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
   const lb = document.getElementById('gantt-left-body');
+  const orgIndex = buildOrgIndex(state.ProjectData.org);
   lb.innerHTML = '';
   visibleTasks.forEach((t, i) => {
     const color = phaseColor(t.wbs);
+    const pocTeam = resolveNames(t.poc, orgIndex).teams.join(', ');
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
     const depth = (t.wbs.match(/\./g) || []).length;
     const wd = t.milestone ? { text: '◆', cls: '' } : wdDisplay(t, state.ganttWorkDays, getToday());
@@ -987,7 +993,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     div.setAttribute('aria-selected', 'false');
     const _rowStart = t.start ? t.start.toISOString().split('T')[0] : 'no date';
     const _rowEnd   = t.end   ? t.end.toISOString().split('T')[0]   : 'no date';
-    div.setAttribute('aria-label', `${t.wbs}: ${t.name}, ${t.team} team, ${t.pct}% complete, ${_rowStart} to ${_rowEnd}${state.conflictSet.has(t.id) ? ', scheduling conflict' : ''}${isCollapsed ? ', collapsed' : ''}`);
+    div.setAttribute('aria-label', `${t.wbs}: ${t.name}, ${pocTeam ? pocTeam + ' POC team' : 'no POC team'}, ${t.pct}% complete, ${_rowStart} to ${_rowEnd}${state.conflictSet.has(t.id) ? ', scheduling conflict' : ''}${isCollapsed ? ', collapsed' : ''}`);
     div.innerHTML = `
       <div class="g-wbs-wrap" role="gridcell" style="color:${color}">
         ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
@@ -995,7 +1001,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
         <span class="g-wbs-text">${esc(t.wbs)}</span>
       </div>
       <span class="g-name" role="gridcell" style="padding-left:${depth*10}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
-      <span class="g-team" role="gridcell" title="${esc(t.team)}">${esc(t.team)}</span>
+      <span class="g-team" role="gridcell" title="${esc(pocTeam)}">${esc(pocTeam)}</span>
       <span class="g-wd ${wd.cls}" role="gridcell">${wd.text}</span>
       <span class="g-pct" role="gridcell" style="color:${pctColor}">${t.pct}%</span>
       <span class="g-conflict${state.conflictSet.has(t.id) ? ' active' : ''}" role="gridcell" aria-hidden="${state.conflictSet.has(t.id) ? 'false' : 'true'}" aria-label="Schedule overlap: starts before predecessor ends" title="Schedule overlap: starts before a predecessor ends">⚠</span>`;
@@ -1027,12 +1033,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
       nameEl.addEventListener('click',   e => { e.stopPropagation(); startTaskNameEdit(nameEl, t); });
       nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskNameEdit(nameEl, t); } });
 
-      // Team inline edit
-      const teamEl = div.querySelector('.g-team');
-      teamEl.style.cursor = 'pointer';
-      teamEl.setAttribute('tabindex', '0');
-      teamEl.addEventListener('click',   e => { e.stopPropagation(); startTaskTeamEdit(teamEl, t); });
-      teamEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskTeamEdit(teamEl, t); } });
+      // (POC Team column is read-only — derived from the org chart; edit POC via the task panel)
 
       // Pct inline edit
       const pctEl = div.querySelector('.g-pct');
@@ -1310,11 +1311,26 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
     if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(+p.getAttribute('data-succ-id'));
   });
 
+  // Only auto-scroll when the panel is actually visible (clientWidth > 0). When the Gantt
+  // isn't the default tab it renders hidden, so defer the scroll to scrollGanttToToday()
+  // on first switch to the tab (see switchTab) rather than burning the one-shot here.
   const right = document.getElementById('gantt-right');
-  if (!ganttScrolledToday && tx > right.clientWidth / 2) {
+  if (!state.ganttScrolledToday && right.clientWidth > 0 && tx > right.clientWidth / 2) {
     right.scrollLeft = tx - right.clientWidth / 2;
-    ganttScrolledToday = true;
+    state.ganttScrolledToday = true;
   }
+  updateTodayFloat();
+}
+
+// Scroll the Gantt to the Today line the first time its tab becomes visible. Uses the
+// today offset cached by the prepare pass (state.ganttTodayX). One-shot per file load.
+export function scrollGanttToToday() {
+  if (state.ganttScrolledToday) return;
+  const right = document.getElementById('gantt-right');
+  const tx = state.ganttTodayX;
+  if (!right || right.clientWidth === 0) return;
+  if (tx != null && tx > right.clientWidth / 2) right.scrollLeft = tx - right.clientWidth / 2;
+  state.ganttScrolledToday = true;
   updateTodayFloat();
 }
 
@@ -1420,37 +1436,6 @@ export function startTaskNameEdit(span, t) {
     if (e.key === 'Escape') { t.name = orig; renderGantt(); }
   });
   input.addEventListener('blur', commit);
-}
-
-export function startTaskTeamEdit(span, t) {
-  if (span.querySelector('select')) return;
-  const orig = t.team;
-  const teams = [...new Set(state.ProjectData.tasks.map(x => x.team).filter(Boolean))].sort();
-  const sel = document.createElement('select');
-  sel.className = 'gantt-cell-select';
-  teams.forEach(tm => {
-    const o = document.createElement('option');
-    o.value = tm; o.textContent = tm;
-    if (tm === t.team) o.selected = true;
-    sel.appendChild(o);
-  });
-  span.textContent = '';
-  span.appendChild(sel);
-  sel.focus();
-  const commit = (save) => {
-    if (save && sel.value !== orig) {
-      pushUndo('team change');
-      t.team = sel.value;
-      renderGantt();
-      showToast('Team changed', state.handlers.applyUndo, 5000);
-    } else {
-      t.team = orig;
-      renderGantt();
-    }
-  };
-  sel.addEventListener('change', () => commit(true));
-  sel.addEventListener('keydown', e => { if (e.key === 'Escape') commit(false); });
-  sel.addEventListener('blur', () => { if (t.team === orig) commit(false); });
 }
 
 export function startTaskPctEdit(span, t) {

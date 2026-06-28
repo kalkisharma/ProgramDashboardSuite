@@ -4,8 +4,72 @@ import { esc, fmt, workDaysRemaining, countWorkDays, getToday, daysBetween } fro
 import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
 import { computeConflicts } from '../compute/conflicts.js';
+import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { getPhaseNames } from './progDash.js';
-import { showToast } from '../ui/toast.js';
+import { showToast, safeSetItem } from '../ui/toast.js';
+import { toggleCheckboxDropdown, closeCheckboxDropdown } from '../ui/checkboxDropdown.js';
+
+// Column order for the Status Report table. POC/Customer Team are derived from the org
+// chart at render time. All columns are user-toggleable; everything except Notes sorts.
+const SR_COLS = ['wbs','name','poc','pocTeam','customer','customerTeam','start','end','pct','wd','rag','notes'];
+const SR_LABELS = {
+  wbs:'WBS', name:'Task Name', poc:'POC', pocTeam:'POC Team', customer:'Customer',
+  customerTeam:'Customer Team', start:'Start Date', end:'End Date', pct:'%', wd:'WD Left',
+  rag:'Status', notes:'Notes',
+};
+const SR_NOSORT = new Set(['notes']);
+function srVisibleCols() { return SR_COLS.filter(c => !state.statusReportHiddenCols.includes(c)); }
+
+// ── Persisted Status Report preferences (column visibility + phase/team filters) ──
+// Restored once at module load; survive page reload. Reset on new file load (main.js).
+(function restoreSrPrefs() {
+  try {
+    const g = k => { const v = localStorage.getItem(k); return v == null ? undefined : JSON.parse(v); };
+    const cols = g('vh-sr-cols');         if (Array.isArray(cols)) state.statusReportHiddenCols = cols;
+    const ph   = g('vh-sr-phases');       if (ph   !== undefined)  state.statusReportPhases = ph;
+    const pt   = g('vh-sr-poc-teams');    if (pt   !== undefined)  state.statusReportPocTeams = pt;
+    const ct   = g('vh-sr-cust-teams');   if (ct   !== undefined)  state.statusReportCustomerTeams = ct;
+  } catch { /* ignore malformed prefs */ }
+})();
+
+function persistSrPrefs() {
+  safeSetItem('vh-sr-cols',       JSON.stringify(state.statusReportHiddenCols));
+  safeSetItem('vh-sr-phases',     JSON.stringify(state.statusReportPhases));
+  safeSetItem('vh-sr-poc-teams',  JSON.stringify(state.statusReportPocTeams));
+  safeSetItem('vh-sr-cust-teams', JSON.stringify(state.statusReportCustomerTeams));
+}
+
+// Distinct phase numbers / POC teams / Customer teams across non-header tasks. Tasks with
+// no resolvable team contribute 'Unassigned' so they remain filterable.
+function srUniverses(orgIndex) {
+  const phases = new Set(), poc = new Set(), cust = new Set();
+  state.ProjectData.tasks.filter(t => !isPhaseHeader(t)).forEach(t => {
+    phases.add(String(parseInt(String(t.wbs).split('.')[0]) || 1));
+    const pt = resolveNames(t.poc, orgIndex).teams;      (pt.length ? pt : ['Unassigned']).forEach(x => poc.add(x));
+    const ct = resolveNames(t.customer, orgIndex).teams; (ct.length ? ct : ['Unassigned']).forEach(x => cust.add(x));
+  });
+  return {
+    phases:    [...phases].sort((a, b) => +a - +b),
+    pocTeams:  [...poc].sort(),
+    custTeams: [...cust].sort(),
+  };
+}
+
+// A task passes the phase/team multi-selects (null selection = all; OR within a control,
+// AND across the three controls).
+function srPassesFilters(t, orgIndex) {
+  const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
+  if (state.statusReportPhases && !state.statusReportPhases.includes(ph)) return false;
+  if (state.statusReportPocTeams) {
+    const tm = resolveNames(t.poc, orgIndex).teams; const eff = tm.length ? tm : ['Unassigned'];
+    if (!eff.some(x => state.statusReportPocTeams.includes(x))) return false;
+  }
+  if (state.statusReportCustomerTeams) {
+    const tm = resolveNames(t.customer, orgIndex).teams; const eff = tm.length ? tm : ['Unassigned'];
+    if (!eff.some(x => state.statusReportCustomerTeams.includes(x))) return false;
+  }
+  return true;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -26,6 +90,7 @@ function weightedPct(tasks) {
 
 function ragStatus(t, conflictSet) {
   const today = getToday();
+  if (t.pct >= 100) return 'done';                 // completed → never overdue/at-risk
   if (t.end && t.end < today) return 'red';
   if (conflictSet.has(t.id))   return 'amber';
   const wdLeft = t.end ? workDaysRemaining(t.end, state.ganttWorkDays, today) : Infinity;
@@ -34,14 +99,14 @@ function ragStatus(t, conflictSet) {
 }
 
 function ragLabel(rag) {
-  return rag === 'red' ? 'Overdue' : rag === 'amber' ? 'At Risk' : 'On Track';
+  return rag === 'red' ? 'Overdue' : rag === 'amber' ? 'At Risk' : rag === 'done' ? 'Done' : 'On Track';
 }
 
 function ragOrder(rag) {
-  return rag === 'red' ? 0 : rag === 'amber' ? 1 : 2;
+  return rag === 'red' ? 0 : rag === 'amber' ? 1 : rag === 'green' ? 2 : 3;
 }
 
-function sortTasks(tasks, conflictSet) {
+function sortTasks(tasks, conflictSet, orgIndex) {
   const { col, dir } = state.statusReportSort;
   if (!col) {
     // Default: sort by RAG (red first), then by end date
@@ -51,14 +116,19 @@ function sortTasks(tasks, conflictSet) {
       return (a.end || new Date(9e15)) - (b.end || new Date(9e15));
     });
   }
+  const teamsStr = poc => resolveNames(poc, orgIndex).teams.join(', ');
   return tasks.slice().sort((a, b) => {
     let va, vb;
     const today = getToday();
     switch (col) {
-      case 'wbs':  va = a.wbs;  vb = b.wbs;  break;
-      case 'name': va = a.name; vb = b.name; break;
-      case 'team': va = a.team; vb = b.team; break;
-      case 'end':  va = a.end || new Date(9e15); vb = b.end || new Date(9e15); break;
+      case 'wbs':          va = a.wbs;  vb = b.wbs;  break;
+      case 'name':         va = a.name; vb = b.name; break;
+      case 'poc':          va = a.poc || ''; vb = b.poc || ''; break;
+      case 'pocTeam':      va = teamsStr(a.poc); vb = teamsStr(b.poc); break;
+      case 'customer':     va = a.customer || ''; vb = b.customer || ''; break;
+      case 'customerTeam': va = teamsStr(a.customer); vb = teamsStr(b.customer); break;
+      case 'start': va = a.start || new Date(9e15); vb = b.start || new Date(9e15); break;
+      case 'end':   va = a.end   || new Date(9e15); vb = b.end   || new Date(9e15); break;
       case 'pct':  va = a.pct; vb = b.pct; break;
       case 'wd':   va = a.end ? workDaysRemaining(a.end, state.ganttWorkDays, today) : Infinity;
                    vb = b.end ? workDaysRemaining(b.end, state.ganttWorkDays, today) : Infinity; break;
@@ -74,39 +144,100 @@ function sortTasks(tasks, conflictSet) {
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
-function renderStatusToolbar(toolbar, allCount, concernCount, conflictSet) {
-  const showAll = state.statusReportFilter === 'all';
+function srFilterBtn(id, value, label, count, extra) {
+  const active = state.statusReportFilter === value;
+  return `<button class="btn-secondary btn-sm" id="${id}" ${extra || ''}
+    style="${active ? 'border-color:var(--accent);color:var(--accent)' : ''}">${label} (${count})</button>`;
+}
+
+function srMultiBtnHtml(id, label, selected, universe) {
+  const all = !selected || selected.length === universe.length;
+  const txt = all ? label : `${label} (${selected.length}/${universe.length})`;
+  return `<button class="btn-secondary btn-sm" id="${id}" aria-haspopup="true" aria-expanded="false"
+    style="${all ? '' : 'border-color:var(--accent);color:var(--accent)'}">${esc(txt)}</button>`;
+}
+
+function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount, orgIndex) {
+  const uni = srUniverses(orgIndex);
   toolbar.innerHTML = `
-    <button class="btn-secondary btn-sm" id="sr-filter-all"
-      style="${showAll ? 'border-color:var(--accent);color:var(--accent)' : ''}">
-      All open (${allCount})
-    </button>
-    <button class="btn-secondary btn-sm" id="sr-filter-concerns"
-      title="Overdue + at-risk tasks" aria-label="Concerns only — overdue and at-risk tasks"
-      style="${!showAll ? 'border-color:var(--accent);color:var(--accent)' : ''}">
-      Concerns only (${concernCount})
-    </button>
+    ${srFilterBtn('sr-filter-tasks', 'tasks', 'All tasks', tasksCount,
+      'title="Every task regardless of completion or status"')}
+    ${srFilterBtn('sr-filter-open', 'open', 'All open', openCount,
+      'title="Incomplete tasks only"')}
+    ${srFilterBtn('sr-filter-concerns', 'concerns', 'Concerns only', concernCount,
+      'title="Overdue + at-risk tasks" aria-label="Concerns only — overdue and at-risk tasks"')}
+    <span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>
+    ${srMultiBtnHtml('sr-phase-btn', 'Phase', state.statusReportPhases, uni.phases)}
+    ${srMultiBtnHtml('sr-poc-btn', 'POC Team', state.statusReportPocTeams, uni.pocTeams)}
+    ${srMultiBtnHtml('sr-cust-btn', 'Customer Team', state.statusReportCustomerTeams, uni.custTeams)}
     <span style="margin-left:auto"></span>
+    <button class="btn-secondary btn-sm" id="sr-cols-btn" aria-haspopup="true" aria-expanded="false">Columns (${srVisibleCols().length}/${SR_COLS.length})</button>
     <button class="btn-secondary" id="sr-export-btn">Export to PowerPoint</button>`;
 
-  toolbar.querySelector('#sr-filter-all').addEventListener('click', () => {
-    state.statusReportFilter = 'all';
-    renderStatusReport();
-  });
-  toolbar.querySelector('#sr-filter-concerns').addEventListener('click', () => {
-    state.statusReportFilter = 'concerns';
-    renderStatusReport();
-  });
+  const setFilter = v => { state.statusReportFilter = v; closeCheckboxDropdown(); renderStatusReport(); };
+  toolbar.querySelector('#sr-filter-tasks').addEventListener('click', () => setFilter('tasks'));
+  toolbar.querySelector('#sr-filter-open').addEventListener('click', () => setFilter('open'));
+  toolbar.querySelector('#sr-filter-concerns').addEventListener('click', () => setFilter('concerns'));
   toolbar.querySelector('#sr-export-btn').addEventListener('click', exportStatusReportPPTX);
+
+  const colsBtn = toolbar.querySelector('#sr-cols-btn');
+  colsBtn.addEventListener('click', () => toggleCheckboxDropdown(colsBtn, {
+    title: 'Columns',
+    items: SR_COLS.map(c => ({ value: c, label: SR_LABELS[c] })),
+    selected: srVisibleCols(),
+    onChange: sel => {
+      state.statusReportHiddenCols = SR_COLS.filter(c => !sel.includes(c));
+      persistSrPrefs();
+      refreshStatusTable();
+    },
+  }));
+
+  wireSrMultiSelect(toolbar, orgIndex);
+}
+
+// Wire the Phase / POC Team / Customer Team multi-select dropdown buttons. Selection of
+// `null` means "all"; once narrowed it holds an explicit array. OR within, AND across.
+function wireSrMultiSelect(toolbar, orgIndex) {
+  const uni = srUniverses(orgIndex);
+  const defs = [
+    { id: 'sr-phase-btn', title: 'Phase', universe: uni.phases,
+      items: uni.phases.map(p => ({ value: p, label: `${p}. ${esc(srPhaseName(p))}` })),
+      get: () => state.statusReportPhases, set: v => state.statusReportPhases = v },
+    { id: 'sr-poc-btn', title: 'POC Team', universe: uni.pocTeams,
+      items: uni.pocTeams.map(x => ({ value: x, label: x })),
+      get: () => state.statusReportPocTeams, set: v => state.statusReportPocTeams = v },
+    { id: 'sr-cust-btn', title: 'Customer Team', universe: uni.custTeams,
+      items: uni.custTeams.map(x => ({ value: x, label: x })),
+      get: () => state.statusReportCustomerTeams, set: v => state.statusReportCustomerTeams = v },
+  ];
+  defs.forEach(d => {
+    const btn = toolbar.querySelector('#' + d.id);
+    if (!btn) return;
+    btn.addEventListener('click', () => toggleCheckboxDropdown(btn, {
+      title: d.title,
+      items: d.items,
+      selected: d.get() || d.universe,   // null = all selected
+      onChange: sel => {
+        d.set(sel.length === d.universe.length ? null : sel);
+        persistSrPrefs();
+        refreshStatusTable();
+      },
+    }));
+  });
+}
+
+function srPhaseName(ph) {
+  const names = getPhaseNames();
+  return names[ph] || PHASE_NAMES_FALLBACK[ph - 1] || ('Phase ' + ph);
 }
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 
-function renderStatusTable(body, tasks, conflictSet) {
+function renderStatusTable(body, tasks, conflictSet, orgIndex) {
   if (!tasks.length) {
     const msg = state.statusReportFilter === 'concerns'
       ? 'No concerns — all open tasks are on track.'
-      : 'All tasks complete — nothing to report.';
+      : 'No tasks match the current filters.';
     body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
       padding:60px 20px;gap:12px;color:var(--muted);text-align:center">
       <div style="font-size:2rem">✅</div>
@@ -115,56 +246,64 @@ function renderStatusTable(body, tasks, conflictSet) {
     return;
   }
 
-  const cols = ['wbs','name','team','end','pct','wd','rag','notes'];
-  const labels = { wbs:'WBS', name:'Task Name', team:'Team', end:'End Date',
-                   pct:'%', wd:'WD Left', rag:'Status', notes:'Notes' };
+  const cols = srVisibleCols();
   const { col: sortCol, dir: sortDir } = state.statusReportSort;
   const today = getToday();
 
   const headerCells = cols.map(c => {
+    const noSort = SR_NOSORT.has(c);
     const isSorted = sortCol === c;
     const ind = isSorted ? (sortDir === 'asc' ? '↑' : '↓') : '<span style="opacity:0.3">↕</span>';
-    const noSort = c === 'notes';
     const ariaSort = noSort ? '' : ` aria-sort="${isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}"`;
     return `<th${ariaSort} ${noSort ? '' : `data-sort="${c}" style="cursor:pointer;user-select:none"`}
-      title="${noSort ? '' : 'Click to sort'}">${labels[c]} ${noSort ? '' : ind}</th>`;
+      title="${noSort ? '' : 'Click to sort'}">${SR_LABELS[c]}${noSort ? '' : ' ' + ind}</th>`;
   }).join('');
 
   const rowsHTML = tasks.map(t => {
     const rag       = ragStatus(t, conflictSet);
-    const label     = ragLabel(rag);
     const color     = phaseColor(t.wbs);
-    const isOverdue = t.end && t.end < today;
+    const isOverdue = t.end && t.end < today && t.pct < 100;
     const pctColor  = t.pct >= 75 ? '#3fb950' : t.pct >= 40 ? '#d29922' : '#f85149';
-    const wdObj     = t.milestone ? { text: '◆', cls: '' } :
+    const pocRes    = resolveNames(t.poc, orgIndex);
+    const custRes   = resolveNames(t.customer, orgIndex);
+    const wdObj     = t.pct >= 100 ? { text: '✓', cls: 'done' } :
+                      t.milestone ? { text: '◆', cls: '' } :
                       !t.end ? { text: '—', cls: '' } :
-                      (() => {
-                        const rem = workDaysRemaining(t.end, state.ganttWorkDays, today);
-                        if (isOverdue) return { text: '0 wd', cls: 'overdue' };
-                        return { text: rem + ' wd', cls: '' };
-                      })();
+                      isOverdue ? { text: '0 wd', cls: 'overdue' } :
+                      { text: workDaysRemaining(t.end, state.ganttWorkDays, today) + ' wd', cls: '' };
     const wdColor   = wdObj.cls === 'overdue' ? '#f85149' : wdObj.cls === 'done' ? '#3fb950' : 'var(--text)';
 
-    return `<tr class="sr-row" data-task-id="${t.id}" style="cursor:pointer">
-      <td><code style="color:${color};font-size:0.75rem">${esc(t.wbs)}</code></td>
-      <td style="font-weight:${t.milestone ? '700' : '400'}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</td>
-      <td style="color:var(--muted)">${esc(t.team || '—')}</td>
-      <td style="color:${isOverdue ? '#f85149' : 'var(--text)'}">${fmt(t.end)}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="min-width:32px;text-align:right;font-size:0.78rem">${t.pct}%</span>
-          <div style="flex:1;height:5px;background:rgba(88,166,255,0.12);border-radius:3px;min-width:40px">
-            <div style="height:5px;width:${t.pct}%;background:${pctColor};border-radius:3px"></div>
-          </div>
-        </div>
-      </td>
-      <td style="color:${wdColor};font-size:0.8rem">${esc(wdObj.text)}</td>
-      <td>
-        <span class="rag-badge rag-${rag}" aria-label="${label}">${label}</span>
-      </td>
-      <td style="color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem"
-        title="${esc(t.notes || '')}">${esc(t.notes || '—')}</td>
-    </tr>`;
+    const validCell = (text, res) => {
+      if (res.hasUnknown) {
+        // Persistent ⚠ marker (not color-alone) + accessible label, plus hover tooltip.
+        return `<td class="sr-invalid" title="Person not defined in org chart" aria-label="${esc(text)} — person not defined in org chart">${esc(text || '—')} <span class="sr-warn" aria-hidden="true">⚠</span></td>`;
+      }
+      return `<td>${esc(text || '—')}</td>`;
+    };
+    const cell = c => {
+      switch (c) {
+        case 'wbs':  return `<td><code style="color:${color};font-size:0.75rem">${esc(t.wbs)}</code></td>`;
+        case 'name': return `<td style="font-weight:${t.milestone ? '700' : '400'}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</td>`;
+        case 'poc':  return validCell(t.poc, pocRes);
+        case 'pocTeam': return `<td style="color:var(--muted)">${esc(pocRes.teams.join(', ') || '—')}</td>`;
+        case 'customer': return validCell(t.customer, custRes);
+        case 'customerTeam': return `<td style="color:var(--muted)">${esc(custRes.teams.join(', ') || '—')}</td>`;
+        case 'start': return `<td>${fmt(t.start)}</td>`;
+        case 'end':  return `<td style="color:${isOverdue ? '#f85149' : 'var(--text)'}">${fmt(t.end)}</td>`;
+        case 'pct':  return `<td><div style="display:flex;align-items:center;gap:6px">
+            <span style="min-width:32px;text-align:right;font-size:0.78rem">${t.pct}%</span>
+            <div style="flex:1;height:5px;background:rgba(88,166,255,0.12);border-radius:3px;min-width:40px">
+              <div style="height:5px;width:${t.pct}%;background:${pctColor};border-radius:3px"></div>
+            </div></div></td>`;
+        case 'wd':   return `<td style="color:${wdColor};font-size:0.8rem">${esc(wdObj.text)}</td>`;
+        case 'rag':  return `<td><span class="rag-badge rag-${rag}" aria-label="${ragLabel(rag)}">${ragLabel(rag)}</span></td>`;
+        case 'notes': return `<td style="color:var(--muted);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem"
+            title="${esc(t.notes || '')}">${esc(t.notes || '—')}</td>`;
+        default: return '<td></td>';
+      }
+    };
+
+    return `<tr class="sr-row" data-task-id="${t.id}" style="cursor:pointer">${cols.map(cell).join('')}</tr>`;
   }).join('');
 
   body.innerHTML = `
@@ -197,10 +336,52 @@ function renderStatusTable(body, tasks, conflictSet) {
 
 // ── Entry point ───────────────────────────────────────────────────────────────
 
+// Compute the filtered + sorted display set and the supporting indexes. Shared by the
+// full render and the table-only refresh (column toggle) so the popover stays open.
+function srComputeDisplay() {
+  const conflictSet = computeConflicts(state.ProjectData.tasks);
+  const orgIndex    = buildOrgIndex(state.ProjectData.org);
+  const nonHeaders  = state.ProjectData.tasks.filter(t => !isPhaseHeader(t));
+  const allOpen     = nonHeaders.filter(t => t.pct < 100);
+  const concerns    = allOpen.filter(t => { const r = ragStatus(t, conflictSet); return r === 'red' || r === 'amber'; });
+  const base        = state.statusReportFilter === 'concerns' ? concerns
+                    : state.statusReportFilter === 'tasks'    ? nonHeaders
+                    : allOpen;
+  const filtered    = base.filter(t => srPassesFilters(t, orgIndex));
+  const display     = sortTasks(filtered, conflictSet, orgIndex);
+  return { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display };
+}
+
+// Re-render just the table (and the Columns button label) without rebuilding the toolbar,
+// so an open Columns popover survives a column toggle.
+function setSrMultiLabel(id, label, selected, universe) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  const all = !selected || selected.length === universe.length;
+  b.textContent = all ? label : `${label} (${selected.length}/${universe.length})`;
+  b.style.borderColor = all ? '' : 'var(--accent)';
+  b.style.color = all ? '' : 'var(--accent)';
+}
+
+function refreshStatusTable() {
+  const body = document.getElementById('status-body');
+  if (!body) return;
+  const { conflictSet, orgIndex, display } = srComputeDisplay();
+  renderStatusTable(body, display, conflictSet, orgIndex);
+  // Toolbar isn't rebuilt (so open popovers survive) — sync the dropdown labels in place.
+  const uni = srUniverses(orgIndex);
+  setSrMultiLabel('sr-phase-btn', 'Phase', state.statusReportPhases, uni.phases);
+  setSrMultiLabel('sr-poc-btn', 'POC Team', state.statusReportPocTeams, uni.pocTeams);
+  setSrMultiLabel('sr-cust-btn', 'Customer Team', state.statusReportCustomerTeams, uni.custTeams);
+  const colsBtn = document.getElementById('sr-cols-btn');
+  if (colsBtn) colsBtn.textContent = `Columns (${srVisibleCols().length}/${SR_COLS.length})`;
+}
+
 export function renderStatusReport() {
   const toolbar = document.getElementById('status-toolbar');
   const body    = document.getElementById('status-body');
   if (!toolbar || !body) return;
+  closeCheckboxDropdown();
 
   if (!state.ProjectData.tasks.length) {
     toolbar.innerHTML = '';
@@ -213,16 +394,9 @@ export function renderStatusReport() {
     return;
   }
 
-  const conflictSet = computeConflicts(state.ProjectData.tasks);
-  const allOpen     = state.ProjectData.tasks.filter(t => t.pct < 100 && !isPhaseHeader(t));
-  const concerns    = allOpen.filter(t => ragStatus(t, conflictSet) !== 'green');
-  const display     = sortTasks(
-    state.statusReportFilter === 'concerns' ? concerns : allOpen,
-    conflictSet
-  );
-
-  renderStatusToolbar(toolbar, allOpen.length, concerns.length, conflictSet);
-  renderStatusTable(body, display, conflictSet);
+  const { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display } = srComputeDisplay();
+  renderStatusToolbar(toolbar, nonHeaders.length, allOpen.length, concerns.length, orgIndex);
+  renderStatusTable(body, display, conflictSet, orgIndex);
 }
 
 // ── PowerPoint export ─────────────────────────────────────────────────────────
@@ -258,6 +432,7 @@ async function buildPPTX() {
   const allTasks   = state.ProjectData.tasks;
   const nonHeaders = allTasks.filter(t => !isPhaseHeader(t));
   const conflictSet = computeConflicts(allTasks);
+  const orgIndex    = buildOrgIndex(state.ProjectData.org);
 
   const overallPct   = weightedPct(nonHeaders);
   const openTasks    = nonHeaders.filter(t => t.pct < 100);
@@ -417,11 +592,21 @@ async function buildPPTX() {
   const s3 = pptx.addSlide();
   s3.background = { color: 'FFFFFF' };
 
-  const showAll      = state.statusReportFilter === 'all';
-  const exportTasks  = sortTasks(showAll ? openTasks : openTasks.filter(t => ragStatus(t, conflictSet) !== 'green'), conflictSet);
-  const filterDesc   = showAll ? 'All incomplete tasks' : 'Concerns only (overdue + at risk)';
+  const filter = state.statusReportFilter;
+  const base = filter === 'concerns' ? openTasks.filter(t => ragStatus(t, conflictSet) !== 'green')
+             : filter === 'tasks'    ? nonHeaders
+             : openTasks;
+  const exportTasks  = sortTasks(base, conflictSet, orgIndex);
+  const filterDesc   = filter === 'concerns' ? 'Concerns only (overdue + at risk)'
+                     : filter === 'tasks'    ? 'All tasks'
+                     : 'All open (incomplete) tasks';
+  // Mirror the on-screen visible columns (fall back to all if the user hid everything).
+  const cols = srVisibleCols().length ? srVisibleCols() : SR_COLS;
+  const PPTX_W = { wbs:0.7, name:2.6, poc:1.4, pocTeam:1.2, customer:1.4, customerTeam:1.2,
+                   start:1.0, end:1.0, pct:0.6, wd:0.8, rag:1.0, notes:2.6 };
+  const centered = new Set(['start','end','pct','wd','rag']);
 
-  s3.addTable(pptxHeaderRow(`${projectTitle} — Open Tasks`, `Generated: ${dateStr}`), {
+  s3.addTable(pptxHeaderRow(`${projectTitle} — Tasks`, `Generated: ${dateStr}`), {
     x: 0, y: 0, w: 13.33, h: 0.6,
     colW: [9, 4.33],
     fill: { color: '1F2937' },
@@ -434,46 +619,51 @@ async function buildPPTX() {
     fontSize: 9, color: '6B7280', italic: true,
   });
 
-  const taskTableHeader = [
-    { text: 'WBS',       options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9 } },
-    { text: 'Task Name', options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9 } },
-    { text: 'Team',      options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9 } },
-    { text: 'End Date',  options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-    { text: '%',         options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-    { text: 'WD Left',   options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-    { text: 'Status',    options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-    { text: 'Notes',     options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9 } },
-  ];
+  const taskTableHeader = cols.map(c => ({
+    text: SR_LABELS[c],
+    options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: centered.has(c) ? 'center' : 'left' },
+  }));
 
   const taskRows = exportTasks.map((t, idx) => {
     const rag      = ragStatus(t, conflictSet);
     const rowFill  = idx % 2 === 0 ? 'FFFFFF' : 'F9FAFB';
     const ragFill  = rag === 'red' ? 'FEE2E2' : rag === 'amber' ? 'FEF3C7' : 'D1FAE5';
     const ragText  = rag === 'red' ? 'DC2626' : rag === 'amber' ? 'D97706' : '059669';
-    const endColor = (t.end && t.end < today) ? 'DC2626' : '374151';
+    const overdue  = t.end && t.end < today && t.pct < 100;
+    const endColor = overdue ? 'DC2626' : '374151';
     const phColor  = phaseColor(t.wbs).replace('#', '');
-    const wdText   = t.milestone ? '◆' :
-                     !t.end ? '—' :
-                     t.end < today ? '0 wd' :
+    const pocTeams = resolveNames(t.poc, orgIndex).teams.join(', ');
+    const custTeams = resolveNames(t.customer, orgIndex).teams.join(', ');
+    const wdText   = t.pct >= 100 ? '✓' : t.milestone ? '◆' :
+                     !t.end ? '—' : overdue ? '0 wd' :
                      workDaysRemaining(t.end, state.ganttWorkDays, today) + ' wd';
-    const wdColor  = (t.end && t.end < today && t.pct < 100) ? 'DC2626' : '374151';
+    const wdColor  = overdue ? 'DC2626' : '374151';
     const notes    = (t.notes || '').slice(0, 60) + ((t.notes || '').length > 60 ? '…' : '');
-    return [
-      { text: t.wbs,               options: { fontSize: 8, color: phColor, bold: true, fill: { color: rowFill } } },
-      { text: t.name,              options: { fontSize: 8, color: '1F2937', fill: { color: rowFill } } },
-      { text: t.team || '—',       options: { fontSize: 8, color: '6B7280', fill: { color: rowFill } } },
-      { text: fmt(t.end),          options: { fontSize: 8, color: endColor, align: 'center', fill: { color: rowFill } } },
-      { text: `${t.pct}%`,         options: { fontSize: 8, color: '374151', align: 'center', fill: { color: rowFill } } },
-      { text: wdText,              options: { fontSize: 8, color: wdColor,  align: 'center', fill: { color: rowFill } } },
-      { text: ragLabel(rag),       options: { fontSize: 8, bold: true, color: ragText, align: 'center', fill: { color: ragFill } } },
-      { text: notes || '—',        options: { fontSize: 8, color: '6B7280', fill: { color: rowFill } } },
-    ];
+    const base8    = { fontSize: 8, fill: { color: rowFill } };
+    const txt      = (text, opt) => ({ text: text || '—', options: { ...base8, ...opt } });
+    const map = {
+      wbs:          txt(t.wbs, { color: phColor, bold: true }),
+      name:         txt(t.name, { color: '1F2937' }),
+      poc:          txt(t.poc, { color: '374151' }),
+      pocTeam:      txt(pocTeams, { color: '6B7280' }),
+      customer:     txt(t.customer, { color: '374151' }),
+      customerTeam: txt(custTeams, { color: '6B7280' }),
+      start:        txt(fmt(t.start), { color: '374151', align: 'center' }),
+      end:          txt(fmt(t.end), { color: endColor, align: 'center' }),
+      pct:          txt(`${t.pct}%`, { color: '374151', align: 'center' }),
+      wd:           txt(wdText, { color: wdColor, align: 'center' }),
+      rag:          { text: ragLabel(rag), options: { ...base8, bold: true, color: ragText, align: 'center', fill: { color: ragFill } } },
+      notes:        txt(notes, { color: '6B7280' }),
+    };
+    return cols.map(c => map[c]);
   });
 
   if (taskRows.length) {
+    const totalW = cols.reduce((s, c) => s + (PPTX_W[c] || 1), 0);
+    const colW   = cols.map(c => +((PPTX_W[c] || 1) / totalW * 12.73).toFixed(2));
     s3.addTable([taskTableHeader, ...taskRows], {
       x: 0.3, y: 1.05, w: 12.73,
-      colW: [0.75, 3.18, 1.2, 1.0, 0.6, 0.8, 1.0, 4.2],
+      colW,
       border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
       fontSize: 8,
       margin: [0.04, 0.08, 0.04, 0.08],

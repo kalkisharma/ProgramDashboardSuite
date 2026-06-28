@@ -1,12 +1,13 @@
 import * as XLSX from "xlsx";
 import "./styles.css";
 import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from './constants.js';
-import { GANTT_COLORS, PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, ganttColor, teamColor, clearColorCache } from './colors.js';
+import { PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, teamColor } from './colors.js';
 import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from './utils.js';
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
 import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
-import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, extractWorkDays } from './parse.js';
+import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, extractWorkDays } from './parse.js';
+import { buildOrgIndex, resolveNames } from './compute/orgLookup.js';
 import { buildWorkbook, generateSampleExcel } from './excel.js';
 import { state } from './state.js';
 import { showToast, safeSetItem, safeRender } from './ui/toast.js';
@@ -18,6 +19,7 @@ import { renderWeightBudget, getWeightUnit } from './render/weightBudget.js';
 import { renderOrgChart } from './render/orgChart.js';
 import { renderRequirements } from './render/requirements.js';
 import { renderStatusReport } from './render/statusReport.js';
+import { renderReferenceFiles } from './render/referenceFiles.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
   renderGantt, setGanttPhaseFilter, setGanttTeamFilter, clearGanttFilters, togglePhaseCollapse,
@@ -27,8 +29,8 @@ import {
   toggleGanttCalendar, workdaysSummary, applyWorkDays, toggleWorkdaysPicker,
   navigateCalendar, renderGanttCalendar, jumpToGanttDate,
   toggleCriticalPath, toggleGanttLegend, exportGanttSVG, exportGanttPNG,
-  startTaskNameEdit, startTaskTeamEdit, startTaskPctEdit,
-  startPanDrag, updateTodayFloat,
+  startTaskNameEdit, startTaskPctEdit,
+  startPanDrag, updateTodayFloat, scrollGanttToToday,
 } from './render/gantt.js';
 import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported } from './ui/taskOps.js';
 
@@ -69,14 +71,13 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v4.7.1'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v5.0.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
 
 
-// Gantt scroll-to-today guard: only auto-scroll once per file load
-let ganttScrolledToday = false;
+// Gantt scroll-to-today guard lives in state.js (state.ganttScrolledToday) so render/gantt.js shares it
 
 // depArrowEls, conflictSet — moved to state.js
 let _justLoaded = false; // gates load toast: true only during file parse → renderDashboard()
@@ -125,6 +126,7 @@ function _restoreSnapshot(snapshot) {
   state.ProjectData.specs   = snapshot.specs;
   state.ProjectData.org     = snapshot.org     || state.ProjectData.org;
   state.ProjectData.weights = snapshot.weights || state.ProjectData.weights;
+  state.ProjectData.referenceFiles = snapshot.referenceFiles || state.ProjectData.referenceFiles;
   if (snapshot.info) state.ProjectData.info = snapshot.info;
   recalcWBS(state.ProjectData.tasks);
   safeRender(renderGantt,    'Gantt Chart');
@@ -133,6 +135,7 @@ function _restoreSnapshot(snapshot) {
   if (state.ProjectData.weights.length) safeRender(renderWeightBudget, 'Weight Budget');
   if (state.ProjectData.org.length)     safeRender(renderOrgChart,     'Org Chart');
   safeRender(renderStatusReport, 'Status Report');
+  if (state.ProjectData.referenceFiles.length) safeRender(renderReferenceFiles, 'Reference Files');
   if (state.spCurrentType === 'task') { state.spCurrentType = null; openTaskPanel(state.spCurrentId); }
   else if (state.spCurrentType === 'spec') { state.spCurrentType = null; openSpecPanel(state.spCurrentId); }
   else if (state.spCurrentType === 'org') { const n = state.spCurrentId; state.spCurrentType = null; if (state.ProjectData.org.find(p => p.name === n)) openOrgPanel(n); else closeSidePanel(); }
@@ -265,6 +268,9 @@ function switchTab(btn, id) {
   btn.setAttribute('aria-selected', 'true');
   document.getElementById(id + '-panel').classList.add('active');
   closeSidePanel();
+  // Gantt renders hidden when it isn't the default tab, so its scroll-to-today is
+  // deferred until the tab is first shown.
+  if (id === 'gantt') scrollGanttToToday();
 }
 
 // ─── Drag & Drop file loading ─────────────────────────────────────────────────
@@ -310,7 +316,7 @@ function loadFile(file) {
       const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
       parseWorkbook(wb);
       const missing = [];
-      if (!state.ProjectData.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, Category, Start Date, End Date, % Complete, Dependencies, Responsible Team, Milestone, Notes)");
+      if (!state.ProjectData.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, POC, Customer, Start Date, End Date, % Complete, Dependencies, Milestone, Notes)");
       if (!state.ProjectData.specs.length)  missing.push("'Specifications' (columns: Spec ID, Category, Specification Name, Value, Units, Status, Responsible Group, Notes, Dependent Task IDs)");
       if (missing.length) {
         showLoadError('Required sheets missing:\n\n' + missing.join('\n\n') + '\n\nSheet names are case-sensitive. Check that the names match exactly.');
@@ -326,7 +332,7 @@ function loadFile(file) {
 // ─── Parse Workbook ───────────────────────────────────────────────────────────
 /** @param {object} wb - SheetJS workbook object. Resets all state.ProjectData collections and populates from sheets. */
 function parseWorkbook(wb) {
-  state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = [];
+  state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = []; state.ProjectData.referenceFiles = [];
   state.undoStack = []; state.redoStack = [];
   state.collapsedPhases  = new Set();
   state.calDisplayMonth  = null;
@@ -335,13 +341,13 @@ function parseWorkbook(wb) {
   state.barDragPreSnapshot = null;
   state.barEls  = {};
   state.rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
-  clearColorCache();
 
   state.ProjectData.info    = parseInfoSheet(wb.Sheets['Project Info']);
   state.ProjectData.tasks   = parseScheduleSheet(wb.Sheets['Schedule']);
   state.ProjectData.specs   = parseSpecsSheet(wb.Sheets['Specifications']);
   state.ProjectData.org     = parseOrgSheet(wb.Sheets['Org Chart']);
   state.ProjectData.weights = parseWeightSheet(wb.Sheets['Weight Budget']);
+  state.ProjectData.referenceFiles = parseReferenceSheet(wb.Sheets['Reference Files']);
 
   const wds = extractWorkDays(state.ProjectData.info);
   if (wds) {
@@ -374,16 +380,25 @@ function renderDashboard() {
   document.getElementById('org-tab-btn').style.display = state.ProjectData.org.length ? '' : 'none';
   document.getElementById('weight-tab-btn').style.display = state.ProjectData.weights.length ? '' : 'none';
   document.getElementById('status-tab-btn').style.display = '';
+  document.getElementById('reference-tab-btn').style.display = state.ProjectData.referenceFiles.length ? '' : 'none';
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
   document.getElementById('proj-info-btn').style.display = '';
   dashboardLoaded = true;
-  ganttScrolledToday = false;
+  state.ganttScrolledToday = false;
   state.ganttPhaseFilter = 'all';
   state.ganttTeamFilter  = 'all';
   state.specSearchQuery  = '';
   state.collapsedPhases.clear();
-  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases']
+  // Status Report view resets on new file load (a new file may have different phases/teams).
+  state.statusReportFilter        = 'open';
+  state.statusReportSort          = { col: null, dir: 'asc' };
+  state.statusReportHiddenCols    = [];
+  state.statusReportPhases        = null;
+  state.statusReportPocTeams      = null;
+  state.statusReportCustomerTeams = null;
+  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases',
+   'vh-sr-cols','vh-sr-phases','vh-sr-poc-teams','vh-sr-cust-teams']
     .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';
@@ -398,6 +413,7 @@ function renderDashboard() {
   safeRender(renderWeightBudget,  'Weight Budget');
   safeRender(renderOrgChart,      'Org Chart');
   safeRender(renderStatusReport,  'Status Report');
+  safeRender(renderReferenceFiles, 'Reference Files');
   safeRender(renderRequirements, 'Requirements');
   updateUndoRedoBtns();
   if (_justLoaded && state.ProjectData.tasks.length) {
@@ -414,6 +430,9 @@ function renderDashboard() {
     const hasWarnings = badDates.length || dupTaskIds.size || dupSpecIds.size;
     showToast('Loaded: ' + parts.join(' · '), null, hasWarnings ? 10000 : 6000);
   }
+  // Default to Program Dashboard on file load / draft-restore.
+  const progBtn = document.querySelector('.tab-btn[data-tab="prog"]');
+  if (progBtn) switchTab(progBtn, 'prog');
 }
 
 // renderGantt and all gantt functions — imported from ./render/gantt.js
@@ -765,12 +784,11 @@ function openSpecPanel(specId) {
       const started = t.start && t.start <= getToday();
       const done    = t.pct === 100;
       const cardCls = done ? 'done' : started && t.pct > 0 ? 'warn' : started ? 'risk' : 'future';
-      const gc      = ganttColor(t.category);
       const showRisk = started && !done && s.status === 'TBD';
       html += `<div class="task-card clickable ${cardCls}" data-task-id="${t.id}">
-        <div class="tc-id"><button class="sp-dep-rm" data-rm-spec-dep="${t.id}" aria-label="Remove task ${esc(t.wbs)} ${esc(t.name)}" title="Remove">×</button>Task ${t.id} · ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span></div>
+        <div class="tc-id"><button class="sp-dep-rm" data-rm-spec-dep="${t.id}" aria-label="Remove task ${esc(t.wbs)} ${esc(t.name)}" title="Remove">×</button>Task ${t.id} · ${esc(t.wbs)}</div>
         <div class="tc-name">${t.milestone ? '◆ ' : ''}${esc(t.name)}</div>
-        <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${esc(t.team)} · ${t.pct}% complete</div>
+        <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)}${t.poc ? ' · POC: ' + esc(t.poc) : ''} · ${t.pct}% complete</div>
         ${showRisk ? '<div class="tc-risk">⚠ Task active — spec not yet locked</div>' : ''}
       </div>`;
     });
@@ -876,7 +894,11 @@ function openTaskPanel(taskId) {
   state.spOpener = document.activeElement;
   const t = state.ProjectData.tasks.find(t => t.id === taskId);
   if (!t) return;
-  const gc = ganttColor(t.category);
+  const accent = phaseColor(t.wbs);
+  const orgIndex = buildOrgIndex(state.ProjectData.org);
+  const pocRes  = resolveNames(t.poc, orgIndex);
+  const custRes = resolveNames(t.customer, orgIndex);
+  const teamHint = teams => teams.length ? ` <span style="color:var(--muted)">(${esc(teams.join(', '))})</span>` : '';
   document.getElementById('sp-title').textContent = t.name;
 
   const started = t.start && t.start <= getToday();
@@ -891,10 +913,13 @@ function openTaskPanel(taskId) {
   const remWd   = workDaysRemaining(t.end, state.ganttWorkDays, getToday());
   let html = `<div class="sp-meta">
     <div class="sp-meta-id">
-      <code style="color:${gc}">Task ${t.id}</code> · WBS ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span>
+      <code style="color:${accent}">Task ${t.id}</code> · WBS ${esc(t.wbs)}
       ${t.milestone ? ' · <strong>◆ MILESTONE</strong>' : ''}
     </div>
-    <div class="sp-meta-val" style="font-size:1rem">${esc(t.team)}</div>
+    <div class="sp-meta-val" style="font-size:0.9rem;line-height:1.5">
+      <strong>POC:</strong> ${esc(t.poc) || '—'}${teamHint(pocRes.teams)}<br>
+      <strong>Customer:</strong> ${esc(t.customer) || '—'}${teamHint(custRes.teams)}
+    </div>
     ${statusBadge}
     <div class="sp-meta-notes">
       <strong>Start:</strong> ${fmt(t.start)} &nbsp;·&nbsp; <strong>End:</strong> ${fmt(t.end)}<br>
@@ -911,10 +936,9 @@ function openTaskPanel(taskId) {
       html += `<div class="task-card future"><div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${id}" aria-label="Remove dependency" title="Remove dependency">×</button>Task ${id}</div><div class="tc-name" style="color:var(--muted)">Not found</div></div>`;
       return;
     }
-    const dc = ganttColor(dep.category);
     const hasConflict = dep.end && t.start && t.start < dep.end;
     html += `<div class="task-card clickable ${dep.pct===100?'done':'future'}" data-task-id="${dep.id}">
-      <div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${dep.id}" aria-label="Remove dependency: ${esc(dep.wbs)} ${esc(dep.name)}" title="Remove dependency">×</button>Task ${dep.id} · ${esc(dep.wbs)} · <span style="color:${dc}">${esc(dep.category)}</span></div>
+      <div class="tc-id"><button class="sp-dep-rm" data-rm-dep="${dep.id}" aria-label="Remove dependency: ${esc(dep.wbs)} ${esc(dep.name)}" title="Remove dependency">×</button>Task ${dep.id} · ${esc(dep.wbs)}</div>
       <div class="tc-name">${esc(dep.name)}</div>
       <div class="tc-meta">${fmt(dep.start)} → ${fmt(dep.end)} · ${dep.pct}% complete</div>
       ${hasConflict ? `<div class="tc-risk" style="color:var(--warning)">⚠ Starts before predecessor ends (${fmt(dep.end)})</div>` : ''}
@@ -990,14 +1014,21 @@ function openTaskEditPanel(taskId) {
   state.spOpener = state.spOpener || document.activeElement;
   document.getElementById('sp-title').textContent = `Edit: ${t.name}`;
   const toDateInput = d => { if (!d) return ''; const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dy = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dy}`; };
-  const allTeams = [...new Set(state.ProjectData.tasks.map(t => t.team).filter(Boolean))].sort();
-  const teamDl = allTeams.map(tm => `<option>${esc(tm)}</option>`).join('');
+  const orgIndex = buildOrgIndex(state.ProjectData.org);
+  const teamHintHtml = res => {
+    const team = res.teams.join(', ') || '—';
+    const warn = res.hasUnknown ? ` <span style="color:#f85149">· ⚠ ${esc(res.unknown.join(', '))} not in org chart</span>` : '';
+    return `<div style="font-size:0.72rem;color:var(--muted);margin-top:3px">Team: ${esc(team)}${warn}</div>`;
+  };
   const html = `<div class="sp-meta" style="padding:14px 14px 4px">
     <div class="sp-form-group"><label class="sp-form-label" for="task-edit-name">Name</label>
       <input class="sp-form-input" id="task-edit-name" type="text" value="${esc(t.name)}"></div>
-    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-team">Team</label>
-      <input class="sp-form-input" id="task-edit-team" type="text" list="task-team-dl" value="${esc(t.team)}">
-      <datalist id="task-team-dl">${teamDl}</datalist></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-poc">POC <span style="color:var(--muted);font-weight:400">(comma-separated)</span></label>
+      <input class="sp-form-input" id="task-edit-poc" type="text" value="${esc(t.poc || '')}">
+      ${teamHintHtml(resolveNames(t.poc, orgIndex))}</div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-customer">Customer <span style="color:var(--muted);font-weight:400">(comma-separated)</span></label>
+      <input class="sp-form-input" id="task-edit-customer" type="text" value="${esc(t.customer || '')}">
+      ${teamHintHtml(resolveNames(t.customer, orgIndex))}</div>
     <div class="sp-form-group"><label class="sp-form-label" for="task-edit-start">Start Date</label>
       <input class="sp-form-input" id="task-edit-start" type="date" value="${toDateInput(t.start)}"></div>
     <div class="sp-form-group"><label class="sp-form-label" for="task-edit-end">End Date</label>
@@ -1027,7 +1058,8 @@ function saveTaskEdits(taskId) {
   if (!t) return;
   const name = document.getElementById('task-edit-name').value.trim();
   if (!name) { showToast('Task name cannot be empty', null, 3500); return; }
-  const team     = document.getElementById('task-edit-team').value.trim();
+  const poc      = document.getElementById('task-edit-poc').value.trim();
+  const customer = document.getElementById('task-edit-customer').value.trim();
   const startStr = document.getElementById('task-edit-start').value;
   const endStr   = document.getElementById('task-edit-end').value;
   const pct      = Math.max(0, Math.min(100, Math.round(parseFloat(document.getElementById('task-edit-pct').value) || 0)));
@@ -1037,7 +1069,7 @@ function saveTaskEdits(taskId) {
   const newEnd   = endStr   ? snapToWorkDay(parseD(endStr),   state.ganttWorkDays, 1) : t.end;
   if (newStart && newEnd && newEnd < newStart) { showToast('End date must be on or after start date', null, 3500); return; }
   pushUndo('edit task');
-  t.name = name; t.team = team; t.start = newStart; t.end = newEnd; t.pct = pct; t.notes = notes;
+  t.name = name; t.poc = poc; t.customer = customer; t.start = newStart; t.end = newEnd; t.pct = pct; t.notes = notes;
   renderGantt();
   showToast('Task updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
   const btn = document.getElementById('task-save-btn');
@@ -1075,22 +1107,23 @@ function openOrgPanel(name) {
     });
   }
 
-  const myTasks = state.ProjectData.tasks.filter(t => t.team === person.team);
+  const personNameNorm = person.name.trim().toLowerCase();
+  const myTasks = state.ProjectData.tasks.filter(t =>
+    t.poc && t.poc.split(',').some(n => n.trim().toLowerCase() === personNameNorm));
   if (myTasks.length) {
-    html += `<div class="sp-section-label" style="margin-top:16px">Team Tasks (${myTasks.length})</div>`;
+    html += `<div class="sp-section-label" style="margin-top:16px">POC Tasks (${myTasks.length})</div>`;
     myTasks.forEach(t => {
-      const gc = ganttColor(t.category);
       const done2 = t.pct === 100;
       const started2 = t.start && t.start <= getToday();
       const cardCls = done2 ? 'done' : started2 && t.pct > 0 ? 'warn' : started2 ? 'risk' : 'future';
       html += `<div class="task-card clickable ${cardCls}" data-task-id="${t.id}">
-        <div class="tc-id">Task ${t.id} · ${esc(t.wbs)} · <span style="color:${gc}">${esc(t.category)}</span></div>
+        <div class="tc-id">Task ${t.id} · ${esc(t.wbs)}</div>
         <div class="tc-name">${t.milestone ? '◆ ' : ''}${esc(t.name)}</div>
         <div class="tc-meta">${fmt(t.start)} → ${fmt(t.end)} · ${t.pct}% complete</div>
       </div>`;
     });
   } else {
-    html += `<div class="no-deps">No tasks assigned to the ${esc(person.team)} team.</div>`;
+    html += `<div class="no-deps">No tasks with ${esc(person.name)} as POC.</div>`;
   }
 
   html += `<div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">

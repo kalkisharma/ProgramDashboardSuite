@@ -3,7 +3,15 @@ import { RH } from '../constants.js';
 import { renderGantt } from '../render/gantt.js';
 import { pushUndo } from '../core/undo.js';
 import { recalcWBS } from '../compute/wbs.js';
+import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { showToast } from './toast.js';
+
+// Same POC-team derivation the Gantt filter uses, so reorder index math matches the view.
+function matchesTeamFilter(t, orgIndex) {
+  if (state.ganttTeamFilter === 'all') return true;
+  const tm = resolveNames(t.poc, orgIndex).teams;
+  return (tm.length ? tm : ['Unassigned']).includes(state.ganttTeamFilter);
+}
 
 export function startRowDrag(e, visIdx, t, rowEl) {
   const lb = document.getElementById('gantt-left-body');
@@ -61,10 +69,11 @@ export function endRowDrag(e) {
 
   if (dropIdx === srcIdx || dropIdx === srcIdx + 1) { renderGantt(); return; }
 
+  const orgIndex = buildOrgIndex(state.ProjectData.org);
   const visibleTasks = state.ProjectData.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
     if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
-    if (state.ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== state.ganttTeamFilter) return false;
+    if (!matchesTeamFilter(t, orgIndex)) return false;
     return true;
   });
 
@@ -80,7 +89,7 @@ export function endRowDrag(e) {
   const updatedVisible = state.ProjectData.tasks.filter(t => {
     const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
     if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
-    if (state.ganttTeamFilter  !== 'all' && (t.team || 'Unassigned') !== state.ganttTeamFilter) return false;
+    if (!matchesTeamFilter(t, orgIndex)) return false;
     return true;
   });
   const targetTask = updatedVisible[adjustedDrop];
