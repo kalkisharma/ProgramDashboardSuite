@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import "./styles.css";
 import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from './constants.js';
-import { PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, teamColor } from './colors.js';
+import { PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, teamColor, clearTeamColorCache } from './colors.js';
 import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from './utils.js';
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
@@ -341,6 +341,7 @@ function parseWorkbook(wb) {
   state.barDragPreSnapshot = null;
   state.barEls  = {};
   state.rowDrag = { active: false, srcIdx: null, ghost: null, indicator: null, dropIdx: null };
+  clearTeamColorCache(); // reassign team fallback colors deterministically per file
 
   state.ProjectData.info    = parseInfoSheet(wb.Sheets['Project Info']);
   state.ProjectData.tasks   = parseScheduleSheet(wb.Sheets['Schedule']);

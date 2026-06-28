@@ -55,4 +55,21 @@ export const TEAM_COLORS = {
   'All Teams':     '#58a6ff',
 };
 
-export function teamColor(t) { return TEAM_COLORS[t] || '#58a6ff'; }
+// Fallback palette for teams not in TEAM_COLORS — each new team name gets the next
+// distinct color, cached so a given team keeps the same color for the whole session.
+const _teamPool = [
+  '#e879f9', '#22d3ee', '#fb7185', '#a3e635', '#f59e0b', '#818cf8',
+  '#f472b6', '#2dd4bf', '#c084fc', '#fbbf24', '#4ade80', '#38bdf8',
+  '#fca5a5', '#5eead4', '#fdba74', '#a5b4fc',
+];
+const _teamColorCache = {};
+let _teamPoolIdx = 0;
+
+export function clearTeamColorCache() { for (const k in _teamColorCache) delete _teamColorCache[k]; _teamPoolIdx = 0; }
+
+export function teamColor(t) {
+  if (!t) return '#58a6ff';
+  if (TEAM_COLORS[t]) return TEAM_COLORS[t];
+  if (!_teamColorCache[t]) { _teamColorCache[t] = _teamPool[_teamPoolIdx % _teamPool.length]; _teamPoolIdx++; }
+  return _teamColorCache[t];
+}
