@@ -96,3 +96,16 @@ describe('computeConflicts', () => {
     expect(computeConflicts([]) instanceof Set).toBe(true);
   });
 });
+
+describe('computeConflicts — hierarchy', () => {
+  it('does not flag parent tasks (derived dates); flags leaf conflicts', () => {
+    const tasks = [
+      { id: 10, parentId: null, milestone: false, deps: [], start: d('2024-01-05'), end: d('2024-01-20') },
+      { id: 1, parentId: 10, milestone: false, deps: [], start: d('2024-01-10'), end: d('2024-01-15') },
+      { id: 2, parentId: 10, milestone: false, deps: [1], start: d('2024-01-12'), end: d('2024-01-20') },
+    ];
+    const c = computeConflicts(tasks);
+    expect(c.has(10)).toBe(false);
+    expect(c.has(2)).toBe(true); // starts 01-12 before pred 1 ends 01-15
+  });
+});
