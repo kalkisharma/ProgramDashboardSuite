@@ -77,8 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
-// Gantt scroll-to-today guard: only auto-scroll once per file load
-let ganttScrolledToday = false;
+// Gantt scroll-to-today guard lives in state.js (state.ganttScrolledToday) so render/gantt.js shares it
 
 // depArrowEls, conflictSet — moved to state.js
 let _justLoaded = false; // gates load toast: true only during file parse → renderDashboard()
@@ -386,7 +385,7 @@ function renderDashboard() {
   document.getElementById('save-excel-btn').style.display = '';
   document.getElementById('proj-info-btn').style.display = '';
   dashboardLoaded = true;
-  ganttScrolledToday = false;
+  state.ganttScrolledToday = false;
   state.ganttPhaseFilter = 'all';
   state.ganttTeamFilter  = 'all';
   state.specSearchQuery  = '';

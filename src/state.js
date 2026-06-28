@@ -35,6 +35,7 @@ export const state = {
   // ── Gantt render state ──────────────────────────────────────────────────────
   ganttMinDateRef: null, // set by renderGantt; used by adjustZoom scroll math
   ganttTodayX:     null, // px offset of Today line; null when out of range
+  ganttScrolledToday: false, // one-shot: Gantt auto-scrolls to Today on first visible render
   depArrowEls:     [],   // { el, predId, succId } — rebuilt each renderGantt()
   conflictSet:     new Set(), // task IDs with scheduling conflicts
 
@@ -134,6 +135,7 @@ export function resetState() {
   state.statusReportCustomerTeams = null;
   state.ganttMinDateRef = null;
   state.ganttTodayX     = null;
+  state.ganttScrolledToday = false;
   state.depArrowEls     = [];
   state.conflictSet     = new Set();
   state.handlers = { openWeightPanel: null, openTaskPanel: null, openSpecPanel: null, openOrgPanel: null, toggleHelp: null, applyUndo: null };

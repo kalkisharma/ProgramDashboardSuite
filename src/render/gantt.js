@@ -1315,9 +1315,9 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
   // isn't the default tab it renders hidden, so defer the scroll to scrollGanttToToday()
   // on first switch to the tab (see switchTab) rather than burning the one-shot here.
   const right = document.getElementById('gantt-right');
-  if (!ganttScrolledToday && right.clientWidth > 0 && tx > right.clientWidth / 2) {
+  if (!state.ganttScrolledToday && right.clientWidth > 0 && tx > right.clientWidth / 2) {
     right.scrollLeft = tx - right.clientWidth / 2;
-    ganttScrolledToday = true;
+    state.ganttScrolledToday = true;
   }
   updateTodayFloat();
 }
@@ -1325,12 +1325,12 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
 // Scroll the Gantt to the Today line the first time its tab becomes visible. Uses the
 // today offset cached by the prepare pass (state.ganttTodayX). One-shot per file load.
 export function scrollGanttToToday() {
-  if (ganttScrolledToday) return;
+  if (state.ganttScrolledToday) return;
   const right = document.getElementById('gantt-right');
   const tx = state.ganttTodayX;
   if (!right || right.clientWidth === 0) return;
   if (tx != null && tx > right.clientWidth / 2) right.scrollLeft = tx - right.clientWidth / 2;
-  ganttScrolledToday = true;
+  state.ganttScrolledToday = true;
   updateTodayFloat();
 }
 
