@@ -411,11 +411,12 @@ function renderDashboard() {
   state.statusReportFilter        = 'open';
   state.statusReportSort          = { col: null, dir: 'asc' };
   state.statusReportHiddenCols    = [];
+  state.statusReportDepthFilter   = null;
   state.statusReportPhases        = null;
   state.statusReportPocTeams      = null;
   state.statusReportCustomerTeams = null;
   ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-tasks','vh-gantt-depth',
-   'vh-sr-cols','vh-sr-phases','vh-sr-poc-teams','vh-sr-cust-teams']
+   'vh-sr-cols','vh-sr-depth','vh-sr-phases','vh-sr-poc-teams','vh-sr-cust-teams']
     .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';

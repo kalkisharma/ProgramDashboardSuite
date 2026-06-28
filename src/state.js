@@ -64,6 +64,7 @@ export const state = {
   statusReportFilter: 'open',         // 'tasks' | 'open' | 'concerns'
   statusReportSort:   { col: null, dir: 'asc' },
   statusReportHiddenCols:     [],     // array of hidden column keys (e.g. 'pocTeam')
+  statusReportDepthFilter:    null,   // null = no ceiling; else max visible level (shares collapsedTasks with Gantt)
   statusReportPhases:         null,   // null = all phases; else array of selected phase numbers (as strings)
   statusReportPocTeams:       null,   // null = all; else array of selected POC team names
   statusReportCustomerTeams:  null,   // null = all; else array of selected Customer team names
@@ -132,6 +133,7 @@ export function resetState() {
   state.statusReportFilter = 'open';
   state.statusReportSort   = { col: null, dir: 'asc' };
   state.statusReportHiddenCols    = [];
+  state.statusReportDepthFilter   = null;
   state.statusReportPhases        = null;
   state.statusReportPocTeams      = null;
   state.statusReportCustomerTeams = null;
