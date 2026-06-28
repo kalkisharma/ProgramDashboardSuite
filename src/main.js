@@ -5,7 +5,8 @@ import { PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, teamColor, clearTea
 import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from './utils.js';
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
-import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
+import { wouldCreateCycle, inferHierarchyFromWBS } from './compute/wbs.js';
+import { recalcHierarchy } from './compute/hierarchy.js';
 import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, extractWorkDays } from './parse.js';
 import { buildOrgIndex, resolveNames } from './compute/orgLookup.js';
 import { buildWorkbook, generateSampleExcel } from './excel.js';
@@ -128,7 +129,7 @@ function _restoreSnapshot(snapshot) {
   state.ProjectData.weights = snapshot.weights || state.ProjectData.weights;
   state.ProjectData.referenceFiles = snapshot.referenceFiles || state.ProjectData.referenceFiles;
   if (snapshot.info) state.ProjectData.info = snapshot.info;
-  recalcWBS(state.ProjectData.tasks);
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   safeRender(renderGantt,    'Gantt Chart');
   safeRender(renderSpecs,    'Specifications');
   safeRender(renderProgDash, 'Program Dashboard');
@@ -357,7 +358,16 @@ function parseWorkbook(wb) {
     if (wdBtn) wdBtn.textContent = workdaysSummary(wds) + ' ▾';
   }
 
-  // Deep-copy tasks for reset
+  // Build the hierarchy from WBS, then resolve it (order, WBS, inheritance, parent rollup).
+  inferHierarchyFromWBS(state.ProjectData.tasks);
+  const parentIds = new Set(state.ProjectData.tasks.filter(t => t.parentId != null).map(t => t.parentId));
+  const demotedMs = state.ProjectData.tasks.filter(t => t.milestone && parentIds.has(t.id)).length;
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
+  if (demotedMs && _justLoaded) {
+    showToast(`${demotedMs} milestone${demotedMs !== 1 ? 's' : ''} with subtasks recalculated from children.`, null, 8000);
+  }
+
+  // Deep-copy tasks for reset (post-hierarchy, so reset restores the resolved tree)
   state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
   clearDraft();
 }
@@ -1013,6 +1023,10 @@ function openTaskEditPanel(taskId) {
   const t = state.ProjectData.tasks.find(t => t.id === taskId);
   if (!t) return;
   state.spOpener = state.spOpener || document.activeElement;
+  // Parent tasks derive start/end/% from their children — lock those fields.
+  const hasChildren = state.ProjectData.tasks.some(x => x.parentId === t.id);
+  const calcAttr = hasChildren ? ' disabled title="Calculated from subtasks"' : '';
+  const calcHint = hasChildren ? ' <span style="color:var(--muted);font-weight:400;font-size:0.72rem">(calculated from subtasks)</span>' : '';
   document.getElementById('sp-title').textContent = `Edit: ${t.name}`;
   const toDateInput = d => { if (!d) return ''; const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dy = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dy}`; };
   const orgIndex = buildOrgIndex(state.ProjectData.org);
@@ -1030,12 +1044,12 @@ function openTaskEditPanel(taskId) {
     <div class="sp-form-group"><label class="sp-form-label" for="task-edit-customer">Customer <span style="color:var(--muted);font-weight:400">(comma-separated)</span></label>
       <input class="sp-form-input" id="task-edit-customer" type="text" value="${esc(t.customer || '')}">
       ${teamHintHtml(resolveNames(t.customer, orgIndex))}</div>
-    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-start">Start Date</label>
-      <input class="sp-form-input" id="task-edit-start" type="date" value="${toDateInput(t.start)}"></div>
-    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-end">End Date</label>
-      <input class="sp-form-input" id="task-edit-end" type="date" value="${toDateInput(t.end)}"></div>
-    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-pct">% Complete</label>
-      <input class="sp-form-input" id="task-edit-pct" type="number" min="0" max="100" value="${t.pct}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-start">Start Date${calcHint}</label>
+      <input class="sp-form-input" id="task-edit-start" type="date" value="${toDateInput(t.start)}"${calcAttr}></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-end">End Date${calcHint}</label>
+      <input class="sp-form-input" id="task-edit-end" type="date" value="${toDateInput(t.end)}"${calcAttr}></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-pct">% Complete${calcHint}</label>
+      <input class="sp-form-input" id="task-edit-pct" type="number" min="0" max="100" value="${t.pct}"${calcAttr}></div>
     <div class="sp-form-group"><label class="sp-form-label" for="task-edit-notes">Notes</label>
       <textarea class="sp-form-input" id="task-edit-notes" rows="4">${esc(t.notes || '')}</textarea></div>
   </div>
@@ -1509,7 +1523,7 @@ window.addEventListener('beforeunload', e => {
     state.ProjectData.weights = snap.weights || [];
     state.ProjectData.info    = snap.info    || {};
     state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...(t.deps || [])] }));
-    recalcWBS(state.ProjectData.tasks);
+    recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
     state.isDirty = true;
     renderDashboard();
     banner.style.display = 'none';

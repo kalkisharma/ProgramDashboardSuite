@@ -7,7 +7,7 @@ import { getPhaseNames } from '../render/progDash.js';
 import { pushUndo } from '../core/undo.js';
 import { showToast, safeRender } from './toast.js';
 import { closeSidePanel } from './panelBase.js';
-import { recalcWBS } from '../compute/wbs.js';
+import { recalcHierarchy } from '../compute/hierarchy.js';
 
 export function addNewSpec() {
   const filterEl = document.getElementById('specs-filter');
@@ -49,10 +49,15 @@ export function deleteTask(taskId) {
     return;
   }
   pushUndo('task deleted');
+  // Promote any children up one level so they don't orphan (Phase 6 adds the
+  // delete-all vs promote-children choice).
+  const removed = state.ProjectData.tasks.find(t => t.id === taskId);
+  const newParent = removed ? removed.parentId : null;
+  state.ProjectData.tasks.forEach(t => { if (t.parentId === taskId) t.parentId = newParent; });
   state.ProjectData.tasks = state.ProjectData.tasks.filter(t => t.id !== taskId);
   state.ProjectData.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== taskId); });
   state.ProjectData.specs.forEach(s => { s.depIds = s.depIds.filter(d => d !== taskId); });
-  recalcWBS(state.ProjectData.tasks);
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   safeRender(renderGantt, 'Gantt Chart');
   safeRender(renderSpecs, 'Specifications');
   closeSidePanel();
@@ -87,23 +92,26 @@ export function addGanttTask() {
   const filteredPhase = state.ganttPhaseFilter !== 'all' ? parseInt(state.ganttPhaseFilter) : null;
   const lastTask = state.ProjectData.tasks[state.ProjectData.tasks.length - 1];
   const lastPhase = filteredPhase || (parseInt(String(lastTask.wbs).split('.')[0]) || 1);
-  const phaseTasks = state.ProjectData.tasks.filter(t => parseInt(String(t.wbs).split('.')[0]) === lastPhase && t.wbs.includes('.') && !t.wbs.endsWith('.0'));
-  const nextNum = phaseTasks.length + 1;
-  const newWbs = lastPhase + '.' + nextNum;
+  // Add as a child (level 2) of the target phase header; recalcHierarchy assigns the WBS.
+  const phaseHeader = state.ProjectData.tasks.find(t => t.parentId == null && parseInt(String(t.wbs)) === lastPhase)
+    || state.ProjectData.tasks.find(t => t.parentId == null);
 
   const taskStart = snapToWorkDay(getToday(), state.ganttWorkDays, 1);
   const taskEnd   = snapToWorkDay(addDays(taskStart, 4), state.ganttWorkDays, 1);
 
   const newId = Math.max(...state.ProjectData.tasks.map(t => t.id), 0) + 1;
   const newTask = {
-    id: newId, wbs: newWbs,
+    id: newId, wbs: '',
     name: 'New Task ' + newId,
-    poc: '', customer: '',
+    poc: '', customer: '', pocInherited: true, customerInherited: true,
+    parentId: phaseHeader ? phaseHeader.id : null,
+    level: phaseHeader ? 2 : 1,
     start: taskStart, end: taskEnd,
     pct: 0, deps: [], milestone: false, notes: '',
   };
   pushUndo('task added');
   state.ProjectData.tasks.push(newTask);
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   safeRender(renderGantt, 'Gantt Chart');
   const phaseNames = getPhaseNames();
   showToast('Task added to ' + (phaseNames[lastPhase] || ('Phase ' + lastPhase)) + '.');

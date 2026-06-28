@@ -2,7 +2,7 @@ import { state } from '../state.js';
 import { RH } from '../constants.js';
 import { renderGantt } from '../render/gantt.js';
 import { pushUndo } from '../core/undo.js';
-import { recalcWBS } from '../compute/wbs.js';
+import { recalcHierarchy } from '../compute/hierarchy.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { showToast } from './toast.js';
 
@@ -95,7 +95,7 @@ export function endRowDrag(e) {
   const targetTask = updatedVisible[adjustedDrop];
   const targetIdx  = targetTask ? state.ProjectData.tasks.indexOf(targetTask) : state.ProjectData.tasks.length;
   state.ProjectData.tasks.splice(targetIdx, 0, dragged);
-  recalcWBS(state.ProjectData.tasks);
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   renderGantt();
   showToast('Task reordered', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
 }

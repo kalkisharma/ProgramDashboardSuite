@@ -4,7 +4,7 @@ import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLB
 import { phaseColor, PHASE_COLORS } from '../colors.js';
 import { computeCriticalPath } from '../compute/criticalPath.js';
 import { computeConflicts } from '../compute/conflicts.js';
-import { recalcWBS } from '../compute/wbs.js';
+import { recalcHierarchy } from '../compute/hierarchy.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { getPhaseNames } from './progDash.js';
 import { showTooltip, hideTooltip, positionTooltip } from '../ui/tooltip.js';
@@ -876,6 +876,9 @@ export function renderGantt() {
 }
 
 export function prepareGanttData() {
+  // Chokepoint: keep the tree normalized + parent rollups current before every render.
+  // Idempotent when nothing changed (stable DFS order, derived parent values).
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   if (!state.ProjectData.tasks.length) {
     if (dashboardLoaded) {
       const lb = document.getElementById('gantt-left-body');
