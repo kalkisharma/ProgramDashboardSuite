@@ -26,7 +26,8 @@ export const state = {
   ganttZoom:        ZOOM_STEPS[3],
   ganttPhaseFilter: 'all',
   ganttTeamFilter:  'all',
-  collapsedPhases:  new Set(),    // phase numbers (ints) whose sub-tasks are hidden
+  ganttDepthFilter: null,         // null = no ceiling; else max visible level (1,2,3,…)
+  collapsedTasks:   new Set(),    // task IDs whose children are hidden (shared Gantt + Status Report)
   calDisplayMonth:  null,         // { year, month } visible in the mini calendar
   ganttKeyFocusIdx: -1,           // keyboard-focused row index (-1 = none)
   showCriticalPath: false,
@@ -108,7 +109,8 @@ export function resetState() {
   state.ganttZoom        = ZOOM_STEPS[3];
   state.ganttPhaseFilter = 'all';
   state.ganttTeamFilter  = 'all';
-  state.collapsedPhases  = new Set();
+  state.ganttDepthFilter = null;
+  state.collapsedTasks   = new Set();
   state.calDisplayMonth  = null;
   state.ganttKeyFocusIdx = -1;
   state.showCriticalPath = false;

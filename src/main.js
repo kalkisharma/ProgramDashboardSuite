@@ -23,7 +23,7 @@ import { renderStatusReport } from './render/statusReport.js';
 import { renderReferenceFiles } from './render/referenceFiles.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
-  renderGantt, setGanttPhaseFilter, setGanttTeamFilter, clearGanttFilters, togglePhaseCollapse,
+  renderGantt, setGanttPhaseFilter, setGanttTeamFilter, setGanttDepthFilter, clearGanttFilters,
   startBarDrag, endBarDrag, openGanttDatePicker, getBarZone,
   initGanttPan, initGanttColumnResize, initGanttNameColResize, updateGanttKeyFocus,
   adjustZoom, adjustSpecsZoom, adjustOrgZoom,
@@ -335,7 +335,7 @@ function loadFile(file) {
 function parseWorkbook(wb) {
   state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = []; state.ProjectData.referenceFiles = [];
   state.undoStack = []; state.redoStack = [];
-  state.collapsedPhases  = new Set();
+  state.collapsedTasks   = new Set();
   state.calDisplayMonth  = null;
   state.ganttKeyFocusIdx = -1;
   state.barDrag = { active: false, pending: false, taskId: null, mode: null, startClientX: 0, origStart: null, origEnd: null, startScrollLeft: 0 };
@@ -366,6 +366,12 @@ function parseWorkbook(wb) {
   if (demotedMs && _justLoaded) {
     showToast(`${demotedMs} milestone${demotedMs !== 1 ? 's' : ''} with subtasks recalculated from children.`, null, 8000);
   }
+
+  // Default collapse: show Levels 1–2, collapse subtasks (L3+). Collapse every parent at
+  // level ≥ 2 so its deeper children start hidden (D8).
+  const parentSet = new Set(state.ProjectData.tasks.filter(t => t.parentId != null).map(t => t.parentId));
+  state.collapsedTasks = new Set(state.ProjectData.tasks.filter(t => (t.level || 1) >= 2 && parentSet.has(t.id)).map(t => t.id));
+  state.ganttDepthFilter = null;
 
   // Deep-copy tasks for reset (post-hierarchy, so reset restores the resolved tree)
   state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
@@ -400,7 +406,7 @@ function renderDashboard() {
   state.ganttPhaseFilter = 'all';
   state.ganttTeamFilter  = 'all';
   state.specSearchQuery  = '';
-  state.collapsedPhases.clear();
+  // collapsedTasks + ganttDepthFilter are set to their defaults in parseWorkbook — don't clear here.
   // Status Report view resets on new file load (a new file may have different phases/teams).
   state.statusReportFilter        = 'open';
   state.statusReportSort          = { col: null, dir: 'asc' };
@@ -408,7 +414,7 @@ function renderDashboard() {
   state.statusReportPhases        = null;
   state.statusReportPocTeams      = null;
   state.statusReportCustomerTeams = null;
-  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases',
+  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-tasks','vh-gantt-depth',
    'vh-sr-cols','vh-sr-phases','vh-sr-poc-teams','vh-sr-cust-teams']
     .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
@@ -1431,6 +1437,7 @@ document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
 // Gantt filters
 document.getElementById('gantt-phase-filter').addEventListener('change', e => setGanttPhaseFilter(e.target.value));
 document.getElementById('gantt-team-filter').addEventListener('change', e => setGanttTeamFilter(e.target.value));
+document.getElementById('gantt-depth-filter').addEventListener('change', e => setGanttDepthFilter(e.target.value));
 
 // Gantt toolbar buttons
 document.getElementById('gantt-zoom-out-btn').addEventListener('click', () => adjustZoom(-1));

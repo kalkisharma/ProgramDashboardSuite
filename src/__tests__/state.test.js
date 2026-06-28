@@ -10,7 +10,7 @@ describe('resetState', () => {
     state.isDirty = true;
     state.ganttWorkDays = [1, 2, 3];
     state.zoomIdx = 7;
-    state.collapsedPhases.add(2);
+    state.collapsedTasks.add(2);
     state.conflictSet.add(99);
     state.ganttPhaseFilter = '3';
     state.ganttTeamFilter = 'Engineering';
@@ -49,10 +49,10 @@ describe('resetState', () => {
     expect(state.ganttZoom).toBe(ZOOM_STEPS[3]);
   });
 
-  it('resets collapsedPhases to empty Set', () => {
+  it('resets collapsedTasks to empty Set', () => {
     resetState();
-    expect(state.collapsedPhases instanceof Set).toBe(true);
-    expect(state.collapsedPhases.size).toBe(0);
+    expect(state.collapsedTasks instanceof Set).toBe(true);
+    expect(state.collapsedTasks.size).toBe(0);
   });
 
   it('resets conflictSet to empty Set', () => {

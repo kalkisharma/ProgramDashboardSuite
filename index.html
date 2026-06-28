@@ -86,6 +86,10 @@
         <select id="gantt-team-filter" aria-label="Filter by POC team">
           <option value="all">All</option>
         </select>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-left:10px">Depth:</span>
+        <select id="gantt-depth-filter" aria-label="Limit visible subtask depth" title="Hide tasks deeper than this level">
+          <option value="all">All</option>
+        </select>
         <span style="flex:1"></span>
         <button class="btn-secondary btn-sm" id="legend-btn" title="Toggle phase color legend" aria-label="Toggle phase color legend" aria-expanded="false">Legend</button>
         <div id="gantt-legend" style="display:none;position:absolute;top:100%;right:0;z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;box-shadow:0 4px 16px rgba(0,0,0,0.3);white-space:nowrap;min-width:180px" role="region" aria-label="Phase color legend"></div>
