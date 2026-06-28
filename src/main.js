@@ -5,7 +5,7 @@ import { PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, teamColor, clearTea
 import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from './utils.js';
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
-import { wouldCreateCycle, inferHierarchyFromWBS } from './compute/wbs.js';
+import { wouldCreateCycle, inferHierarchyFromWBS, descendantsOf } from './compute/wbs.js';
 import { recalcHierarchy } from './compute/hierarchy.js';
 import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, extractWorkDays } from './parse.js';
 import { buildOrgIndex, resolveNames } from './compute/orgLookup.js';
@@ -33,7 +33,8 @@ import {
   startTaskNameEdit, startTaskPctEdit,
   startPanDrag, updateTodayFloat, scrollGanttToToday,
 } from './render/gantt.js';
-import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported } from './ui/taskOps.js';
+import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
+         addSubtask, promoteTask, demoteTask, deleteSubtree, deletePromoteChildren } from './ui/taskOps.js';
 
 // ─── Function Index ───────────────────────────────────────────────────────────
 // L66   App State          — state.* (see src/state.js); APP_VERSION
@@ -990,10 +991,30 @@ function openTaskPanel(taskId) {
   <div id="sp-spec-link-picker" class="sp-dep-picker" style="display:none" role="listbox" aria-label="Select a specification to link">
     <input class="sp-dep-picker-input" type="text" placeholder="Search by ID, category, or name…" aria-label="Search specifications to link">
     <div class="sp-dep-list" id="sp-spec-link-list"></div>
-  </div>
-  <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+  </div>`;
+
+  // Hierarchy operations
+  const hasChildren = state.ProjectData.tasks.some(x => x.parentId === t.id);
+  const descIds = new Set([t.id, ...descendantsOf(state.ProjectData.tasks, t.id).map(x => x.id)]);
+  const descCount = descIds.size - 1;
+  const demoteCandidates = state.ProjectData.tasks.filter(x => !descIds.has(x.id) && x.id !== t.parentId);
+  const demoteOpts = demoteCandidates.map(x => `<option value="${x.id}">${esc(x.wbs)} · ${esc(x.name)}</option>`).join('');
+  html += `<div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
     <button class="btn-secondary btn-sm" id="sp-edit-task-btn" style="width:100%;margin-bottom:8px">Edit Task</button>
-    <button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task</button>
+    <button class="btn-secondary btn-sm" id="sp-add-subtask-btn" style="width:100%;margin-bottom:8px">+ Add subtask</button>
+    ${t.parentId != null ? `<button class="btn-secondary btn-sm" id="sp-promote-btn" style="width:100%;margin-bottom:8px">▲ Promote one level${hasChildren ? ' (with subtasks)' : ''}</button>` : ''}
+    ${demoteCandidates.length ? `<button class="btn-secondary btn-sm" id="sp-demote-btn" style="width:100%;margin-bottom:8px">▼ Demote under…</button>
+      <div id="sp-demote-row" style="display:none;margin-bottom:8px">
+        <select id="sp-demote-parent" class="sp-form-input" style="margin-bottom:6px">${demoteOpts}</select>
+        <button class="btn-primary btn-sm" id="sp-demote-confirm" style="width:100%">Move under selected</button>
+      </div>` : ''}
+    ${hasChildren
+      ? `<button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task…</button>
+         <div id="sp-delete-choice" style="display:none;margin-top:6px">
+           <button class="btn-secondary btn-sm" id="sp-del-all" style="width:100%;margin-bottom:6px;border-color:#f85149;color:#f85149">Delete all (${descCount + 1})</button>
+           <button class="btn-secondary btn-sm" id="sp-del-promote" style="width:100%">Promote children, delete this</button>
+         </div>`
+      : `<button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task</button>`}
   </div>`;
 
   const spBody = document.getElementById('sp-body');
@@ -1018,8 +1039,31 @@ function openTaskPanel(taskId) {
   wirePicker({ btnId: 'sp-add-dep-btn', pickerId: 'sp-dep-picker', listId: 'sp-dep-list', buildFn: buildDepPickerList, ref: t, itemSelector: '.sp-dep-item:not(.cycle)' });
   wirePicker({ btnId: 'sp-add-spec-link-btn', pickerId: 'sp-spec-link-picker', listId: 'sp-spec-link-list', buildFn: buildSpecLinkPickerList, ref: t });
   spBody.querySelector('#sp-edit-task-btn').addEventListener('click', () => openTaskEditPanel(taskId));
+  spBody.querySelector('#sp-add-subtask-btn').addEventListener('click', () => addSubtask(t.id));
+  const promoteBtn = spBody.querySelector('#sp-promote-btn');
+  if (promoteBtn) promoteBtn.addEventListener('click', () => promoteTask(t.id));
+  const demoteBtn = spBody.querySelector('#sp-demote-btn');
+  if (demoteBtn) demoteBtn.addEventListener('click', () => {
+    const row = spBody.querySelector('#sp-demote-row');
+    row.style.display = row.style.display === 'none' ? 'block' : 'none';
+  });
+  const demoteConfirm = spBody.querySelector('#sp-demote-confirm');
+  if (demoteConfirm) demoteConfirm.addEventListener('click', () => {
+    const sel = spBody.querySelector('#sp-demote-parent');
+    if (sel) demoteTask(t.id, +sel.value);
+  });
   const delTaskBtn = spBody.querySelector('#sp-delete-task-btn');
-  if (delTaskBtn) delTaskBtn.addEventListener('click', () => deleteTask(t.id));
+  if (hasChildren) {
+    // Parent → inline 3-way choice (D7): Delete all vs Promote children.
+    delTaskBtn.addEventListener('click', () => {
+      const c = spBody.querySelector('#sp-delete-choice');
+      c.style.display = c.style.display === 'none' ? 'block' : 'none';
+    });
+    spBody.querySelector('#sp-del-all').addEventListener('click', () => deleteSubtree(t.id));
+    spBody.querySelector('#sp-del-promote').addEventListener('click', () => deletePromoteChildren(t.id));
+  } else if (delTaskBtn) {
+    delTaskBtn.addEventListener('click', () => deleteTask(t.id)); // leaf → two-tap
+  }
 
   state.spCurrentType = 'task'; state.spCurrentId = taskId;
   showSidePanel();

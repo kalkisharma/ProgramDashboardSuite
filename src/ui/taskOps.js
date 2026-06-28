@@ -8,6 +8,7 @@ import { pushUndo } from '../core/undo.js';
 import { showToast, safeRender } from './toast.js';
 import { closeSidePanel } from './panelBase.js';
 import { recalcHierarchy } from '../compute/hierarchy.js';
+import { descendantsOf, wouldCreateAncestorCycle } from '../compute/wbs.js';
 
 export function addNewSpec() {
   const filterEl = document.getElementById('specs-filter');
@@ -48,20 +49,97 @@ export function deleteTask(taskId) {
     }, 3000);
     return;
   }
-  pushUndo('task deleted');
-  // Promote any children up one level so they don't orphan (Phase 6 adds the
-  // delete-all vs promote-children choice).
-  const removed = state.ProjectData.tasks.find(t => t.id === taskId);
-  const newParent = removed ? removed.parentId : null;
-  state.ProjectData.tasks.forEach(t => { if (t.parentId === taskId) t.parentId = newParent; });
-  state.ProjectData.tasks = state.ProjectData.tasks.filter(t => t.id !== taskId);
-  state.ProjectData.tasks.forEach(t => { t.deps = t.deps.filter(d => d !== taskId); });
-  state.ProjectData.specs.forEach(s => { s.depIds = s.depIds.filter(d => d !== taskId); });
+  deleteSubtree(taskId); // two-tap confirmed → delete task and any descendants
+}
+
+function _cleanupDeps(ids) {
+  const s = new Set(ids);
+  state.ProjectData.tasks.forEach(t => { t.deps = t.deps.filter(d => !s.has(d)); });
+  state.ProjectData.specs.forEach(sp => { sp.depIds = sp.depIds.filter(d => !s.has(d)); });
+}
+
+function _finishMutation(label) {
   recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   safeRender(renderGantt, 'Gantt Chart');
   safeRender(renderSpecs, 'Specifications');
   closeSidePanel();
-  showToast('Task deleted', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+  showToast(label, () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+}
+
+// Delete a task and its entire subtree.
+export function deleteSubtree(taskId) {
+  taskId = Number(taskId);
+  if (!state.ProjectData.tasks.find(t => t.id === taskId)) return;
+  const ids = [taskId, ...descendantsOf(state.ProjectData.tasks, taskId).map(t => t.id)];
+  pushUndo('task deleted');
+  const idSet = new Set(ids);
+  state.ProjectData.tasks = state.ProjectData.tasks.filter(t => !idSet.has(t.id));
+  _cleanupDeps(ids);
+  _finishMutation(ids.length > 1 ? `Deleted task + ${ids.length - 1} subtask${ids.length - 1 !== 1 ? 's' : ''}` : 'Task deleted');
+}
+
+// Delete a parent but keep its children, re-parenting them up one level.
+export function deletePromoteChildren(taskId) {
+  taskId = Number(taskId);
+  const removed = state.ProjectData.tasks.find(t => t.id === taskId);
+  if (!removed) return;
+  pushUndo('task deleted');
+  state.ProjectData.tasks.forEach(t => { if (t.parentId === taskId) t.parentId = removed.parentId; });
+  state.ProjectData.tasks = state.ProjectData.tasks.filter(t => t.id !== taskId);
+  _cleanupDeps([taskId]);
+  _finishMutation('Task deleted; children promoted');
+}
+
+// Add a child task under `parentId`, inheriting POC/Customer; WBS auto-assigned.
+export function addSubtask(parentId) {
+  parentId = Number(parentId);
+  const parent = state.ProjectData.tasks.find(t => t.id === parentId);
+  if (!parent) return;
+  const taskStart = snapToWorkDay(getToday(), state.ganttWorkDays, 1);
+  const taskEnd   = snapToWorkDay(addDays(taskStart, 4), state.ganttWorkDays, 1);
+  const newId = Math.max(...state.ProjectData.tasks.map(t => t.id), 0) + 1;
+  pushUndo('subtask added');
+  state.ProjectData.tasks.push({
+    id: newId, wbs: '', name: 'New Subtask ' + newId,
+    poc: '', customer: '', pocInherited: true, customerInherited: true,
+    parentId, level: (parent.level || 1) + 1,
+    start: taskStart, end: taskEnd, pct: 0, deps: [], milestone: false, notes: '',
+  });
+  state.collapsedTasks.delete(parentId); // reveal the new child
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
+  safeRender(renderGantt, 'Gantt Chart');
+  showToast('Subtask added under ' + parent.name + '.');
+  if (state.handlers.openTaskPanel) { state.spCurrentType = null; state.handlers.openTaskPanel(newId); }
+}
+
+// Move a task up one level (its children come along).
+export function promoteTask(taskId) {
+  taskId = Number(taskId);
+  const t = state.ProjectData.tasks.find(x => x.id === taskId);
+  if (!t || t.parentId == null) return;
+  const parent = state.ProjectData.tasks.find(x => x.id === t.parentId);
+  pushUndo('promote task');
+  t.parentId = parent ? parent.parentId : null;
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
+  safeRender(renderGantt, 'Gantt Chart');
+  showToast('Task promoted.', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+  if (state.handlers.openTaskPanel) { state.spCurrentType = null; state.handlers.openTaskPanel(taskId); }
+}
+
+// Move a task under a chosen parent (guards against attaching to its own descendant).
+export function demoteTask(taskId, newParentId) {
+  taskId = Number(taskId); newParentId = Number(newParentId);
+  const t = state.ProjectData.tasks.find(x => x.id === taskId);
+  if (!t) return;
+  if (wouldCreateAncestorCycle(state.ProjectData.tasks, taskId, newParentId)) {
+    showToast('Cannot move a task under its own subtask.', null, 4000); return;
+  }
+  pushUndo('demote task');
+  t.parentId = newParentId;
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
+  safeRender(renderGantt, 'Gantt Chart');
+  showToast('Task moved under selected parent.', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+  if (state.handlers.openTaskPanel) { state.spCurrentType = null; state.handlers.openTaskPanel(taskId); }
 }
 
 export function deleteSpec(specId) {
