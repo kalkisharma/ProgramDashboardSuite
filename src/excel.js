@@ -14,8 +14,12 @@ export function buildWorkbook(projectData, weightUnit) {
   projectData.tasks.forEach(t => {
     // Local calendar parts (matches parseDate/fmt) so export dates don't shift a day.
     const fmtD = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
+    // Write blank for inherited POC/Customer so re-import re-inherits (preserves the
+    // inherited-vs-explicit distinction — D2). WBS carries the hierarchy implicitly.
     schRows.push([
-      t.id, t.wbs, t.name, t.poc || '', t.customer || '',
+      t.id, t.wbs, t.name,
+      t.pocInherited ? '' : (t.poc || ''),
+      t.customerInherited ? '' : (t.customer || ''),
       fmtD(t.start), fmtD(t.end), t.pct,
       t.deps.filter(id => projectData.tasks.some(x => x.id === id)).join(','),
       t.milestone ? 'Y' : 'N', t.notes,
@@ -116,6 +120,12 @@ export function generateSampleExcel() {
     [30,'6.1','Compliance Demonstration & Showing',    'Y. Zhang',           'FAA ODA',     '2027-03-03','2027-10-31',  0,'29',        'N','Ground and flight showing per FAA issue papers'],
     [31,'6.2','FAA Type Inspection Authorization',     'Y. Zhang',           'FAA ODA',     '2027-08-04','2027-09-12',  0,'30',        'N','TIA issued; FAA conducts independent flight evaluation'],
     [32,'6.3','Type Certificate Awarded',              'S. Torres',          'FAA ODA',     '2027-12-15','2027-12-19',  0,'30,31',     'Y','FAA Type Certificate for TW-2 – program complete'],
+    // Subtasks demonstrating N-level hierarchy + POC/Customer inheritance (collapsed by
+    // default). Parent 2.2 = K. Johansson / A. Singh; parent 3.2 = P. Nguyen / K. Johansson.
+    [33,'2.2.1','Wing Box Layup Definition',          '',                   '',            '2025-06-02','2025-07-04',100,'',          'N','Blank POC + Customer → inherits both from 2.2'],
+    [34,'2.2.2','Fuselage Frame Sizing',              'P. Nguyen',          '',            '2025-07-07','2025-08-29',100,'33',        'N','Explicit POC; inherits Customer from 2.2'],
+    [35,'3.2.1','Composite Laminate FEA',             '',                   '',            '2025-09-22','2025-11-14',100,'',          'N','Inherits POC + Customer from 3.2'],
+    [36,'3.2.2','Fatigue & Damage Tolerance',         'P. Nguyen',          'O. Brown',    '2025-11-17','2026-01-09',100,'35',        'N','Explicit POC + Customer'],
   ]), 'Schedule');
 
   const sp = ['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs'];
