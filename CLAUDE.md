@@ -212,6 +212,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - **Per-task collapse + depth filter** — any task with children shows a ▼/▶ toggle. `toggleTaskCollapse(taskId)` toggles the id in `state.collapsedTasks` (shared with the Status Report) and re-renders; `visibleTasks` hides any row under a collapsed ancestor. Indentation is by `t.level`. The Gantt toolbar's **Depth** dropdown (`setGanttDepthFilter`) is a hard ceiling that overrides manual expand — a parent whose children are capped shows a disabled toggle. Default on load: Levels 1–2 visible, L3+ collapsed. Persisted as `vh-collapsed-tasks` / `vh-gantt-depth`. Collapsed parents inherit a critical-descendant highlight.
 - **Column resize** — `#gantt-resize-handle` (5px, between `#gantt-left` and `#gantt-right-col`) is a draggable divider. `initGanttColumnResize()` wires `mousedown` → tracks delta from `startX`, clamps width 150–700px, saves to `localStorage` as `vh-gantt-left-width`. No re-render needed; the name column reflows automatically.
 - **Name-column resize** — `#gantt-name-col-handle` (6px) sits on the right edge of the Task Name header cell. `initGanttNameColResize()` sets CSS variable `--gantt-name-col-w` (default `1fr`), shared by `#gantt-left-header` and `.gantt-row` grid-template-columns. Drag clamps 80–400px, persisted to `vh-gantt-name-col-width`.
+- **WBS-column resize** — `#gantt-wbs-col-handle` (6px) on the right edge of the WBS header cell. `initGanttWbsColResize()` sets `--gantt-wbs-col-w` (default `72px`), shared by both grid templates. Drag clamps 44–240px, persisted to `vh-gantt-wbs-col-width`. Widen it when deep (L3+) WBS codes are clipped.
 - **Inline date picker** — Double-clicking a Gantt bar or milestone diamond opens `#gantt-date-picker` (fixed, 210px wide) via `openGanttDatePicker(t, clientX, clientY)`. Single date input for milestones; Start + End inputs for tasks. Apply snaps to work days via `snapToWorkDay`, calls `pushUndo('edit dates')`, then `renderGantt()`. Enter = apply, Escape = cancel, outside-click dismisses. Positioned near cursor, clamped to viewport.
 
 **Work-day utilities:**
@@ -222,7 +223,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `workDaysRemaining(endDate)` — work days from today to end, min 0
 - `wdDisplay(t)` — returns `{ text, cls }`: `"✓"` (done, green), `"0 wd"` (overdue, red), or `"N wd"`
 
-**WD column:** Left task list has columns `44px 1fr 68px 40px 44px 18px` (WBS | Name | Team | WD | % | conflict). The panel itself is resizable via `#gantt-resize-handle` (default 380px, persisted as `vh-gantt-left-width`).
+**WD column:** Left task list has columns `var(--gantt-wbs-col-w) var(--gantt-name-col-w) 68px 40px 44px 28px` (WBS | Name | Team | WD | % | conflict); the WBS and Name columns are individually resizable. The panel itself is resizable via `#gantt-resize-handle` (default 380px, persisted as `vh-gantt-left-width`).
 
 **localStorage keys (full list):**
 - `vh-theme` — light/dark
@@ -236,6 +237,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `vh-zoom-gantt` / `vh-zoom-specs` / `vh-zoom-org` — per-tab zoom index
 - `vh-draft` — auto-saved draft JSON (fullSnapshot + title + timestamp); removed on export/import
 - `vh-gantt-name-col-width` — Task Name column pixel width (e.g. "180px"); default `1fr`
+- `vh-gantt-wbs-col-width` — WBS column pixel width (e.g. "72px"); default `72px`
 - `vh-gantt-legend` — legend open state (`'1'` = open)
 - `vh-reqs-data` — serialized requirements CSV data (`{ data: { headers, rows }, reqsState }`); cleared on "Load different CSV"
 
@@ -372,7 +374,8 @@ gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --note
 | **v4.7.1** | Team-review quick-wins: Status Report row added to help modal; "Concerns only" tooltip/aria-label; `aria-sort` on Status Report + Requirements headers; `.rag-badge` bumped to 0.75rem; fix `wirePicker` document-click listener leak (multi-picker safe). Docs refresh (README/TOUR/FLOW) for Status Report + Requirements tabs | Done |
 | **v5.0.0** | **POC/Customer model** — Schedule sheet replaces Category/Responsible Team with POC + Customer (org-derived teams, validation); team-driven features (Gantt filter+column, Dashboard workload, Org tasks) repurposed to POC Team; `ganttColor`/`GANTT_COLORS` removed. **Status Report** expansion — POC/POC Team/Customer/Customer Team + Start Date columns, org validation, three task filters (All Tasks/All Open/Concerns), Phase + POC-Team + Customer-Team multi-selects, toggleable columns (PPTX mirrors visible columns), completed-task "Done" status. New **Reference Files** tab/sheet. Tab reorder; Program Dashboard default. New `compute/orgLookup.js`, `ui/checkboxDropdown.js`, `render/referenceFiles.js`, `utils.safeUrl`. Excel **input-schema break** | Done |
 | **v5.0.1** | Unique per-team fallback colors in the Org Chart (`teamColor` 16-color pool + cache) | Done |
-| **v6.0.0** | **N-level WBS hierarchy (subtasks).** `parentId`+order is the source of truth; new `compute/hierarchy.js` (DFS sort, POC/Customer inheritance, parent date/%/milestone rollup) + `wbs.js` rewrite (tree helpers, `recalcWBS`, ancestor-cycle guard). CPM + conflicts run at leaf level. Gantt: per-task collapse (`collapsedTasks`), N-level indent, Depth ceiling dropdown, group drag. Status Report: indented tree (flattens on column sort), Depth filter, PPTX mirrors visible rows. Add subtask / Promote / Demote (parent-picker) / Delete-parent 3-way choice. Excel export writes blank for inherited POC/Customer (round-trips). Date off-by-one fix (local calendar). Sample data gains subtasks | Done — current |
+| **v6.0.0** | **N-level WBS hierarchy (subtasks).** `parentId`+order is the source of truth; new `compute/hierarchy.js` (DFS sort, POC/Customer inheritance, parent date/%/milestone rollup) + `wbs.js` rewrite (tree helpers, `recalcWBS`, ancestor-cycle guard). CPM + conflicts run at leaf level. Gantt: per-task collapse (`collapsedTasks`), N-level indent, Depth ceiling dropdown, group drag. Status Report: indented tree (flattens on column sort), Depth filter, PPTX mirrors visible rows. Add subtask / Promote / Demote (parent-picker) / Delete-parent 3-way choice. Excel export writes blank for inherited POC/Customer (round-trips). Date off-by-one fix (local calendar). Sample data gains subtasks | Done |
+| **v6.0.1** | Gantt WBS column widened (44px → resizable `--gantt-wbs-col-w`, default 72px) so nested L3+ WBS codes aren't clipped; `initGanttWbsColResize` + `vh-gantt-wbs-col-width` | Done — current |
 
 ### v5.1.0 Backlog
 

@@ -391,6 +391,41 @@ export function initGanttNameColResize() {
 }
 initGanttNameColResize();
 
+export function initGanttWbsColResize() {
+  const handle = document.getElementById('gantt-wbs-col-handle');
+  if (!handle) return;
+
+  const saved = localStorage.getItem('vh-gantt-wbs-col-width');
+  if (saved && /^\d+px$/.test(saved)) document.documentElement.style.setProperty('--gantt-wbs-col-w', saved);
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    handle.classList.add('resizing');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const startX = e.clientX;
+    const startW = handle.parentElement.getBoundingClientRect().width;
+    let lastW = startW;
+
+    function onMove(e) {
+      lastW = Math.max(44, Math.min(240, startW + e.clientX - startX));
+      document.documentElement.style.setProperty('--gantt-wbs-col-w', lastW + 'px');
+    }
+    function onUp() {
+      handle.classList.remove('resizing');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      safeSetItem('vh-gantt-wbs-col-width', lastW + 'px');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+initGanttWbsColResize();
+
 // Clean up drag ghosts if user alt-tabs or the window loses focus mid-drag
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {

@@ -776,15 +776,16 @@ body.light-mode {
 #theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ── GANTT COLUMN GRID (WBS | Name | Team | WD | %) ─────── */
-:root { --gantt-name-col-w: 1fr; }
-#gantt-left-header { grid-template-columns: 44px var(--gantt-name-col-w) 68px 40px 44px 28px; }
-.gantt-row         { grid-template-columns: 44px var(--gantt-name-col-w) 68px 40px 44px 28px; }
-#gantt-name-col-handle {
+:root { --gantt-name-col-w: 1fr; --gantt-wbs-col-w: 72px; }
+#gantt-left-header { grid-template-columns: var(--gantt-wbs-col-w) var(--gantt-name-col-w) 68px 40px 44px 28px; }
+.gantt-row         { grid-template-columns: var(--gantt-wbs-col-w) var(--gantt-name-col-w) 68px 40px 44px 28px; }
+#gantt-name-col-handle, #gantt-wbs-col-handle {
   position: absolute; right: 0; top: 0; bottom: 0; width: 6px;
   cursor: col-resize; z-index: 2;
   border-right: 1px solid var(--border);
 }
-#gantt-name-col-handle:hover, #gantt-name-col-handle.resizing {
+#gantt-name-col-handle:hover, #gantt-name-col-handle.resizing,
+#gantt-wbs-col-handle:hover, #gantt-wbs-col-handle.resizing {
   border-right: 2px solid var(--accent);
 }
 
