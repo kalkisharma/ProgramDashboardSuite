@@ -12,7 +12,8 @@ export function buildWorkbook(projectData, weightUnit) {
   // Schedule
   const schRows = [['Task ID','WBS','Task Name','POC','Customer','Start Date','End Date','% Complete','Dependencies','Milestone','Notes']];
   projectData.tasks.forEach(t => {
-    const fmtD = d => d ? d.toISOString().slice(0,10) : '';
+    // Local calendar parts (matches parseDate/fmt) so export dates don't shift a day.
+    const fmtD = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
     schRows.push([
       t.id, t.wbs, t.name, t.poc || '', t.customer || '',
       fmtD(t.start), fmtD(t.end), t.pct,

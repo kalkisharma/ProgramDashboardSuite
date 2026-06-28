@@ -39,6 +39,14 @@ describe('parseDate', () => {
   it('returns non-null for a date string', () => {
     expect(parseDate('2024-06-15')).toBeInstanceOf(Date);
   });
+  it('parses a YYYY-MM-DD string to the same local calendar day (no tz shift)', () => {
+    const r = parseDate('2024-06-15');
+    expect([r.getFullYear(), r.getMonth(), r.getDate()]).toEqual([2024, 5, 15]);
+  });
+  it('rebuilds a UTC-midnight (SheetJS) date to the same calendar day', () => {
+    const r = parseDate(new Date(Date.UTC(2024, 5, 15)));
+    expect([r.getFullYear(), r.getMonth(), r.getDate()]).toEqual([2024, 5, 15]);
+  });
   it('normalizes a Date object to midnight', () => {
     const dt = new Date('2024-01-10T15:30:00');
     const r = parseDate(dt);
@@ -60,8 +68,11 @@ describe('parseDeps', () => {
 });
 
 describe('fmt', () => {
-  it('formats a Date to YYYY-MM-DD', () => {
-    expect(fmt(new Date('2024-03-07'))).toBe('2024-03-07');
+  it('formats a local Date to YYYY-MM-DD', () => {
+    expect(fmt(new Date(2024, 2, 7))).toBe('2024-03-07'); // local March 7
+  });
+  it('round-trips with parseDate regardless of timezone', () => {
+    expect(fmt(parseDate('2024-03-07'))).toBe('2024-03-07');
   });
   it('returns em-dash for null', () => {
     expect(fmt(null)).toBe('—');
@@ -335,8 +346,8 @@ describe('safeUrl', () => {
     expect(safeUrl('java\tscript:alert(1)')).toBeNull();        // embedded tab
     expect(safeUrl('java\nscript:alert(1)')).toBeNull();        // embedded newline
     expect(safeUrl('java\rscript:alert(1)')).toBeNull();        // embedded CR
-    expect(safeUrl('javascript:alert(1)')).toBeNull();    // leading C0 control
-    expect(safeUrl('jav ascript:alert(1)')).toBeNull();    // embedded NUL
+    expect(safeUrl('\u0001javascript:alert(1)')).toBeNull();    // leading C0 control
+    expect(safeUrl('jav\u0000ascript:alert(1)')).toBeNull();    // embedded NUL
   });
   it('preserves internal spaces in local paths', () => {
     expect(safeUrl('C:\\Program Files\\doc.pdf')).toBe('C:\\Program Files\\doc.pdf');
