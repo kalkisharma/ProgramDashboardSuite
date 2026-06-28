@@ -35,31 +35,41 @@ export const SPEC_COLORS = {
   Certification: { bg: 'rgba(239,68,68,.12)',   text: '#ef4444' },
 };
 
+// Named teams — every color here is unique (no duplicates) and is kept disjoint from
+// the fallback pool below so a named team can never share a color with an auto-assigned one.
 export const TEAM_COLORS = {
   // Ground vehicle
-  Powertrain:      '#ef4444',
-  Chassis:         '#60a5fa',
-  Electrical:      '#fbbf24',
-  Software:        '#a78bfa',
-  Safety:          '#f87171',
-  Body:            '#34d399',
-  Manufacturing:   '#d97706',
+  Powertrain:           '#ef4444',
+  Chassis:              '#60a5fa',
+  Electrical:           '#fbbf24',
+  Software:             '#a78bfa',
+  Safety:               '#f87171',
+  Body:                 '#34d399',
+  Manufacturing:        '#d97706',
   // Aerospace / tilt-wing
-  Systems:         '#14b8a6',
-  Aerodynamics:    '#06b6d4',
-  Propulsion:      '#3b82f6',
-  Structures:      '#f59e0b',
-  Avionics:        '#84cc16',
-  'Flight Test':   '#ec4899',
-  Certification:   '#ef4444',
-  'All Teams':     '#58a6ff',
+  Systems:              '#14b8a6',
+  Aerodynamics:         '#06b6d4',
+  Propulsion:           '#3b82f6',
+  Structures:           '#f59e0b',
+  Avionics:             '#84cc16',
+  'Flight Test':        '#ec4899',
+  Certification:        '#b91c1c',
+  'Handling Qualities': '#0ea5e9',
+  'Loads and Criteria': '#65a30d',
+  Rotors:               '#d946ef',
+  Thermal:              '#f97316',
+  Innovations:          '#6366f1',
+  Airframe:             '#64748b',
+  Design:               '#16a34a',
+  'All Teams':          '#58a6ff',
 };
 
 // Fallback palette for teams not in TEAM_COLORS — each new team name gets the next
 // distinct color, cached so a given team keeps the same color for the whole session.
+// These are all distinct from each other AND from every TEAM_COLORS value above.
 const _teamPool = [
-  '#e879f9', '#22d3ee', '#fb7185', '#a3e635', '#f59e0b', '#818cf8',
-  '#f472b6', '#2dd4bf', '#c084fc', '#fbbf24', '#4ade80', '#38bdf8',
+  '#e879f9', '#22d3ee', '#fb7185', '#a3e635', '#facc15', '#818cf8',
+  '#f472b6', '#2dd4bf', '#c084fc', '#fb923c', '#4ade80', '#38bdf8',
   '#fca5a5', '#5eead4', '#fdba74', '#a5b4fc',
 ];
 const _teamColorCache = {};

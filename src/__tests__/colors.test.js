@@ -39,4 +39,23 @@ describe('teamColor', () => {
     const afterFirst = teamColor('Different Team');
     expect(afterFirst).toBe(before);
   });
+
+  it('includes the newly added named teams', () => {
+    for (const t of ['Handling Qualities', 'Loads and Criteria', 'Rotors', 'Thermal', 'Innovations', 'Airframe', 'Design']) {
+      expect(TEAM_COLORS[t]).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+
+  it('has no duplicate colors among named teams', () => {
+    const vals = Object.values(TEAM_COLORS);
+    expect(new Set(vals).size).toBe(vals.length);
+  });
+
+  it('fallback colors are all distinct and never collide with a named team color', () => {
+    // 16 distinct unknown teams exhaust the whole fallback pool.
+    const named = new Set(Object.values(TEAM_COLORS));
+    const fallback = Array.from({ length: 16 }, (_, i) => teamColor('Unknown Team ' + i));
+    expect(new Set(fallback).size).toBe(16);          // all distinct
+    fallback.forEach(c => expect(named.has(c)).toBe(false)); // disjoint from named
+  });
 });
