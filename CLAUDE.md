@@ -26,7 +26,8 @@ npm test         # Vitest unit tests
 | `src/utils.js` | `esc`, `parseDate`, `parseDeps`, `fmt`, `daysBetween`, `parseWorkDays`, `isWorkDay`, `addDays`, `snapToWorkDay`, `countWorkDays(start, end, wds)`, `workDaysRemaining(endDate, wds, today)`, `wdDisplay(t, wds, today)`, `TODAY` |
 | `src/compute/criticalPath.js` | `computeCriticalPath(tasks)` |
 | `src/compute/conflicts.js` | `computeConflicts(tasks)` |
-| `src/compute/wbs.js` | `recalcWBS(tasks)`, `wouldCreateCycle(tasks, taskId, candidateId)` |
+| `src/compute/wbs.js` | N-level tree: `inferHierarchyFromWBS`, `recalcWBS` (regenerate WBS from `parentId`+order), `sortTasksDFS`, `childrenOf`/`descendantsOf`/`ancestorsOf`/`isLeaf`, `wouldCreateCycle`, `wouldCreateAncestorCycle` |
+| `src/compute/hierarchy.js` | `recalcHierarchy(tasks, wds)` chokepoint — DFS order + WBS + POC/Customer inheritance + parent date/% rollup; `resolveInheritance`, `rollupParents` |
 | `src/parse.js` | `parseInfoSheet`, `parseScheduleSheet`, `parseSpecsSheet`, `parseOrgSheet`, `parseWeightSheet`, `extractWorkDays` |
 | `src/excel.js` | `buildWorkbook(projectData, weightUnit)`, `generateSampleExcel()` |
 | `src/state.js` | `state`, `resetState()` — single exported mutable object holding all cross-module app state |
@@ -81,7 +82,8 @@ export const state = {
   barEls:           {},  // taskId → { bgRect, progRect, outlineRect, midY [, diamond, cpRing, overRing] }
   rowDrag:          { active: false, srcIdx: null, dropIdx: null, ghost: null, indicator: null },
   calDisplayMonth:  null,
-  collapsedPhases:  new Set(),
+  collapsedTasks:   new Set(),    // task IDs whose children are hidden (shared by Gantt + Status Report)
+  ganttDepthFilter: null,         // + statusReportDepthFilter — depth ceiling (null = all levels)
   zoomIdx:          3, ganttZoom: 4,
   ganttPhaseFilter: 'all', ganttTeamFilter: 'all',
   showCriticalPath: false, showGanttLegend: false, ganttKeyFocusIdx: -1,
@@ -101,7 +103,7 @@ export const state = {
 Implementation-local state that stays in `src/main.js`: `_draftTimer`, `_exportReminderTimer`, `_justLoaded`, org/Gantt pan state, toast timers, help modal state, zoom debounce timers.
 
 - `ProjectData.info` — key/value pairs from the "Project Info" sheet
-- `ProjectData.tasks[]` — `{ id, wbs, name, poc, customer, start, end, pct, deps, milestone, notes }` — `poc`/`customer` are raw comma-separated name strings; POC Team / Customer Team are **derived at render** from the Org Chart (not stored)
+- `ProjectData.tasks[]` — `{ id, wbs, name, poc, customer, pocInherited, customerInherited, parentId, level, start, end, pct, deps, milestone, notes }`. N-level hierarchy: `parentId`+array order are the source of truth after parse; `recalcWBS` regenerates `wbs`/`level`. `poc`/`customer` are resolved strings (blank cell → inherited from nearest ancestor, flagged by `*Inherited`); POC/Customer **Team** still derived at render via `orgLookup`. Parent `start`/`end`/`pct` are **rolled up** from children by `recalcHierarchy` (parents can't be milestones)
 - `ProjectData.specs[]` — `{ id, category, name, value, units, status, group, notes, depIds[] }`
 - `ProjectData.org[]` — `{ name, title, team, reportsTo: string[], email }` — `reportsTo` is always an array; `[0]` is the primary manager (determines tree position); `slice(1)` are secondary managers (dashed lines)
 - `ProjectData.weights[]` — `{ subsystem, group, target, estimated, status, notes }`
@@ -207,7 +209,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - **Reset** — `resetGanttToImported()` deep-copies `originalTasks` back into `ProjectData.tasks` and re-renders.
 - **Save to Excel** — `saveToExcel()` rebuilds all 5 sheets from current `ProjectData.*` state using SheetJS and downloads `"[Project Title] - YYYY-MM-DD.xlsx"`. The column layout matches what `parseWorkbook()` expects, so the file can be re-imported.
 - **Delete task/spec** — `deleteTask(taskId)` / `deleteSpec(specId)` use a two-tap confirm pattern (`btn.dataset.confirming`). Pushes undo before removing. `deleteTask` also cleans up dangling deps in all other tasks and specs.
-- **Phase collapse** — Phase header rows show a ▼/▶ button in the WBS cell. `togglePhaseCollapse(phaseNum)` toggles the phase number in `collapsedPhases` and re-renders. Collapsed phases hide all sub-tasks from `visibleTasks`; the header row remains with `.phase-collapsed` opacity styling. Only active when `ganttPhaseFilter === 'all'`. State persisted to `localStorage` as `vh-collapsed-phases`.
+- **Per-task collapse + depth filter** — any task with children shows a ▼/▶ toggle. `toggleTaskCollapse(taskId)` toggles the id in `state.collapsedTasks` (shared with the Status Report) and re-renders; `visibleTasks` hides any row under a collapsed ancestor. Indentation is by `t.level`. The Gantt toolbar's **Depth** dropdown (`setGanttDepthFilter`) is a hard ceiling that overrides manual expand — a parent whose children are capped shows a disabled toggle. Default on load: Levels 1–2 visible, L3+ collapsed. Persisted as `vh-collapsed-tasks` / `vh-gantt-depth`. Collapsed parents inherit a critical-descendant highlight.
 - **Column resize** — `#gantt-resize-handle` (5px, between `#gantt-left` and `#gantt-right-col`) is a draggable divider. `initGanttColumnResize()` wires `mousedown` → tracks delta from `startX`, clamps width 150–700px, saves to `localStorage` as `vh-gantt-left-width`. No re-render needed; the name column reflows automatically.
 - **Name-column resize** — `#gantt-name-col-handle` (6px) sits on the right edge of the Task Name header cell. `initGanttNameColResize()` sets CSS variable `--gantt-name-col-w` (default `1fr`), shared by `#gantt-left-header` and `.gantt-row` grid-template-columns. Drag clamps 80–400px, persisted to `vh-gantt-name-col-width`.
 - **Inline date picker** — Double-clicking a Gantt bar or milestone diamond opens `#gantt-date-picker` (fixed, 210px wide) via `openGanttDatePicker(t, clientX, clientY)`. Single date input for milestones; Start + End inputs for tasks. Apply snaps to work days via `snapToWorkDay`, calls `pushUndo('edit dates')`, then `renderGantt()`. Enter = apply, Escape = cancel, outside-click dismisses. Positioned near cursor, clamped to viewport.
@@ -229,6 +231,7 @@ Drawn entirely with raw SVG via `document.createElementNS` — no charting libra
 - `vh-wt-collapsed` — collapsed weight budget groups
 - `vh-collapsed-phases` — collapsed Gantt phase numbers (JSON array of ints)
 - `vh-sr-cols` / `vh-sr-phases` / `vh-sr-poc-teams` / `vh-sr-cust-teams` — Status Report column visibility + Phase/POC-Team/Customer-Team filter selections (JSON; `null` = all). Reset on new file load
+- `vh-collapsed-tasks` — collapsed task IDs (JSON; shared Gantt + Status Report) · `vh-gantt-depth` / `vh-sr-depth` — depth-ceiling level. All reset on new file load
 - `vh-gantt-left-width` — left panel pixel width (e.g. "380px")
 - `vh-zoom-gantt` / `vh-zoom-specs` / `vh-zoom-org` — per-tab zoom index
 - `vh-draft` — auto-saved draft JSON (fullSnapshot + title + timestamp); removed on export/import
@@ -367,7 +370,9 @@ gh release create vX.Y.Z dist/ProgramDashboardSuite.html --title "vX.Y.Z" --note
 | **v4.6.1** | Phase header rows visually distinct (tinted background, bold name); Requirements CSV persisted to localStorage across page reload | Done |
 | **v4.7.0** | Status Report tab — open task table with RAG (Red/Amber/Green) status, sort, filter by concerns; one-click 3-slide PowerPoint export (KPI summary + phase breakdown + task table) via pptxgenjs | Done |
 | **v4.7.1** | Team-review quick-wins: Status Report row added to help modal; "Concerns only" tooltip/aria-label; `aria-sort` on Status Report + Requirements headers; `.rag-badge` bumped to 0.75rem; fix `wirePicker` document-click listener leak (multi-picker safe). Docs refresh (README/TOUR/FLOW) for Status Report + Requirements tabs | Done |
-| **v5.0.0** | **POC/Customer model** — Schedule sheet replaces Category/Responsible Team with POC + Customer (org-derived teams, validation); team-driven features (Gantt filter+column, Dashboard workload, Org tasks) repurposed to POC Team; `ganttColor`/`GANTT_COLORS` removed. **Status Report** expansion — POC/POC Team/Customer/Customer Team + Start Date columns, org validation, three task filters (All Tasks/All Open/Concerns), Phase + POC-Team + Customer-Team multi-selects, toggleable columns (PPTX mirrors visible columns), completed-task "Done" status. New **Reference Files** tab/sheet. Tab reorder; Program Dashboard default. New `compute/orgLookup.js`, `ui/checkboxDropdown.js`, `render/referenceFiles.js`, `utils.safeUrl`. Excel **input-schema break** | Done — current |
+| **v5.0.0** | **POC/Customer model** — Schedule sheet replaces Category/Responsible Team with POC + Customer (org-derived teams, validation); team-driven features (Gantt filter+column, Dashboard workload, Org tasks) repurposed to POC Team; `ganttColor`/`GANTT_COLORS` removed. **Status Report** expansion — POC/POC Team/Customer/Customer Team + Start Date columns, org validation, three task filters (All Tasks/All Open/Concerns), Phase + POC-Team + Customer-Team multi-selects, toggleable columns (PPTX mirrors visible columns), completed-task "Done" status. New **Reference Files** tab/sheet. Tab reorder; Program Dashboard default. New `compute/orgLookup.js`, `ui/checkboxDropdown.js`, `render/referenceFiles.js`, `utils.safeUrl`. Excel **input-schema break** | Done |
+| **v5.0.1** | Unique per-team fallback colors in the Org Chart (`teamColor` 16-color pool + cache) | Done |
+| **v6.0.0** | **N-level WBS hierarchy (subtasks).** `parentId`+order is the source of truth; new `compute/hierarchy.js` (DFS sort, POC/Customer inheritance, parent date/%/milestone rollup) + `wbs.js` rewrite (tree helpers, `recalcWBS`, ancestor-cycle guard). CPM + conflicts run at leaf level. Gantt: per-task collapse (`collapsedTasks`), N-level indent, Depth ceiling dropdown, group drag. Status Report: indented tree (flattens on column sort), Depth filter, PPTX mirrors visible rows. Add subtask / Promote / Demote (parent-picker) / Delete-parent 3-way choice. Excel export writes blank for inherited POC/Customer (round-trips). Date off-by-one fix (local calendar). Sample data gains subtasks | Done — current |
 
 ### v5.1.0 Backlog
 

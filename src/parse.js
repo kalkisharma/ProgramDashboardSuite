@@ -15,12 +15,18 @@ export function parseScheduleSheet(ws) {
   const h = rows[0] || [];
   return rows.slice(1).filter(r => r[h.indexOf('Task ID')] != null).map(r => {
     const g = k => r[h.indexOf(k)];
+    const poc      = String(g('POC') || '');
+    const customer = String(g('Customer') || '');
     return {
       id:        +g('Task ID'),
       wbs:       String(g('WBS') || ''),
       name:      String(g('Task Name') || ''),
-      poc:       String(g('POC') || ''),
-      customer:  String(g('Customer') || ''),
+      poc, customer,
+      // A blank cell means "inherit from the nearest ancestor"; resolved by recalcHierarchy.
+      pocInherited:      poc === '',
+      customerInherited: customer === '',
+      parentId:  null,   // set by inferHierarchyFromWBS in parseWorkbook
+      level:     1,
       start:     parseDate(g('Start Date')),
       end:       parseDate(g('End Date')),
       pct:       +g('% Complete') || 0,

@@ -114,3 +114,17 @@ describe('computeCriticalPath', () => {
     expect(cp.has(1)).toBe(true);
   });
 });
+
+describe('computeCriticalPath — hierarchy', () => {
+  it('excludes parent (derived-date) tasks; evaluates leaves', () => {
+    const tasks = [
+      { id: 10, parentId: null, deps: [], start: d('2024-01-01'), end: d('2024-01-20') },
+      { id: 1, parentId: 10, deps: [], start: d('2024-01-01'), end: d('2024-01-10') },
+      { id: 2, parentId: 10, deps: [1], start: d('2024-01-10'), end: d('2024-01-20') },
+    ];
+    const cp = computeCriticalPath(tasks);
+    expect(cp.has(10)).toBe(false); // parent excluded
+    expect(cp.has(1)).toBe(true);
+    expect(cp.has(2)).toBe(true);
+  });
+});

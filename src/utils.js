@@ -6,10 +6,24 @@ export function esc(s) {
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Normalize any input to a LOCAL midnight Date representing a calendar day. Avoids the
+// classic off-by-one where "YYYY-MM-DD" / SheetJS date cells (UTC midnight) shift a day in
+// west-of-UTC timezones. Pair with fmt(), which formats the same local calendar day.
 export function parseDate(v) {
   if (!v) return null;
-  if (v instanceof Date) { const d = new Date(v); d.setHours(0,0,0,0); return d; }
-  const d = new Date(v);
+  if (v instanceof Date) {
+    if (isNaN(v)) return null;
+    // SheetJS emits date cells at UTC midnight — rebuild from UTC parts so the calendar day
+    // is preserved. Other Date inputs keep their local day.
+    if (v.getUTCHours() === 0 && v.getUTCMinutes() === 0 && v.getUTCSeconds() === 0 && v.getUTCMilliseconds() === 0) {
+      return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate());
+    }
+    const d = new Date(v); d.setHours(0,0,0,0); return d;
+  }
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]); // date-only string → local, no UTC shift
+  const d = new Date(s);
   if (!isNaN(d)) { d.setHours(0,0,0,0); return d; }
   return null;
 }
@@ -19,7 +33,13 @@ export function parseDeps(v) {
   return String(v).split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
 }
 
-export function fmt(d) { return d ? d.toISOString().slice(0,10) : '—'; }
+// Format a Date as YYYY-MM-DD using LOCAL calendar parts (consistent with parseDate's
+// local-midnight dates; toISOString would re-introduce a tz shift).
+export function fmt(d) {
+  if (!d) return '—';
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 // Sanitize a Reference-Files URL/Path for use as a link href. Allows http(s)/file/mailto
 // schemes, Windows drive paths (C:\…), UNC paths (\\server\share), and relative paths;

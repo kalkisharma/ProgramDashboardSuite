@@ -5,6 +5,7 @@ import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
 import { computeConflicts } from '../compute/conflicts.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
+import { childrenOf, ancestorsOf } from '../compute/wbs.js';
 import { getPhaseNames } from './progDash.js';
 import { showToast, safeSetItem } from '../ui/toast.js';
 import { toggleCheckboxDropdown, closeCheckboxDropdown } from '../ui/checkboxDropdown.js';
@@ -29,6 +30,7 @@ function srVisibleCols() { return SR_COLS.filter(c => !state.statusReportHiddenC
     const ph   = g('vh-sr-phases');       if (ph   !== undefined)  state.statusReportPhases = ph;
     const pt   = g('vh-sr-poc-teams');    if (pt   !== undefined)  state.statusReportPocTeams = pt;
     const ct   = g('vh-sr-cust-teams');   if (ct   !== undefined)  state.statusReportCustomerTeams = ct;
+    const dp   = g('vh-sr-depth');         if (dp   !== undefined)  state.statusReportDepthFilter = dp;
   } catch { /* ignore malformed prefs */ }
 })();
 
@@ -37,6 +39,14 @@ function persistSrPrefs() {
   safeSetItem('vh-sr-phases',     JSON.stringify(state.statusReportPhases));
   safeSetItem('vh-sr-poc-teams',  JSON.stringify(state.statusReportPocTeams));
   safeSetItem('vh-sr-cust-teams', JSON.stringify(state.statusReportCustomerTeams));
+  safeSetItem('vh-sr-depth',      JSON.stringify(state.statusReportDepthFilter));
+}
+
+// Toggle a parent's collapse from the Status Report (shares state.collapsedTasks with Gantt).
+function toggleSrCollapse(id) {
+  if (state.collapsedTasks.has(id)) state.collapsedTasks.delete(id); else state.collapsedTasks.add(id);
+  safeSetItem('vh-collapsed-tasks', JSON.stringify([...state.collapsedTasks]));
+  refreshStatusTable();
 }
 
 // Distinct phase numbers / POC teams / Customer teams across non-header tasks. Tasks with
@@ -157,6 +167,13 @@ function srMultiBtnHtml(id, label, selected, universe) {
     style="${all ? '' : 'border-color:var(--accent);color:var(--accent)'}">${esc(txt)}</button>`;
 }
 
+function srDepthSelectHtml() {
+  const maxDepth = Math.max(1, ...state.ProjectData.tasks.map(t => t.level || 1));
+  let opts = '<option value="all">Depth: All</option>';
+  for (let n = 1; n <= maxDepth; n++) opts += `<option value="${n}" ${state.statusReportDepthFilter === n ? 'selected' : ''}>Depth: Level ${n}</option>`;
+  return `<select id="sr-depth-filter" class="btn-secondary btn-sm" aria-label="Limit visible subtask depth" title="Hide tasks deeper than this level" style="padding:4px 6px">${opts}</select>`;
+}
+
 function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount, orgIndex) {
   const uni = srUniverses(orgIndex);
   toolbar.innerHTML = `
@@ -170,6 +187,7 @@ function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount, orgIn
     ${srMultiBtnHtml('sr-phase-btn', 'Phase', state.statusReportPhases, uni.phases)}
     ${srMultiBtnHtml('sr-poc-btn', 'POC Team', state.statusReportPocTeams, uni.pocTeams)}
     ${srMultiBtnHtml('sr-cust-btn', 'Customer Team', state.statusReportCustomerTeams, uni.custTeams)}
+    ${srDepthSelectHtml()}
     <span style="margin-left:auto"></span>
     <button class="btn-secondary btn-sm" id="sr-cols-btn" aria-haspopup="true" aria-expanded="false">Columns (${srVisibleCols().length}/${SR_COLS.length})</button>
     <button class="btn-secondary" id="sr-export-btn">Export to PowerPoint</button>`;
@@ -179,6 +197,11 @@ function renderStatusToolbar(toolbar, tasksCount, openCount, concernCount, orgIn
   toolbar.querySelector('#sr-filter-open').addEventListener('click', () => setFilter('open'));
   toolbar.querySelector('#sr-filter-concerns').addEventListener('click', () => setFilter('concerns'));
   toolbar.querySelector('#sr-export-btn').addEventListener('click', exportStatusReportPPTX);
+  const depthSel = toolbar.querySelector('#sr-depth-filter');
+  if (depthSel) depthSel.addEventListener('change', e => {
+    state.statusReportDepthFilter = e.target.value === 'all' ? null : parseInt(e.target.value);
+    persistSrPrefs(); closeCheckboxDropdown(); renderStatusReport();
+  });
 
   const colsBtn = toolbar.querySelector('#sr-cols-btn');
   colsBtn.addEventListener('click', () => toggleCheckboxDropdown(colsBtn, {
@@ -233,7 +256,7 @@ function srPhaseName(ph) {
 
 // ── Table ─────────────────────────────────────────────────────────────────────
 
-function renderStatusTable(body, tasks, conflictSet, orgIndex) {
+function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
   if (!tasks.length) {
     const msg = state.statusReportFilter === 'concerns'
       ? 'No concerns — all open tasks are on track.'
@@ -283,7 +306,19 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex) {
     const cell = c => {
       switch (c) {
         case 'wbs':  return `<td><code style="color:${color};font-size:0.75rem">${esc(t.wbs)}</code></td>`;
-        case 'name': return `<td style="font-weight:${t.milestone ? '700' : '400'}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</td>`;
+        case 'name': {
+          const indent = treeMode ? (((t.level || 1) - 1) * 16) : 0;
+          let toggle = '';
+          if (treeMode) {
+            if (childrenOf(state.ProjectData.tasks, t.id).length) {
+              const isColl = state.collapsedTasks.has(t.id);
+              toggle = `<button class="sr-tree-toggle" data-toggle-id="${t.id}" aria-label="${isColl ? 'Expand' : 'Collapse'}" title="${isColl ? 'Expand' : 'Collapse'}">${isColl ? '▶' : '▼'}</button>`;
+            } else {
+              toggle = '<span class="sr-tree-spacer"></span>';
+            }
+          }
+          return `<td style="font-weight:${t.milestone ? '700' : '400'};padding-left:${indent}px">${toggle}${t.milestone ? '◆ ' : ''}${esc(t.name)}</td>`;
+        }
         case 'poc':  return validCell(t.poc, pocRes);
         case 'pocTeam': return `<td style="color:var(--muted)">${esc(pocRes.teams.join(', ') || '—')}</td>`;
         case 'customer': return validCell(t.customer, custRes);
@@ -326,6 +361,11 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex) {
     });
   });
 
+  // Collapse/expand toggles (tree mode) — don't trigger the row click
+  body.querySelectorAll('.sr-tree-toggle').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); toggleSrCollapse(+btn.dataset.toggleId); });
+  });
+
   // Row click → side panel
   body.querySelectorAll('.sr-row').forEach(row => {
     row.addEventListener('click', () => {
@@ -341,15 +381,40 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex) {
 function srComputeDisplay() {
   const conflictSet = computeConflicts(state.ProjectData.tasks);
   const orgIndex    = buildOrgIndex(state.ProjectData.org);
-  const nonHeaders  = state.ProjectData.tasks.filter(t => !isPhaseHeader(t));
+  const tasks       = state.ProjectData.tasks;
+  const nonHeaders  = tasks.filter(t => !isPhaseHeader(t));
   const allOpen     = nonHeaders.filter(t => t.pct < 100);
   const concerns    = allOpen.filter(t => { const r = ragStatus(t, conflictSet); return r === 'red' || r === 'amber'; });
-  const base        = state.statusReportFilter === 'concerns' ? concerns
-                    : state.statusReportFilter === 'tasks'    ? nonHeaders
-                    : allOpen;
-  const filtered    = base.filter(t => srPassesFilters(t, orgIndex));
-  const display     = sortTasks(filtered, conflictSet, orgIndex);
-  return { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display };
+  const treeMode    = !state.statusReportSort.col;   // default order = tree; column sort = flat (D5)
+
+  // Does a task pass the active task-filter button + the Phase/POC-Team/Customer-Team selects?
+  const matches = t => {
+    const r = ragStatus(t, conflictSet);
+    const passFilter = state.statusReportFilter === 'tasks' ? true
+      : state.statusReportFilter === 'concerns' ? (r === 'red' || r === 'amber')
+      : t.pct < 100;
+    return passFilter && srPassesFilters(t, orgIndex);
+  };
+
+  let display;
+  if (treeMode) {
+    // Indented tree in WBS order: matches + their ancestors (so the tree stays connected),
+    // minus rows hidden by collapse or the depth ceiling.
+    const matchAll = tasks.filter(matches);
+    const keep = new Set(matchAll.map(t => t.id));
+    matchAll.forEach(t => ancestorsOf(tasks, t.id).forEach(a => keep.add(a.id)));
+    const byId = {}; tasks.forEach(t => { byId[t.id] = t; });
+    const depthCeil = state.statusReportDepthFilter;
+    const hiddenByCollapse = t => {
+      let p = t.parentId != null ? byId[t.parentId] : null; const s = new Set();
+      while (p && !s.has(p.id)) { s.add(p.id); if (state.collapsedTasks.has(p.id)) return true; p = p.parentId != null ? byId[p.parentId] : null; }
+      return false;
+    };
+    display = tasks.filter(t => keep.has(t.id) && (!depthCeil || (t.level || 1) <= depthCeil) && !hiddenByCollapse(t));
+  } else {
+    display = sortTasks(nonHeaders.filter(matches), conflictSet, orgIndex);
+  }
+  return { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display, treeMode };
 }
 
 // Re-render just the table (and the Columns button label) without rebuilding the toolbar,
@@ -366,8 +431,8 @@ function setSrMultiLabel(id, label, selected, universe) {
 function refreshStatusTable() {
   const body = document.getElementById('status-body');
   if (!body) return;
-  const { conflictSet, orgIndex, display } = srComputeDisplay();
-  renderStatusTable(body, display, conflictSet, orgIndex);
+  const { conflictSet, orgIndex, display, treeMode } = srComputeDisplay();
+  renderStatusTable(body, display, conflictSet, orgIndex, treeMode);
   // Toolbar isn't rebuilt (so open popovers survive) — sync the dropdown labels in place.
   const uni = srUniverses(orgIndex);
   setSrMultiLabel('sr-phase-btn', 'Phase', state.statusReportPhases, uni.phases);
@@ -394,9 +459,9 @@ export function renderStatusReport() {
     return;
   }
 
-  const { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display } = srComputeDisplay();
+  const { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display, treeMode } = srComputeDisplay();
   renderStatusToolbar(toolbar, nonHeaders.length, allOpen.length, concerns.length, orgIndex);
-  renderStatusTable(body, display, conflictSet, orgIndex);
+  renderStatusTable(body, display, conflictSet, orgIndex, treeMode);
 }
 
 // ── PowerPoint export ─────────────────────────────────────────────────────────
@@ -593,10 +658,9 @@ async function buildPPTX() {
   s3.background = { color: 'FFFFFF' };
 
   const filter = state.statusReportFilter;
-  const base = filter === 'concerns' ? openTasks.filter(t => ragStatus(t, conflictSet) !== 'green')
-             : filter === 'tasks'    ? nonHeaders
-             : openTasks;
-  const exportTasks  = sortTasks(base, conflictSet, orgIndex);
+  // Mirror exactly what's visible on screen: same rows (filters + collapse + depth, tree or
+  // flat) the table shows (D5/D6) — collapsed subtasks are not exported.
+  const exportTasks  = srComputeDisplay().display;
   const filterDesc   = filter === 'concerns' ? 'Concerns only (overdue + at risk)'
                      : filter === 'tasks'    ? 'All tasks'
                      : 'All open (incomplete) tasks';

@@ -4,7 +4,8 @@ import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLB
 import { phaseColor, PHASE_COLORS } from '../colors.js';
 import { computeCriticalPath } from '../compute/criticalPath.js';
 import { computeConflicts } from '../compute/conflicts.js';
-import { recalcWBS } from '../compute/wbs.js';
+import { recalcHierarchy } from '../compute/hierarchy.js';
+import { childrenOf, descendantsOf } from '../compute/wbs.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { getPhaseNames } from './progDash.js';
 import { showTooltip, hideTooltip, positionTooltip } from '../ui/tooltip.js';
@@ -20,12 +21,20 @@ export function setGanttTeamFilter(val)  { state.ganttTeamFilter  = val; safeSet
 export function clearGanttFilters() {
   document.getElementById('gantt-phase-filter').value = 'all';
   document.getElementById('gantt-team-filter').value  = 'all';
-  state.ganttPhaseFilter = 'all'; state.ganttTeamFilter = 'all';
+  const depthSel = document.getElementById('gantt-depth-filter');
+  if (depthSel) depthSel.value = 'all';
+  state.ganttPhaseFilter = 'all'; state.ganttTeamFilter = 'all'; state.ganttDepthFilter = null;
   renderGantt();
 }
-export function togglePhaseCollapse(phaseNum) {
-  if (state.collapsedPhases.has(phaseNum)) state.collapsedPhases.delete(phaseNum); else state.collapsedPhases.add(phaseNum);
-  safeSetItem('vh-collapsed-phases', JSON.stringify([...state.collapsedPhases]));
+export function toggleTaskCollapse(taskId) {
+  if (state.collapsedTasks.has(taskId)) state.collapsedTasks.delete(taskId); else state.collapsedTasks.add(taskId);
+  safeSetItem('vh-collapsed-tasks', JSON.stringify([...state.collapsedTasks]));
+  renderGantt();
+}
+
+export function setGanttDepthFilter(val) {
+  state.ganttDepthFilter = (val === 'all' || val == null) ? null : parseInt(val);
+  safeSetItem('vh-gantt-depth', JSON.stringify(state.ganttDepthFilter));
   renderGantt();
 }
 
@@ -876,6 +885,9 @@ export function renderGantt() {
 }
 
 export function prepareGanttData() {
+  // Chokepoint: keep the tree normalized + parent rollups current before every render.
+  // Idempotent when nothing changed (stable DFS order, derived parent values).
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   if (!state.ProjectData.tasks.length) {
     if (dashboardLoaded) {
       const lb = document.getElementById('gantt-left-body');
@@ -925,18 +937,35 @@ export function prepareGanttData() {
     teamSel.value = state.ganttTeamFilter;
   }
 
-  // ── Build filtered task list ───────────────────────
+  // Depth filter (hard ceiling): options All / Level 1..maxDepth present in the tree.
+  const maxDepth = Math.max(1, ...state.ProjectData.tasks.map(t => t.level || 1));
+  const depthSel = document.getElementById('gantt-depth-filter');
+  if (depthSel) {
+    let opts = '<option value="all">All</option>';
+    for (let n = 1; n <= maxDepth; n++) opts += `<option value="${n}">Level ${n}</option>`;
+    depthSel.innerHTML = opts;
+    if (state.ganttDepthFilter != null && state.ganttDepthFilter > maxDepth) state.ganttDepthFilter = null;
+    depthSel.value = state.ganttDepthFilter == null ? 'all' : String(state.ganttDepthFilter);
+  }
+
+  // ── Build filtered + collapsed task list ───────────
+  const byId = {}; state.ProjectData.tasks.forEach(t => { byId[t.id] = t; });
+  const collapsed = state.collapsedTasks;
+  const depthCeil = state.ganttDepthFilter;        // null = no ceiling
+  const hiddenByCollapse = t => {
+    let p = t.parentId != null ? byId[t.parentId] : null; const seen = new Set();
+    while (p && !seen.has(p.id)) { seen.add(p.id); if (collapsed.has(p.id)) return true; p = p.parentId != null ? byId[p.parentId] : null; }
+    return false;
+  };
   const visibleTasks = state.ProjectData.tasks.filter(t => {
-    const phNum = parseInt(String(t.wbs).split('.')[0]) || 1;
-    const ph    = String(phNum);
+    const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
     if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
     if (state.ganttTeamFilter  !== 'all' && !pocTeamsOf(t).includes(state.ganttTeamFilter)) return false;
-    if (state.ganttPhaseFilter === 'all' && state.collapsedPhases.has(phNum)) {
-      const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
-      if (!isPhaseHeader) return false;
-    }
+    if (depthCeil && (t.level || 1) > depthCeil) return false;   // hard ceiling (D6)
+    if (hiddenByCollapse(t)) return false;
     return true;
   });
+  state.ganttVisibleTasks = visibleTasks; // shared with rowReorder so drag indices align
 
   const lb = document.getElementById('gantt-left-body');
   if (!visibleTasks.length) {
@@ -955,7 +984,15 @@ export function prepareGanttData() {
   const totalDays = daysBetween(minD, maxD);
   const W = totalDays * state.ganttZoom;
   const bodyH = visibleTasks.length * RH;
-  const cpSet = state.showCriticalPath ? computeCriticalPath(state.ProjectData.tasks) : new Set();
+  // CPM runs at leaf level (Phase 3). For collapsed parents, surface criticality on the
+  // parent row if any hidden descendant is critical (D4).
+  const cpLeaves = state.showCriticalPath ? computeCriticalPath(state.ProjectData.tasks) : new Set();
+  const cpSet = new Set(cpLeaves);
+  if (state.showCriticalPath) {
+    state.ProjectData.tasks.forEach(t => {
+      if (collapsed.has(t.id) && descendantsOf(state.ProjectData.tasks, t.id).some(d => cpLeaves.has(d.id))) cpSet.add(t.id);
+    });
+  }
   state.conflictSet = computeConflicts(state.ProjectData.tasks);
   const exportBtn = document.getElementById('gantt-export-svg-btn');
   if (exportBtn) exportBtn.disabled = false;
@@ -978,29 +1015,35 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const color = phaseColor(t.wbs);
     const pocTeam = resolveNames(t.poc, orgIndex).teams.join(', ');
     const pctColor = t.pct === 100 ? '#3fb950' : t.pct > 0 ? '#d29922' : '#484f58';
-    const depth = (t.wbs.match(/\./g) || []).length;
+    const level = t.level || 1;
+    const depth = level - 1;                       // 0 for phases, 1 task, 2 subtask, …
     const wd = t.milestone ? { text: '◆', cls: '' } : wdDisplay(t, state.ganttWorkDays, getToday());
-    const isPhaseHeader = !t.wbs.includes('.') || t.wbs.endsWith('.0');
-    const phaseNum = parseInt(t.wbs.split('.')[0]) || 1;
-    const isCollapsed = isPhaseHeader && state.collapsedPhases.has(phaseNum);
-    const showHandle = !isFiltered && !isPhaseHeader;
-    const showCollapseBtn = isPhaseHeader && state.ganttPhaseFilter === 'all';
+    const isPhaseHeader = level === 1;
+    const hasChildren = childrenOf(state.ProjectData.tasks, t.id).length > 0;
+    const isCollapsed = state.collapsedTasks.has(t.id);
+    // A parent whose children are hidden by the depth ceiling (not by manual collapse).
+    const cappedByDepth = hasChildren && state.ganttDepthFilter != null && level >= state.ganttDepthFilter;
+    const showHandle = !isFiltered && level > 1;   // reorder subtasks/tasks; phases stay put
+    const showCollapseBtn = hasChildren;
     const div = document.createElement('div');
     div.className = 'gantt-row' + (isPhaseHeader ? ' gantt-phase-hdr' : '') + (isCollapsed ? ' phase-collapsed' : '');
     div.dataset.taskid = t.id;
     div.setAttribute('role', 'row');
     div.setAttribute('tabindex', '-1');
     div.setAttribute('aria-selected', 'false');
-    const _rowStart = t.start ? t.start.toISOString().split('T')[0] : 'no date';
-    const _rowEnd   = t.end   ? t.end.toISOString().split('T')[0]   : 'no date';
+    if (hasChildren) div.setAttribute('aria-expanded', String(!isCollapsed));
+    const _rowStart = t.start ? fmt(t.start) : 'no date';
+    const _rowEnd   = t.end   ? fmt(t.end)   : 'no date';
     div.setAttribute('aria-label', `${t.wbs}: ${t.name}, ${pocTeam ? pocTeam + ' POC team' : 'no POC team'}, ${t.pct}% complete, ${_rowStart} to ${_rowEnd}${state.conflictSet.has(t.id) ? ', scheduling conflict' : ''}${isCollapsed ? ', collapsed' : ''}`);
+    const toggleIcon = cappedByDepth ? '▾' : (isCollapsed ? '▶' : '▼');
+    const toggleTitle = cappedByDepth ? 'Subtasks hidden by depth filter' : (isCollapsed ? 'Expand' : 'Collapse');
     div.innerHTML = `
-      <div class="g-wbs-wrap" role="gridcell" style="color:${color}">
+      <div class="g-wbs-wrap" role="gridcell" style="color:${color};padding-left:${depth * 12}px">
         ${showHandle ? '<span class="gantt-drag-handle" title="Drag to reorder">⠿</span>' : ''}
-        ${showCollapseBtn ? `<button class="gantt-collapse-btn" aria-label="${isCollapsed ? 'Expand phase' : 'Collapse phase'}" title="${isCollapsed ? 'Expand phase' : 'Collapse phase'}">${isCollapsed ? '▶' : '▼'}</button>` : ''}
+        ${showCollapseBtn ? `<button class="gantt-collapse-btn${cappedByDepth ? ' capped' : ''}" ${cappedByDepth ? 'disabled' : ''} aria-label="${toggleTitle}" title="${toggleTitle}">${toggleIcon}</button>` : ''}
         <span class="g-wbs-text">${esc(t.wbs)}</span>
       </div>
-      <span class="g-name" role="gridcell" style="padding-left:${depth*10}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
+      <span class="g-name" role="gridcell" style="padding-left:${depth*12}px" title="${esc(t.name)}">${t.milestone ? '◆ ' : ''}${esc(t.name)}</span>
       <span class="g-team" role="gridcell" title="${esc(pocTeam)}">${esc(pocTeam)}</span>
       <span class="g-wd ${wd.cls}" role="gridcell">${wd.text}</span>
       <span class="g-pct" role="gridcell" style="color:${pctColor}">${t.pct}%</span>
@@ -1019,10 +1062,15 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
       }
     }
 
-    // Phase collapse toggle
-    if (showCollapseBtn) {
+    // Collapse/expand toggle (any task with children, unless capped by the depth ceiling)
+    if (showCollapseBtn && !cappedByDepth) {
       const colBtn = div.querySelector('.gantt-collapse-btn');
-      if (colBtn) colBtn.addEventListener('click', e => { e.stopPropagation(); togglePhaseCollapse(phaseNum); });
+      if (colBtn) {
+        // The toggle lives inside the draggable WBS cell — stop its mousedown from
+        // starting a row drag, otherwise the click is swallowed.
+        colBtn.addEventListener('mousedown', e => e.stopPropagation());
+        colBtn.addEventListener('click', e => { e.stopPropagation(); toggleTaskCollapse(t.id); });
+      }
     }
 
     if (!isPhaseHeader) {
@@ -1035,12 +1083,14 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
 
       // (POC Team column is read-only — derived from the org chart; edit POC via the task panel)
 
-      // Pct inline edit
-      const pctEl = div.querySelector('.g-pct');
-      pctEl.style.cursor = 'text';
-      pctEl.setAttribute('tabindex', '0');
-      pctEl.addEventListener('click',   e => { e.stopPropagation(); startTaskPctEdit(pctEl, t); });
-      pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskPctEdit(pctEl, t); } });
+      // Pct inline edit — leaf tasks only (parents' % is rolled up from children)
+      if (!hasChildren) {
+        const pctEl = div.querySelector('.g-pct');
+        pctEl.style.cursor = 'text';
+        pctEl.setAttribute('tabindex', '0');
+        pctEl.addEventListener('click',   e => { e.stopPropagation(); startTaskPctEdit(pctEl, t); });
+        pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskPctEdit(pctEl, t); } });
+      }
 
       div.addEventListener('click', () => { if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); });
     }

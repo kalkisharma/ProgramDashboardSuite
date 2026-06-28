@@ -2,7 +2,7 @@ import { state } from '../state.js';
 import { RH } from '../constants.js';
 import { renderGantt } from '../render/gantt.js';
 import { pushUndo } from '../core/undo.js';
-import { recalcWBS } from '../compute/wbs.js';
+import { recalcHierarchy } from '../compute/hierarchy.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { showToast } from './toast.js';
 
@@ -69,33 +69,23 @@ export function endRowDrag(e) {
 
   if (dropIdx === srcIdx || dropIdx === srcIdx + 1) { renderGantt(); return; }
 
-  const orgIndex = buildOrgIndex(state.ProjectData.org);
-  const visibleTasks = state.ProjectData.tasks.filter(t => {
-    const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
-    if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
-    if (!matchesTeamFilter(t, orgIndex)) return false;
-    return true;
-  });
-
-  const dragged = visibleTasks[srcIdx];
+  // Use the exact rows the Gantt rendered (collapse + depth applied) so indices line up.
+  const visible = state.ganttVisibleTasks || [];
+  const dragged = visible[srcIdx];
   if (!dragged) { renderGantt(); return; }
+  // Row to insert before (dropIdx === visible.length → append). Skip if it's the dragged row.
+  const targetTask = visible[dropIdx] && visible[dropIdx] !== dragged ? visible[dropIdx] : null;
 
   pushUndo('task reorder');
-
+  // Move the dragged row; its descendants follow automatically because recalcHierarchy
+  // re-sorts the flat array into DFS order by parentId (drag never changes parentId, so a
+  // subtask can only be reordered within its own parent).
   const origIdx = state.ProjectData.tasks.indexOf(dragged);
   state.ProjectData.tasks.splice(origIdx, 1);
-
-  const adjustedDrop  = dropIdx > srcIdx ? dropIdx - 1 : dropIdx;
-  const updatedVisible = state.ProjectData.tasks.filter(t => {
-    const ph = String(parseInt(String(t.wbs).split('.')[0]) || 1);
-    if (state.ganttPhaseFilter !== 'all' && ph !== state.ganttPhaseFilter) return false;
-    if (!matchesTeamFilter(t, orgIndex)) return false;
-    return true;
-  });
-  const targetTask = updatedVisible[adjustedDrop];
-  const targetIdx  = targetTask ? state.ProjectData.tasks.indexOf(targetTask) : state.ProjectData.tasks.length;
-  state.ProjectData.tasks.splice(targetIdx, 0, dragged);
-  recalcWBS(state.ProjectData.tasks);
+  let insertIdx = targetTask ? state.ProjectData.tasks.indexOf(targetTask) : state.ProjectData.tasks.length;
+  if (insertIdx < 0) insertIdx = state.ProjectData.tasks.length;
+  state.ProjectData.tasks.splice(insertIdx, 0, dragged);
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   renderGantt();
   showToast('Task reordered', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
 }

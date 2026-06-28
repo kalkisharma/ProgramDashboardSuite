@@ -5,7 +5,8 @@ import { PHASE_COLORS, SPEC_COLORS, TEAM_COLORS, phaseColor, teamColor, clearTea
 import { esc, parseDate, parseDeps, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from './utils.js';
 import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
-import { recalcWBS, wouldCreateCycle } from './compute/wbs.js';
+import { wouldCreateCycle, inferHierarchyFromWBS, descendantsOf } from './compute/wbs.js';
+import { recalcHierarchy } from './compute/hierarchy.js';
 import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, extractWorkDays } from './parse.js';
 import { buildOrgIndex, resolveNames } from './compute/orgLookup.js';
 import { buildWorkbook, generateSampleExcel } from './excel.js';
@@ -22,7 +23,7 @@ import { renderStatusReport } from './render/statusReport.js';
 import { renderReferenceFiles } from './render/referenceFiles.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
-  renderGantt, setGanttPhaseFilter, setGanttTeamFilter, clearGanttFilters, togglePhaseCollapse,
+  renderGantt, setGanttPhaseFilter, setGanttTeamFilter, setGanttDepthFilter, clearGanttFilters,
   startBarDrag, endBarDrag, openGanttDatePicker, getBarZone,
   initGanttPan, initGanttColumnResize, initGanttNameColResize, updateGanttKeyFocus,
   adjustZoom, adjustSpecsZoom, adjustOrgZoom,
@@ -32,7 +33,8 @@ import {
   startTaskNameEdit, startTaskPctEdit,
   startPanDrag, updateTodayFloat, scrollGanttToToday,
 } from './render/gantt.js';
-import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported } from './ui/taskOps.js';
+import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
+         addSubtask, promoteTask, demoteTask, deleteSubtree, deletePromoteChildren } from './ui/taskOps.js';
 
 // ─── Function Index ───────────────────────────────────────────────────────────
 // L66   App State          — state.* (see src/state.js); APP_VERSION
@@ -71,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported 
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v5.0.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.0.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -128,7 +130,7 @@ function _restoreSnapshot(snapshot) {
   state.ProjectData.weights = snapshot.weights || state.ProjectData.weights;
   state.ProjectData.referenceFiles = snapshot.referenceFiles || state.ProjectData.referenceFiles;
   if (snapshot.info) state.ProjectData.info = snapshot.info;
-  recalcWBS(state.ProjectData.tasks);
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   safeRender(renderGantt,    'Gantt Chart');
   safeRender(renderSpecs,    'Specifications');
   safeRender(renderProgDash, 'Program Dashboard');
@@ -334,7 +336,7 @@ function loadFile(file) {
 function parseWorkbook(wb) {
   state.ProjectData.info = {}; state.ProjectData.tasks = []; state.ProjectData.specs = []; state.ProjectData.org = []; state.ProjectData.weights = []; state.ProjectData.referenceFiles = [];
   state.undoStack = []; state.redoStack = [];
-  state.collapsedPhases  = new Set();
+  state.collapsedTasks   = new Set();
   state.calDisplayMonth  = null;
   state.ganttKeyFocusIdx = -1;
   state.barDrag = { active: false, pending: false, taskId: null, mode: null, startClientX: 0, origStart: null, origEnd: null, startScrollLeft: 0 };
@@ -357,7 +359,22 @@ function parseWorkbook(wb) {
     if (wdBtn) wdBtn.textContent = workdaysSummary(wds) + ' ▾';
   }
 
-  // Deep-copy tasks for reset
+  // Build the hierarchy from WBS, then resolve it (order, WBS, inheritance, parent rollup).
+  inferHierarchyFromWBS(state.ProjectData.tasks);
+  const parentIds = new Set(state.ProjectData.tasks.filter(t => t.parentId != null).map(t => t.parentId));
+  const demotedMs = state.ProjectData.tasks.filter(t => t.milestone && parentIds.has(t.id)).length;
+  recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
+  if (demotedMs && _justLoaded) {
+    showToast(`${demotedMs} milestone${demotedMs !== 1 ? 's' : ''} with subtasks recalculated from children.`, null, 8000);
+  }
+
+  // Default collapse: show Levels 1–2, collapse subtasks (L3+). Collapse every parent at
+  // level ≥ 2 so its deeper children start hidden (D8).
+  const parentSet = new Set(state.ProjectData.tasks.filter(t => t.parentId != null).map(t => t.parentId));
+  state.collapsedTasks = new Set(state.ProjectData.tasks.filter(t => (t.level || 1) >= 2 && parentSet.has(t.id)).map(t => t.id));
+  state.ganttDepthFilter = null;
+
+  // Deep-copy tasks for reset (post-hierarchy, so reset restores the resolved tree)
   state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
   clearDraft();
 }
@@ -390,16 +407,17 @@ function renderDashboard() {
   state.ganttPhaseFilter = 'all';
   state.ganttTeamFilter  = 'all';
   state.specSearchQuery  = '';
-  state.collapsedPhases.clear();
+  // collapsedTasks + ganttDepthFilter are set to their defaults in parseWorkbook — don't clear here.
   // Status Report view resets on new file load (a new file may have different phases/teams).
   state.statusReportFilter        = 'open';
   state.statusReportSort          = { col: null, dir: 'asc' };
   state.statusReportHiddenCols    = [];
+  state.statusReportDepthFilter   = null;
   state.statusReportPhases        = null;
   state.statusReportPocTeams      = null;
   state.statusReportCustomerTeams = null;
-  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-phases',
-   'vh-sr-cols','vh-sr-phases','vh-sr-poc-teams','vh-sr-cust-teams']
+  ['vh-filter-phase','vh-filter-team','vh-filter-specs-cat','vh-filter-specs-search','vh-collapsed-tasks','vh-gantt-depth',
+   'vh-sr-cols','vh-sr-depth','vh-sr-phases','vh-sr-poc-teams','vh-sr-cust-teams']
     .forEach(k => localStorage.removeItem(k));
   const ssInput = document.getElementById('specs-search');
   if (ssInput) ssInput.value = '';
@@ -973,10 +991,30 @@ function openTaskPanel(taskId) {
   <div id="sp-spec-link-picker" class="sp-dep-picker" style="display:none" role="listbox" aria-label="Select a specification to link">
     <input class="sp-dep-picker-input" type="text" placeholder="Search by ID, category, or name…" aria-label="Search specifications to link">
     <div class="sp-dep-list" id="sp-spec-link-list"></div>
-  </div>
-  <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
+  </div>`;
+
+  // Hierarchy operations
+  const hasChildren = state.ProjectData.tasks.some(x => x.parentId === t.id);
+  const descIds = new Set([t.id, ...descendantsOf(state.ProjectData.tasks, t.id).map(x => x.id)]);
+  const descCount = descIds.size - 1;
+  const demoteCandidates = state.ProjectData.tasks.filter(x => !descIds.has(x.id) && x.id !== t.parentId);
+  const demoteOpts = demoteCandidates.map(x => `<option value="${x.id}">${esc(x.wbs)} · ${esc(x.name)}</option>`).join('');
+  html += `<div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border)">
     <button class="btn-secondary btn-sm" id="sp-edit-task-btn" style="width:100%;margin-bottom:8px">Edit Task</button>
-    <button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task</button>
+    <button class="btn-secondary btn-sm" id="sp-add-subtask-btn" style="width:100%;margin-bottom:8px">+ Add subtask</button>
+    ${t.parentId != null ? `<button class="btn-secondary btn-sm" id="sp-promote-btn" style="width:100%;margin-bottom:8px">▲ Promote one level${hasChildren ? ' (with subtasks)' : ''}</button>` : ''}
+    ${demoteCandidates.length ? `<button class="btn-secondary btn-sm" id="sp-demote-btn" style="width:100%;margin-bottom:8px">▼ Demote under…</button>
+      <div id="sp-demote-row" style="display:none;margin-bottom:8px">
+        <select id="sp-demote-parent" class="sp-form-input" style="margin-bottom:6px">${demoteOpts}</select>
+        <button class="btn-primary btn-sm" id="sp-demote-confirm" style="width:100%">Move under selected</button>
+      </div>` : ''}
+    ${hasChildren
+      ? `<button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task…</button>
+         <div id="sp-delete-choice" style="display:none;margin-top:6px">
+           <button class="btn-secondary btn-sm" id="sp-del-all" style="width:100%;margin-bottom:6px;border-color:#f85149;color:#f85149">Delete all (${descCount + 1})</button>
+           <button class="btn-secondary btn-sm" id="sp-del-promote" style="width:100%">Promote children, delete this</button>
+         </div>`
+      : `<button class="btn-secondary btn-sm" id="sp-delete-task-btn" style="width:100%" aria-label="Delete this task">Delete Task</button>`}
   </div>`;
 
   const spBody = document.getElementById('sp-body');
@@ -1001,8 +1039,31 @@ function openTaskPanel(taskId) {
   wirePicker({ btnId: 'sp-add-dep-btn', pickerId: 'sp-dep-picker', listId: 'sp-dep-list', buildFn: buildDepPickerList, ref: t, itemSelector: '.sp-dep-item:not(.cycle)' });
   wirePicker({ btnId: 'sp-add-spec-link-btn', pickerId: 'sp-spec-link-picker', listId: 'sp-spec-link-list', buildFn: buildSpecLinkPickerList, ref: t });
   spBody.querySelector('#sp-edit-task-btn').addEventListener('click', () => openTaskEditPanel(taskId));
+  spBody.querySelector('#sp-add-subtask-btn').addEventListener('click', () => addSubtask(t.id));
+  const promoteBtn = spBody.querySelector('#sp-promote-btn');
+  if (promoteBtn) promoteBtn.addEventListener('click', () => promoteTask(t.id));
+  const demoteBtn = spBody.querySelector('#sp-demote-btn');
+  if (demoteBtn) demoteBtn.addEventListener('click', () => {
+    const row = spBody.querySelector('#sp-demote-row');
+    row.style.display = row.style.display === 'none' ? 'block' : 'none';
+  });
+  const demoteConfirm = spBody.querySelector('#sp-demote-confirm');
+  if (demoteConfirm) demoteConfirm.addEventListener('click', () => {
+    const sel = spBody.querySelector('#sp-demote-parent');
+    if (sel) demoteTask(t.id, +sel.value);
+  });
   const delTaskBtn = spBody.querySelector('#sp-delete-task-btn');
-  if (delTaskBtn) delTaskBtn.addEventListener('click', () => deleteTask(t.id));
+  if (hasChildren) {
+    // Parent → inline 3-way choice (D7): Delete all vs Promote children.
+    delTaskBtn.addEventListener('click', () => {
+      const c = spBody.querySelector('#sp-delete-choice');
+      c.style.display = c.style.display === 'none' ? 'block' : 'none';
+    });
+    spBody.querySelector('#sp-del-all').addEventListener('click', () => deleteSubtree(t.id));
+    spBody.querySelector('#sp-del-promote').addEventListener('click', () => deletePromoteChildren(t.id));
+  } else if (delTaskBtn) {
+    delTaskBtn.addEventListener('click', () => deleteTask(t.id)); // leaf → two-tap
+  }
 
   state.spCurrentType = 'task'; state.spCurrentId = taskId;
   showSidePanel();
@@ -1013,6 +1074,10 @@ function openTaskEditPanel(taskId) {
   const t = state.ProjectData.tasks.find(t => t.id === taskId);
   if (!t) return;
   state.spOpener = state.spOpener || document.activeElement;
+  // Parent tasks derive start/end/% from their children — lock those fields.
+  const hasChildren = state.ProjectData.tasks.some(x => x.parentId === t.id);
+  const calcAttr = hasChildren ? ' disabled title="Calculated from subtasks"' : '';
+  const calcHint = hasChildren ? ' <span style="color:var(--muted);font-weight:400;font-size:0.72rem">(calculated from subtasks)</span>' : '';
   document.getElementById('sp-title').textContent = `Edit: ${t.name}`;
   const toDateInput = d => { if (!d) return ''; const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dy = String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dy}`; };
   const orgIndex = buildOrgIndex(state.ProjectData.org);
@@ -1030,12 +1095,12 @@ function openTaskEditPanel(taskId) {
     <div class="sp-form-group"><label class="sp-form-label" for="task-edit-customer">Customer <span style="color:var(--muted);font-weight:400">(comma-separated)</span></label>
       <input class="sp-form-input" id="task-edit-customer" type="text" value="${esc(t.customer || '')}">
       ${teamHintHtml(resolveNames(t.customer, orgIndex))}</div>
-    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-start">Start Date</label>
-      <input class="sp-form-input" id="task-edit-start" type="date" value="${toDateInput(t.start)}"></div>
-    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-end">End Date</label>
-      <input class="sp-form-input" id="task-edit-end" type="date" value="${toDateInput(t.end)}"></div>
-    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-pct">% Complete</label>
-      <input class="sp-form-input" id="task-edit-pct" type="number" min="0" max="100" value="${t.pct}"></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-start">Start Date${calcHint}</label>
+      <input class="sp-form-input" id="task-edit-start" type="date" value="${toDateInput(t.start)}"${calcAttr}></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-end">End Date${calcHint}</label>
+      <input class="sp-form-input" id="task-edit-end" type="date" value="${toDateInput(t.end)}"${calcAttr}></div>
+    <div class="sp-form-group"><label class="sp-form-label" for="task-edit-pct">% Complete${calcHint}</label>
+      <input class="sp-form-input" id="task-edit-pct" type="number" min="0" max="100" value="${t.pct}"${calcAttr}></div>
     <div class="sp-form-group"><label class="sp-form-label" for="task-edit-notes">Notes</label>
       <textarea class="sp-form-input" id="task-edit-notes" rows="4">${esc(t.notes || '')}</textarea></div>
   </div>
@@ -1417,6 +1482,7 @@ document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
 // Gantt filters
 document.getElementById('gantt-phase-filter').addEventListener('change', e => setGanttPhaseFilter(e.target.value));
 document.getElementById('gantt-team-filter').addEventListener('change', e => setGanttTeamFilter(e.target.value));
+document.getElementById('gantt-depth-filter').addEventListener('change', e => setGanttDepthFilter(e.target.value));
 
 // Gantt toolbar buttons
 document.getElementById('gantt-zoom-out-btn').addEventListener('click', () => adjustZoom(-1));
@@ -1509,7 +1575,7 @@ window.addEventListener('beforeunload', e => {
     state.ProjectData.weights = snap.weights || [];
     state.ProjectData.info    = snap.info    || {};
     state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...(t.deps || [])] }));
-    recalcWBS(state.ProjectData.tasks);
+    recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
     state.isDirty = true;
     renderDashboard();
     banner.style.display = 'none';
