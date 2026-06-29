@@ -4,6 +4,7 @@ import { esc, fmt, workDaysRemaining, countWorkDays, getToday, daysBetween } fro
 import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
 import { computeConflicts } from '../compute/conflicts.js';
+import { computeCriticalPath } from '../compute/criticalPath.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { childrenOf, ancestorsOf, isPhaseHeader } from '../compute/wbs.js';
 import { getPhaseNames } from './progDash.js';
@@ -95,13 +96,39 @@ function weightedPct(tasks) {
   return sumW ? Math.round(sumP / sumW) : 0;
 }
 
-function ragStatus(t, conflictSet) {
-  const today = getToday();
+// At-risk thresholds, overridable via Project Info keys (same pattern as `Phase N Name`).
+export function ragConfig() {
+  const info = state.ProjectData.info || {};
+  const num = (k, d) => { const v = parseFloat(info[k]); return Number.isFinite(v) ? v : d; };
+  return {
+    atRiskDays: num('RAG At-Risk Days', 10),      // ≤ this many work-days to end …
+    atRiskPct:  num('RAG At-Risk %', 50),         // … and below this % complete → at risk
+    slipTol:    num('RAG Slip Tolerance %', 15),  // behind expected progress by > this → at risk
+  };
+}
+
+// Expected % complete for the elapsed portion of the schedule (earned-schedule style):
+// work-days from start to today ÷ total work-days. null when dates are missing.
+export function expectedPct(t, today) {
+  if (!t.start || !t.end) return null;
+  if (today <= t.start) return 0;
+  const total   = Math.max(1, countWorkDays(t.start, t.end, state.ganttWorkDays));
+  const elapsed = countWorkDays(t.start, today < t.end ? today : t.end, state.ganttWorkDays);
+  return Math.min(100, Math.round(elapsed / total * 100));
+}
+
+// `today` is injectable for testing; defaults to the live date.
+export function ragStatus(t, conflictSet, today = getToday()) {
   if (t.pct >= 100) return 'done';                 // completed → never overdue/at-risk
-  if (t.end && t.end < today) return 'red';
-  if (conflictSet.has(t.id))   return 'amber';
+  if (t.end && t.end < today) return 'red';        // past end date
+  if (conflictSet && conflictSet.has(t.id)) return 'amber';
+  const cfg = ragConfig();
+  // Behind planned progress for the time elapsed (catches "should have started / be further along").
+  const exp = expectedPct(t, today);
+  if (exp !== null && (t.pct || 0) < exp - cfg.slipTol) return 'amber';
+  // Near-deadline-and-behind rule (thresholds configurable).
   const wdLeft = t.end ? workDaysRemaining(t.end, state.ganttWorkDays, today) : Infinity;
-  if (wdLeft <= 10 && t.pct < 50) return 'amber';
+  if (wdLeft <= cfg.atRiskDays && (t.pct || 0) < cfg.atRiskPct) return 'amber';
   return 'green';
 }
 
@@ -580,25 +607,27 @@ async function buildPPTX() {
     s1.addText(k.label, { x: cx, y: cardY + cardH - 0.42, w: cardW, h: 0.32, fontSize: 9, color: '4B5563', align: 'center', valign: 'top' });
   });
 
-  // Top Concerns — the worst open red/amber tasks (replaces the slide-2-duplicate phase table)
+  // Top Concerns — worst open red/amber tasks, critical-path items first (replaces the
+  // slide-2-duplicate phase table). ⛓ marks a task on the critical path.
   s1.addText('Top Concerns', { x: 0.3, y: 2.78, w: 6, h: 0.25, fontSize: 12, bold: true, color: '1F2937' });
+  const cpSet = computeCriticalPath(allTasks);
   const concerns = leafTasks
     .filter(t => t.pct < 100)
-    .map(t => ({ t, rag: ragStatus(t, conflictSet) }))
+    .map(t => ({ t, rag: ragStatus(t, conflictSet), critical: cpSet.has(t.id) }))
     .filter(o => o.rag === 'red' || o.rag === 'amber')
     .map(o => {
       const overdue  = o.t.end && o.t.end < today;
       const daysLate = overdue ? Math.max(1, Math.round((today - o.t.end) / 86400000)) : 0;
       return { ...o, overdue, daysLate };
     })
-    .sort((a, b) => (b.overdue - a.overdue) || (b.daysLate - a.daysLate) || (a.t.pct - b.t.pct))
+    .sort((a, b) => (b.critical - a.critical) || (b.overdue - a.overdue) || (b.daysLate - a.daysLate) || (a.t.pct - b.t.pct))
     .slice(0, 8);
 
   if (concerns.length) {
     const cHeader = ['Status', 'Task', 'POC', 'End', 'Detail'].map((h, i) => ({
       text: h, options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: i >= 3 ? 'center' : 'left' },
     }));
-    const cRows = concerns.map(({ t, rag, overdue, daysLate }) => {
+    const cRows = concerns.map(({ t, rag, overdue, daysLate, critical }) => {
       const fill  = rag === 'red' ? 'FEE2E2' : 'FEF3C7';
       const stTxt = rag === 'red' ? 'Overdue' : 'At Risk';
       const stCol = rag === 'red' ? 'B91C1C' : 'B45309';
@@ -608,7 +637,7 @@ async function buildPPTX() {
       const base = { fontSize: 9, fill: { color: fill } };
       return [
         { text: stTxt,                       options: { ...base, bold: true, color: stCol } },
-        { text: truncWords(t.name, 52),      options: { ...base, color: '1F2937' } },
+        { text: (critical ? '⛓ ' : '') + truncWords(t.name, 50), options: { ...base, color: '1F2937', bold: critical } },
         { text: truncWords(t.poc || '—', 24),options: { ...base, color: '374151' } },
         { text: t.end ? fmt(t.end) : '—',    options: { ...base, color: overdue ? 'B91C1C' : '374151', align: 'center' } },
         { text: detail,                      options: { ...base, color: '4B5563', align: 'center' } },
@@ -627,8 +656,9 @@ async function buildPPTX() {
     });
   }
 
-  // Footnote: methodology + as-of date
-  s1.addText('% complete is schedule-duration-weighted. "At Risk" = ≤10 work-days to end and <50% complete, or a scheduling conflict. Status as of ' + dateStr + '.', {
+  // Footnote: methodology + as-of date (reflects the configured RAG thresholds)
+  const _cfg = ragConfig();
+  s1.addText(`% complete is schedule-duration-weighted. "At Risk" = behind expected progress by >${_cfg.slipTol}%, or ≤${_cfg.atRiskDays} work-days to end and <${_cfg.atRiskPct}% complete, or a scheduling conflict. ⛓ = on the critical path. Status as of ${dateStr}.`, {
     x: 0.3, y: 7.05, w: 12.73, h: 0.3, fontSize: 8, italic: true, color: '6B7280',
   });
 
@@ -719,7 +749,7 @@ async function buildPPTX() {
   // RAG legend (colored chips) + org-validation key — on the first task slide.
   s3.addText([
     { text: '■ ', options: { color: 'B91C1C' } }, { text: 'Overdue    ', options: { color: '4B5563' } },
-    { text: '■ ', options: { color: 'B45309' } }, { text: 'At Risk (≤10 work-days left & <50%, or a conflict)    ', options: { color: '4B5563' } },
+    { text: '■ ', options: { color: 'B45309' } }, { text: `At Risk (behind plan, or ≤${ragConfig().atRiskDays} wd left & <${ragConfig().atRiskPct}%, or a conflict)    `, options: { color: '4B5563' } },
     { text: '■ ', options: { color: '047857' } }, { text: 'On Track    ', options: { color: '4B5563' } },
     { text: '■ ', options: { color: '1D4ED8' } }, { text: 'Done', options: { color: '4B5563' } },
     { text: '        ⚠ = name not in org chart', options: { color: 'B45309' } },
