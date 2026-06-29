@@ -73,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v6.6.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.6.1'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -1181,7 +1181,12 @@ function saveTaskEdits(taskId) {
   if (newStart && newEnd && newEnd < newStart) { showToast('End date must be on or after start date', null, 3500); return; }
   pushUndo('edit task');
   t.name = name; t.poc = poc; t.customer = customer; t.start = newStart; t.end = newEnd; t.pct = pct; t.notes = notes;
-  renderGantt();
+  // Re-render every task-driven view, not just the Gantt — otherwise an edit made from the
+  // Status Report (or its effect on the dashboard) wouldn't show until the next tab switch.
+  safeRender(renderGantt, 'Gantt Chart');
+  safeRender(renderStatusReport, 'Status Report');
+  safeRender(renderProgDash, 'Program Dashboard');
+  safeRender(renderSpecs, 'Specifications');
   showToast('Task updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
   const btn = document.getElementById('task-save-btn');
   if (btn) { btn.textContent = '✓ Saved'; btn.style.background = '#238636'; btn.style.color = '#fff'; btn.disabled = true; }
