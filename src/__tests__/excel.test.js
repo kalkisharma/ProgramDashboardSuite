@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
 import { buildWorkbook } from '../excel.js';
-import { parseScheduleSheet, parseBaselineSheet } from '../parse.js';
+import { parseScheduleSheet, parseBaselineSheet, parseInfoSheet } from '../parse.js';
+import { ragConfig } from '../render/statusReport.js';
+import { state, resetState } from '../state.js';
 import { inferHierarchyFromWBS } from '../compute/wbs.js';
 import { recalcHierarchy } from '../compute/hierarchy.js';
 
@@ -323,5 +325,32 @@ describe('buildWorkbook — Baseline sheet round-trip', () => {
     expect(map[1].end.getFullYear()).toBe(2025);
     expect(map[1].end.getMonth()).toBe(0);
     expect(map[1].end.getDate()).toBe(20);
+  });
+});
+
+describe('RAG thresholds — Excel round-trip', () => {
+  const buildAndReadInfo = (vals) => {
+    const pd = minimalData();
+    Object.assign(pd.info, vals);
+    const wb = buildWorkbook(pd, 'lb');
+    return parseInfoSheet(wb.Sheets['Project Info']);
+  };
+
+  it('round-trips RAG keys saved as strings (panel) → ragConfig', () => {
+    const info = buildAndReadInfo({ 'RAG At-Risk Days': '7', 'RAG At-Risk %': '40', 'RAG Slip Tolerance %': '20' });
+    resetState(); state.ProjectData.info = info;
+    expect(ragConfig()).toEqual({ atRiskDays: 7, atRiskPct: 40, slipTol: 20 });
+  });
+
+  it('round-trips RAG keys stored as numbers (sample) → ragConfig', () => {
+    const info = buildAndReadInfo({ 'RAG At-Risk Days': 10, 'RAG At-Risk %': 50, 'RAG Slip Tolerance %': 15 });
+    resetState(); state.ProjectData.info = info;
+    expect(ragConfig()).toEqual({ atRiskDays: 10, atRiskPct: 50, slipTol: 15 });
+  });
+
+  it('falls back to defaults when the keys are absent', () => {
+    const info = buildAndReadInfo({});
+    resetState(); state.ProjectData.info = info;
+    expect(ragConfig()).toEqual({ atRiskDays: 10, atRiskPct: 50, slipTol: 15 });
   });
 });
