@@ -73,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v6.1.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.1.1'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -278,11 +278,11 @@ function switchTab(btn, id) {
 // ─── Drag & Drop file loading ─────────────────────────────────────────────────
 const dz = document.getElementById('dropzone');
 const overlay = document.getElementById('dashboard-drop-overlay');
-let dashboardLoaded = false;
+// dashboardLoaded lives in state.js so render/gantt.js can read it (empty-state branch).
 
 document.addEventListener('dragover', e => {
   e.preventDefault();
-  if (dashboardLoaded) overlay.classList.add('active');
+  if (state.dashboardLoaded) overlay.classList.add('active');
   else dz.classList.add('drag-over');
 });
 document.addEventListener('dragleave', e => {
@@ -402,7 +402,7 @@ function renderDashboard() {
   document.getElementById('generate-sample-btn').style.display = 'none';
   document.getElementById('save-excel-btn').style.display = '';
   document.getElementById('proj-info-btn').style.display = '';
-  dashboardLoaded = true;
+  state.dashboardLoaded = true;
   state.ganttScrolledToday = false;
   state.ganttPhaseFilter = 'all';
   state.ganttTeamFilter  = 'all';

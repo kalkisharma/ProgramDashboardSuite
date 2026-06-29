@@ -7,6 +7,20 @@
 export function childrenOf(tasks, id) { return tasks.filter(t => t.parentId === id); }
 export function isLeaf(tasks, id)     { return !tasks.some(t => t.parentId === id); }
 
+// A phase-header / summary WBS row (top-level, e.g. "2", or a "x.0" header).
+export function isPhaseHeader(t) {
+  const wbs = String(t.wbs || '');
+  return !wbs.includes('.') || wbs.endsWith('.0');
+}
+
+// Real work items only: leaf tasks (no children) that aren't phase-header summary rows.
+// Metrics (overall %, counts, phase rollups) must use these so a parent's rolled-up value
+// isn't double-counted alongside its children. Shared by Program Dashboard + Status Report.
+export function leafTasks(tasks) {
+  const parents = new Set(tasks.filter(t => t.parentId != null).map(t => t.parentId));
+  return tasks.filter(t => !parents.has(t.id) && !isPhaseHeader(t));
+}
+
 export function descendantsOf(tasks, id) {
   const out = [];
   const stack = [...childrenOf(tasks, id)];

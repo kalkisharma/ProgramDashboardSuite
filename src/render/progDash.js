@@ -3,6 +3,7 @@ import { esc, daysBetween, getToday, countWorkDays } from '../utils.js';
 import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
+import { leafTasks } from '../compute/wbs.js';
 
 export function getPhaseNames() {
   const names = {};
@@ -38,11 +39,14 @@ export function renderProgDash() {
   const body = document.getElementById('prog-body');
   if (!body) return;
 
-  const totalTasks = state.ProjectData.tasks.length;
-  const overallPct = weightedPct(state.ProjectData.tasks);
-  const doneTasks = state.ProjectData.tasks.filter(t => t.pct >= 100).length;
+  // Metrics over LEAF tasks only — parents carry rolled-up values and would double-count
+  // (matches the Status Report / PowerPoint so the same file reports one set of numbers).
+  const leaves = leafTasks(state.ProjectData.tasks);
+  const totalTasks = leaves.length;
+  const overallPct = weightedPct(leaves);
+  const doneTasks = leaves.filter(t => t.pct >= 100).length;
 
-  const milestones = state.ProjectData.tasks.filter(t => t.milestone);
+  const milestones = leaves.filter(t => t.milestone);
   const milestoneDone = milestones.filter(t => t.pct >= 100).length;
   const nextMs = milestones
     .filter(t => t.pct < 100)
@@ -61,14 +65,14 @@ export function renderProgDash() {
     daysToFinal > 0 ? `${daysToFinal} days remaining` :
     daysToFinal === 0 ? 'Today' : 'Completed';
 
-  const overdueTasks = state.ProjectData.tasks.filter(t => t.end && t.end < getToday() && (t.pct || 0) < 100).length;
+  const overdueTasks = leaves.filter(t => t.end && t.end < getToday() && (t.pct || 0) < 100).length;
 
   const specAchieved = state.ProjectData.specs.filter(s => s.status === 'Achieved').length;
   const specTarget   = state.ProjectData.specs.filter(s => s.status === 'Target').length;
   const specTBD      = state.ProjectData.specs.filter(s => s.status === 'TBD').length;
 
   const phaseMap = {};
-  state.ProjectData.tasks.forEach(t => {
+  leaves.forEach(t => {
     const ph = parseInt(String(t.wbs).split('.')[0]) || 1;
     if (!phaseMap[ph]) phaseMap[ph] = [];
     phaseMap[ph].push(t);
@@ -79,7 +83,7 @@ export function renderProgDash() {
   // teams appears under each. 'Unassigned' when no POC team resolves.
   const orgIndex = buildOrgIndex(state.ProjectData.org);
   const teamTaskMap = {};
-  state.ProjectData.tasks.forEach(t => {
+  leaves.forEach(t => {
     const teams = resolveNames(t.poc, orgIndex).teams;
     (teams.length ? teams : ['Unassigned']).forEach(team => {
       if (!teamTaskMap[team]) teamTaskMap[team] = [];

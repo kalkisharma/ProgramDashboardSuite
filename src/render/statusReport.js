@@ -5,7 +5,7 @@ import { phaseColor } from '../colors.js';
 import { PHASE_NAMES_FALLBACK } from '../constants.js';
 import { computeConflicts } from '../compute/conflicts.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
-import { childrenOf, ancestorsOf } from '../compute/wbs.js';
+import { childrenOf, ancestorsOf, isPhaseHeader } from '../compute/wbs.js';
 import { getPhaseNames } from './progDash.js';
 import { showToast, safeSetItem } from '../ui/toast.js';
 import { toggleCheckboxDropdown, closeCheckboxDropdown } from '../ui/checkboxDropdown.js';
@@ -82,10 +82,7 @@ function srPassesFilters(t, orgIndex) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function isPhaseHeader(t) {
-  return !t.wbs.includes('.') || t.wbs.endsWith('.0');
-}
+// isPhaseHeader is shared from compute/wbs.js (same definition the Program Dashboard uses).
 
 function weightedPct(tasks) {
   if (!tasks.length) return 0;
@@ -258,13 +255,19 @@ function srPhaseName(ph) {
 
 function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
   if (!tasks.length) {
-    const msg = state.statusReportFilter === 'concerns'
+    // Only claim "all on track" when Concerns is the ONLY active narrowing — otherwise a
+    // Phase/Team/Depth filter could be hiding real concerns, so don't reassure falsely.
+    const narrowed = state.statusReportPhases || state.statusReportPocTeams ||
+                     state.statusReportCustomerTeams || state.statusReportDepthFilter != null;
+    const msg = (state.statusReportFilter === 'concerns' && !narrowed)
       ? 'No concerns — all open tasks are on track.'
-      : 'No tasks match the current filters.';
+      : state.statusReportFilter === 'concerns'
+        ? 'No concerns in the current Phase / Team / Depth filter.'
+        : 'No tasks match the current filters.';
     body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
       padding:60px 20px;gap:12px;color:var(--muted);text-align:center">
       <div style="font-size:2rem">✅</div>
-      <div style="font-weight:700;color:var(--text)">${msg}</div>
+      <div style="font-weight:700;color:var(--text)">${esc(msg)}</div>
     </div>`;
     return;
   }
@@ -338,7 +341,7 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
       }
     };
 
-    return `<tr class="sr-row" data-task-id="${t.id}" style="cursor:pointer">${cols.map(cell).join('')}</tr>`;
+    return `<tr class="sr-row" data-task-id="${t.id}" tabindex="0" role="button" aria-label="${esc(t.wbs)} ${esc(t.name)} — open details" style="cursor:pointer">${cols.map(cell).join('')}</tr>`;
   }).join('');
 
   body.innerHTML = `
@@ -366,10 +369,12 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
     btn.addEventListener('click', e => { e.stopPropagation(); toggleSrCollapse(+btn.dataset.toggleId); });
   });
 
-  // Row click → side panel
+  // Row click / Enter / Space → side panel (keyboard-operable)
   body.querySelectorAll('.sr-row').forEach(row => {
-    row.addEventListener('click', () => {
-      if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(+row.dataset.taskId);
+    const open = () => { if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(+row.dataset.taskId); };
+    row.addEventListener('click', open);
+    row.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
     });
   });
 }
@@ -396,6 +401,7 @@ function srComputeDisplay() {
     return passFilter && srPassesFilters(t, orgIndex);
   };
 
+  const depthCeil = state.statusReportDepthFilter;   // applies in BOTH modes
   let display;
   if (treeMode) {
     // Indented tree in WBS order: matches + their ancestors (so the tree stays connected),
@@ -404,7 +410,6 @@ function srComputeDisplay() {
     const keep = new Set(matchAll.map(t => t.id));
     matchAll.forEach(t => ancestorsOf(tasks, t.id).forEach(a => keep.add(a.id)));
     const byId = {}; tasks.forEach(t => { byId[t.id] = t; });
-    const depthCeil = state.statusReportDepthFilter;
     const hiddenByCollapse = t => {
       let p = t.parentId != null ? byId[t.parentId] : null; const s = new Set();
       while (p && !s.has(p.id)) { s.add(p.id); if (state.collapsedTasks.has(p.id)) return true; p = p.parentId != null ? byId[p.parentId] : null; }
@@ -412,7 +417,8 @@ function srComputeDisplay() {
     };
     display = tasks.filter(t => keep.has(t.id) && (!depthCeil || (t.level || 1) <= depthCeil) && !hiddenByCollapse(t));
   } else {
-    display = sortTasks(nonHeaders.filter(matches), conflictSet, orgIndex);
+    // Flat (column-sorted) view still honors the depth ceiling so the Depth control keeps working.
+    display = sortTasks(nonHeaders.filter(t => matches(t) && (!depthCeil || (t.level || 1) <= depthCeil)), conflictSet, orgIndex);
   }
   return { conflictSet, orgIndex, nonHeaders, allOpen, concerns, display, treeMode };
 }

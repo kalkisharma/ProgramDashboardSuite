@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { esc, fmt, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from '../utils.js';
+import { esc, fmt, parseDate, daysBetween, parseWorkDays, isWorkDay, addDays, snapToWorkDay, countWorkDays, workDaysRemaining, wdDisplay, getToday } from '../utils.js';
 import { ZOOM_STEPS, SPECS_ZOOM_STEPS, ORG_ZOOM_STEPS, RH, HH, PHASE_NAMES_FALLBACK } from '../constants.js';
 import { phaseColor, PHASE_COLORS } from '../colors.js';
 import { computeCriticalPath } from '../compute/criticalPath.js';
@@ -10,7 +10,7 @@ import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { getPhaseNames } from './progDash.js';
 import { showTooltip, hideTooltip, positionTooltip } from '../ui/tooltip.js';
 import { showToast, safeSetItem } from '../ui/toast.js';
-import { pushUndo, fullSnapshot } from '../core/undo.js';
+import { pushUndo, pushUndoSnapshot, fullSnapshot } from '../core/undo.js';
 import { startRowDrag, doRowDragMove, endRowDrag } from '../ui/rowReorder.js';
 
 // ZOOM_STEPS, RH, HH imported from ./constants.js
@@ -200,11 +200,10 @@ export function endBarDrag() {
       renderGantt();
       showToast('End date cannot be before start date', null, 3500);
     } else {
+      // Route the pre-drag snapshot through the shared path so the edit also marks the
+      // project dirty (autosave draft + beforeunload guard) and refreshes the undo buttons.
       if (state.barDragPreSnapshot) {
-        state.undoStack.push({ label: 'date adjusted', snapshot: state.barDragPreSnapshot });
-        if (state.undoStack.length > 50) state.undoStack.shift();
-        state.redoStack = [];
-        updateUndoRedoBtns();
+        pushUndoSnapshot('date adjusted', state.barDragPreSnapshot);
       }
       state.barDragPreSnapshot = null;
       const _movedId = state.barDrag.taskId;
@@ -276,7 +275,7 @@ export function openGanttDatePicker(t, clientX, clientY) {
   const label  = document.getElementById('gdp-label');
 
   label.textContent = t.milestone ? 'Milestone Date' : 'Task Dates';
-  const toVal = d => d ? d.toISOString().slice(0, 10) : '';
+  const toVal = d => d ? fmt(d) : '';   // local calendar (no UTC off-by-one in the picker)
 
   if (t.milestone) {
     fields.innerHTML = `<label class="sp-form-label" for="gdp-start">Date</label>
@@ -299,8 +298,8 @@ export function openGanttDatePicker(t, clientX, clientY) {
   const apply = () => {
     const startEl = document.getElementById('gdp-start');
     const endEl   = document.getElementById('gdp-end');
-    const newStart = startEl ? new Date(startEl.value) : null;
-    const newEnd   = endEl   ? new Date(endEl.value)   : newStart;
+    const newStart = startEl ? parseDate(startEl.value) : null;
+    const newEnd   = endEl   ? parseDate(endEl.value)   : newStart;
     if (!newStart || isNaN(newStart)) { picker.style.display = 'none'; return; }
     pushUndo('edit dates');
     t.start = snapToWorkDay(newStart, state.ganttWorkDays, 1);
@@ -603,7 +602,7 @@ export function renderGanttCalendar() {
   state.ProjectData.tasks.filter(t => t.milestone).forEach(t => {
     const d = t.end || t.start;
     if (!d) return;
-    const key = d.toISOString().slice(0, 10);
+    const key = fmt(d);   // local key to match the day-cell key built below
     if (!msMap[key]) msMap[key] = [];
     msMap[key].push({ color: phaseColor(t.wbs), name: t.name });
   });
@@ -612,7 +611,7 @@ export function renderGanttCalendar() {
   const phaseNames = getPhaseNames();
   state.ProjectData.tasks.filter(t => !t.wbs.includes('.') || t.wbs.endsWith('.0')).forEach(t => {
     if (!t.start) return;
-    const key = t.start.toISOString().slice(0, 10);
+    const key = fmt(t.start);   // local key to match the day-cell key
     const phNum = parseInt(t.wbs);
     const phName = phaseNames[phNum] || PHASE_NAMES_FALLBACK[phNum - 1] || ('Phase ' + phNum);
     phStartMap[key] = { color: phaseColor(t.wbs.includes('.') ? t.wbs : t.wbs + '.0'), name: phName };
@@ -849,7 +848,7 @@ export function exportGanttSVG() {
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
   a.href     = url;
-  a.download = `${state.ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.svg`;
+  a.download = `${state.ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${fmt(getToday())}.svg`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -893,7 +892,7 @@ export function exportGanttPNG() {
       const url = URL.createObjectURL(pngBlob);
       const a   = document.createElement('a');
       a.href    = url;
-      a.download = `${state.ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${new Date().toISOString().slice(0,10)}.png`;
+      a.download = `${state.ProjectData.info['Project Title'] || 'Gantt'} - Gantt - ${fmt(getToday())}.png`;
       a.click();
       URL.revokeObjectURL(url);
       URL.revokeObjectURL(svgUrl);
@@ -924,7 +923,7 @@ export function prepareGanttData() {
   // Idempotent when nothing changed (stable DFS order, derived parent values).
   recalcHierarchy(state.ProjectData.tasks, state.ganttWorkDays);
   if (!state.ProjectData.tasks.length) {
-    if (dashboardLoaded) {
+    if (state.dashboardLoaded) {
       const lb = document.getElementById('gantt-left-body');
       if (lb) {
         lb.innerHTML = `<div role="status" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;gap:10px;color:var(--muted);text-align:center">
@@ -933,7 +932,7 @@ export function prepareGanttData() {
           <div style="font-size:0.82rem">Check that your Excel file includes a <code style="background:var(--bg);padding:1px 5px;border-radius:3px">Schedule</code> sheet with at least one task row.</div>
           <button class="empty-help-btn" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;margin-top:4px">Open help guide</button>
         </div>`;
-        lb.querySelector('.empty-help-btn').addEventListener('click', toggleHelp);
+        lb.querySelector('.empty-help-btn').addEventListener('click', () => state.handlers.toggleHelp && state.handlers.toggleHelp());
       }
     }
     return null;
@@ -1225,8 +1224,8 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
     hit.setAttribute('x', 0); hit.setAttribute('y', i*RH);
     hit.setAttribute('width', W); hit.setAttribute('height', RH);
     hit.setAttribute('fill', 'transparent');
-    const _hitStart = t.start ? t.start.toISOString().split('T')[0] : '';
-    const _hitEnd   = t.end   ? t.end.toISOString().split('T')[0]   : '';
+    const _hitStart = t.start ? fmt(t.start) : '';
+    const _hitEnd   = t.end   ? fmt(t.end)   : '';
     hit.setAttribute('role', 'img');
     hit.setAttribute('aria-label', `${t.milestone ? 'Milestone' : 'Task'} ${t.wbs}: ${t.name}, ${t.pct}% complete${_hitStart ? ', ' + _hitStart + ' to ' + _hitEnd : ''}`);
     hit.dataset.taskid = t.id;
@@ -1365,13 +1364,15 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
       p.addEventListener('mouseenter', e => {
         clearTimeout(_tooltipTimer);
         _tooltipTimer = setTimeout(() => {
-          tooltip.innerHTML = `<div style="font-weight:700;margin-bottom:4px;font-size:0.8rem">Dependency</div>
+          const tip = document.getElementById('tooltip');
+          if (!tip) return;
+          tip.innerHTML = `<div style="font-weight:700;margin-bottom:4px;font-size:0.8rem">Dependency</div>
             <div style="display:flex;align-items:center;gap:8px;font-size:0.82rem">
               <span style="color:var(--muted)">${esc(predTaskName)}</span>
               <span style="color:var(--accent)">→</span>
               <span>${esc(t.name)}</span>
             </div>`;
-          tooltip.style.display = 'block'; positionTooltip(e);
+          tip.style.display = 'block'; positionTooltip(e);
         }, 400);
       });
       p.addEventListener('mousemove', positionTooltip);

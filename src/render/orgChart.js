@@ -206,7 +206,7 @@ export function renderOrgChart() {
       const badgeT = document.createElementNS(NS, 'text');
       badgeT.setAttribute('x', nx + NW/2); badgeT.setAttribute('y', by2 + 10);
       badgeT.setAttribute('text-anchor', 'middle');
-      badgeT.setAttribute('fill', col); badgeT.setAttribute('font-size', '8.5');
+      badgeT.setAttribute('fill', col); badgeT.setAttribute('font-size', '10');
       badgeT.setAttribute('font-weight', '700');
       badgeT.setAttribute('font-family', 'Segoe UI, system-ui, sans-serif');
       badgeT.setAttribute('letter-spacing', '0.05em');

@@ -47,12 +47,19 @@ export function clearDraft() {
   localStorage.removeItem('vh-draft');
 }
 
-export function pushUndo(label) {
+// Push an already-captured snapshot (e.g. taken before a live drag began) onto the undo
+// stack with the full safety machinery: clears redo, marks dirty, schedules autosave +
+// export reminder, refreshes buttons.
+export function pushUndoSnapshot(label, snapshot) {
   if (state.undoStack.length >= 50) state.undoStack.shift();
-  state.undoStack.push({ label, snapshot: fullSnapshot() });
+  state.undoStack.push({ label, snapshot });
   state.redoStack = [];
   state.isDirty = true;
   scheduleDraftSave();
   scheduleExportReminder();
   updateUndoRedoBtns();
+}
+
+export function pushUndo(label) {
+  pushUndoSnapshot(label, fullSnapshot());
 }
