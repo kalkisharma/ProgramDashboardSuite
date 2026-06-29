@@ -8,17 +8,22 @@ function showWtTooltip(e, el) {
   const est    = Number(el.dataset.est);
   const tgt    = Number(el.dataset.tgt);
   const total  = Number(el.dataset.total);
+  const cont   = Number(el.dataset.cont) || 0;
+  const predRaw = el.dataset.pred;
+  const predicted = predRaw !== '' && predRaw != null ? Number(predRaw) : est;
   const name   = el.dataset.name;
   const unit   = getWeightUnit();
-  const margin = tgt - est;
+  const margin = tgt - predicted;
   const mSign  = margin >= 0 ? '+' : '';
-  const mColor = margin >= 0 ? '#3fb950' : '#d29922';
+  const mColor = margin >= 0 ? '#3fb950' : '#f85149';
+  const row = (label, val, opt = '') => `<div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">${label}</span><strong${opt}>${val}</strong></div>`;
   const tt = document.getElementById('tooltip');
   tt.innerHTML = `
     <div style="font-weight:700;margin-bottom:5px">${esc(name)}</div>
-    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Estimated</span><strong>${est.toLocaleString()} ${esc(unit)}</strong></div>
-    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Target</span><strong>${tgt.toLocaleString()} ${esc(unit)}</strong></div>
-    <div style="display:flex;justify-content:space-between;gap:16px"><span style="color:var(--muted)">Margin</span><strong style="color:${mColor}">${mSign}${margin.toLocaleString()} ${esc(unit)}</strong></div>
+    ${row('Estimated (CBE)', `${est.toLocaleString()} ${esc(unit)}`)}
+    ${cont > 0 ? row('Contingency', `+${cont}%`) + row('Predicted', `${predicted.toLocaleString()} ${esc(unit)}`) : ''}
+    ${row('Target', `${tgt.toLocaleString()} ${esc(unit)}`)}
+    ${row('Margin', `${mSign}${Math.round(margin).toLocaleString()} ${esc(unit)}`, ` style="color:${mColor}"`)}
     <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--muted);font-size:0.75rem">Total vehicle est.: <strong style="color:var(--text)">${total.toLocaleString()} ${esc(unit)}</strong></div>
   `;
   tt.style.display = 'block';
@@ -46,13 +51,22 @@ export function renderWeightBudget() {
   if (!body || !state.ProjectData.weights.length) return;
 
   const unit        = getWeightUnit();
+  // Predicted = current best estimate + maturity contingency (MGA). Margin is measured
+  // against predicted, so contingency consumes margin (aerospace mass-management convention).
+  const pred        = w => w.estimated * (1 + (w.contingency || 0) / 100);
+  const anyCont     = state.ProjectData.weights.some(w => (w.contingency || 0) > 0);
   const totalTarget = state.ProjectData.weights.reduce((s, w) => s + w.target, 0);
   const totalEst    = state.ProjectData.weights.reduce((s, w) => s + w.estimated, 0);
-  const totalMargin = totalTarget - totalEst;
-  const maxVal      = Math.max(...state.ProjectData.weights.map(w => Math.max(w.target, w.estimated)), 1);
-  const marginColor = totalMargin >= 0 ? '#3fb950' : '#d29922';
+  const totalPred   = state.ProjectData.weights.reduce((s, w) => s + pred(w), 0);
+  const totalMargin = totalTarget - totalPred;
+  const marginColor = totalMargin >= 0 ? '#3fb950' : '#f85149';   // over budget → red everywhere
   const marginSign  = totalMargin >= 0 ? '+' : '';
-  const marginPct   = Math.round(Math.abs(totalMargin) / totalTarget * 100);
+  const marginPct   = totalTarget ? Math.round(Math.abs(totalMargin) / totalTarget * 100) : 0;
+  // Fixed target-reference scaling: the target tick sits at a constant position on every
+  // row, and the predicted bar extends relative to it — so a bar short of the tick reads as
+  // under budget and past the tick as over, instantly and per-row regardless of magnitude.
+  const TGT_REF = 66;
+  const barEstPct = (val, tgt) => tgt > 0 ? Math.min(99, Math.round(val / tgt * TGT_REF)) : (val > 0 ? 99 : 0);
 
   body.innerHTML = `
     <div class="kpi-row">
@@ -67,7 +81,7 @@ export function renderWeightBudget() {
       <div class="kpi-card">
         <div class="kpi-label">Margin Remaining</div>
         <div class="kpi-value" style="font-size:1.6rem;color:${marginColor}">${marginSign}${totalMargin.toLocaleString()} ${esc(unit)}</div>
-        <div class="kpi-sub">${marginPct}% of target</div>
+        <div class="kpi-sub">${marginPct}% of target${anyCont ? ' · incl. contingency' : ''}</div>
       </div>
     </div>
 
@@ -92,17 +106,18 @@ export function renderWeightBudget() {
         return Object.entries(grouped).map(([grpName, items], n) => {
           const gEst    = items.reduce((s, w) => s + w.estimated, 0);
           const gTgt    = items.reduce((s, w) => s + w.target, 0);
-          const gMargin = gTgt - gEst;
+          const gPred   = items.reduce((s, w) => s + pred(w), 0);
+          const gMargin = gTgt - gPred;
           const gSign   = gMargin >= 0 ? '+' : '';
           const gClass  = gMargin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
-          const gColor  = gMargin < 0 ? '#d29922' : '#3fb950';
-          const gEstPct = Math.min(100, Math.round(gEst / maxVal * 100));
-          const gTgtPct = Math.min(100, Math.round(gTgt / maxVal * 100));
+          const gColor  = gMargin < 0 ? '#f85149' : '#3fb950';
+          const gEstPct = barEstPct(gPred, gTgt);  // bar = predicted (CBE + contingency)
+          const gTgtPct = TGT_REF;                  // target tick fixed across rows
           const isCollapsed = collapsedGroups.includes(grpName);
           const header  = `<div class="wt-row wt-group-header" role="button" tabindex="0" aria-expanded="${!isCollapsed}" aria-controls="wt-grp-${n}" data-group-name="${esc(grpName)}" style="cursor:pointer">
             <div style="font-weight:700"><span class="wt-group-arrow" style="margin-right:6px">${isCollapsed ? '▶' : '▼'}</span>${esc(grpName)}</div>
             <div class="wt-bar-wrap" style="cursor:crosshair"
-              data-name="${esc(grpName)}" data-est="${gEst}" data-tgt="${gTgt}" data-total="${totalEst}">
+              data-name="${esc(grpName)}" data-est="${gEst}" data-pred="${Math.round(gPred)}" data-cont="" data-tgt="${gTgt}" data-total="${totalEst}">
               <div class="wt-bar-est" style="width:${gEstPct}%;background:${gColor}"></div>
               <div class="wt-bar-tgt" style="left:${gTgtPct}%"></div>
             </div>
@@ -111,22 +126,23 @@ export function renderWeightBudget() {
             <div style="text-align:right;font-weight:700" class="${gClass}">${gSign}${gMargin.toLocaleString()}</div>
           </div><div class="wt-group-items" id="wt-grp-${n}" style="${isCollapsed ? 'display:none' : ''}">`;
           const rows = items.map(w => {
-            const margin   = w.target - w.estimated;
-            const estPct   = Math.min(100, Math.round(w.estimated / maxVal * 100));
-            const tgtPct   = Math.min(100, Math.round(w.target    / maxVal * 100));
-            const barColor = margin < 0 ? '#d29922' : '#3fb950';
+            const wPred    = pred(w);
+            const margin   = w.target - wPred;
+            const estPct   = barEstPct(wPred, w.target);
+            const tgtPct   = TGT_REF;
+            const barColor = margin < 0 ? '#f85149' : '#3fb950';
             const mSign    = margin >= 0 ? '+' : '';
             const mClass   = margin >= 0 ? 'wt-margin-pos' : 'wt-margin-neg';
             return `<div class="wt-row" style="padding-left:12px;cursor:pointer" data-wt-idx="${state.ProjectData.weights.indexOf(w)}" title="Click to edit">
               <div title="${esc(w.subsystem)} (${esc(w.group)})">${esc(w.subsystem)}</div>
               <div class="wt-bar-wrap" style="cursor:crosshair"
-                data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-tgt="${w.target}" data-total="${totalEst}">
+                data-name="${esc(w.subsystem)}" data-est="${w.estimated}" data-pred="${Math.round(wPred)}" data-cont="${w.contingency || 0}" data-tgt="${w.target}" data-total="${totalEst}">
                 <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
                 <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
               </div>
               <div style="text-align:right">${w.estimated.toLocaleString()}</div>
               <div style="text-align:right;color:var(--muted)">${w.target.toLocaleString()}</div>
-              <div style="text-align:right" class="${mClass}">${mSign}${margin.toLocaleString()}</div>
+              <div style="text-align:right" class="${mClass}">${mSign}${Math.round(margin).toLocaleString()}</div>
             </div>`;
           }).join('');
           return header + rows + '</div>';

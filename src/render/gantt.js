@@ -5,7 +5,7 @@ import { phaseColor, PHASE_COLORS } from '../colors.js';
 import { computeCriticalPath } from '../compute/criticalPath.js';
 import { computeConflicts } from '../compute/conflicts.js';
 import { recalcHierarchy } from '../compute/hierarchy.js';
-import { childrenOf, descendantsOf } from '../compute/wbs.js';
+// (tree helpers childrenOf/descendantsOf no longer needed here — replaced by precomputed sets)
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
 import { getPhaseNames } from './progDash.js';
 import { showTooltip, hideTooltip, positionTooltip } from '../ui/tooltip.js';
@@ -44,6 +44,16 @@ let ganttDragging = false, ganttDragDidMove = false, ganttDragStartX, ganttDragS
 let _barDragWasActive = false;
 // Delay timer for Gantt tooltip — prevents tooltip firing during quick scans
 let _tooltipTimer = null;
+
+// Cache for the O(n²) conflict + critical-path computations, keyed on a structural
+// signature so view-only re-renders (zoom, theme, pan, legend, filter) reuse the result.
+let _cpCacheSig = null, _cpCacheConflicts = new Set(), _cpCacheLeaves = new Set();
+function _structuralSig() {
+  const t = state.ProjectData.tasks;
+  let s = (state.showCriticalPath ? 'C' : '-') + state.ganttWorkDays.join('');
+  for (const x of t) s += `|${x.id},${x.parentId},${x.start ? x.start.getTime() : 0},${x.end ? x.end.getTime() : 0},${x.pct},${x.milestone ? 1 : 0},${(x.deps || []).join('.')}`;
+  return s;
+}
 
 export function getBarZone(svgX, t) {
   const barX = daysBetween(state.ganttMinDateRef, t.start) * state.ganttZoom;
@@ -1018,16 +1028,26 @@ export function prepareGanttData() {
   const totalDays = daysBetween(minD, maxD);
   const W = totalDays * state.ganttZoom;
   const bodyH = visibleTasks.length * RH;
-  // CPM runs at leaf level (Phase 3). For collapsed parents, surface criticality on the
-  // parent row if any hidden descendant is critical (D4).
-  const cpLeaves = state.showCriticalPath ? computeCriticalPath(state.ProjectData.tasks, state.ganttWorkDays) : new Set();
+  // Conflicts + CPM (both ~O(n²)) are cached by structural signature so zoom/theme/pan/
+  // filter re-renders don't recompute them.
+  const sig = _structuralSig();
+  if (sig !== _cpCacheSig) {
+    _cpCacheSig = sig;
+    _cpCacheConflicts = computeConflicts(state.ProjectData.tasks);
+    _cpCacheLeaves = state.showCriticalPath ? computeCriticalPath(state.ProjectData.tasks, state.ganttWorkDays) : new Set();
+  }
+  const cpLeaves = _cpCacheLeaves;
+  state.conflictSet = _cpCacheConflicts;
+  // Collapsed parents inherit a critical-descendant highlight (D4) — walk up from each
+  // critical leaf to its collapsed ancestors (O(critical·depth), not O(n²)).
   const cpSet = new Set(cpLeaves);
-  if (state.showCriticalPath) {
-    state.ProjectData.tasks.forEach(t => {
-      if (collapsed.has(t.id) && descendantsOf(state.ProjectData.tasks, t.id).some(d => cpLeaves.has(d.id))) cpSet.add(t.id);
+  if (state.showCriticalPath && collapsed.size) {
+    cpLeaves.forEach(id => {
+      let p = byId[id] && byId[id].parentId != null ? byId[byId[id].parentId] : null;
+      const seen = new Set();
+      while (p && !seen.has(p.id)) { seen.add(p.id); if (collapsed.has(p.id)) cpSet.add(p.id); p = p.parentId != null ? byId[p.parentId] : null; }
     });
   }
-  state.conflictSet = computeConflicts(state.ProjectData.tasks);
   const exportBtn = document.getElementById('gantt-export-svg-btn');
   if (exportBtn) exportBtn.disabled = false;
   const exportPngBtn = document.getElementById('gantt-export-png-btn');
@@ -1044,6 +1064,9 @@ export function prepareGanttData() {
 export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
   const lb = document.getElementById('gantt-left-body');
   const orgIndex = buildOrgIndex(state.ProjectData.org);
+  // Precompute the set of task ids that are parents (O(1) hasChildren lookups instead of
+  // an O(n) childrenOf scan per visible row).
+  const parentIdSet = new Set(state.ProjectData.tasks.filter(t => t.parentId != null).map(t => t.parentId));
   lb.innerHTML = '';
   visibleTasks.forEach((t, i) => {
     const color = phaseColor(t.wbs);
@@ -1053,7 +1076,7 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     const depth = level - 1;                       // 0 for phases, 1 task, 2 subtask, …
     const wd = t.milestone ? { text: '◆', cls: '' } : wdDisplay(t, state.ganttWorkDays, getToday());
     const isPhaseHeader = level === 1;
-    const hasChildren = childrenOf(state.ProjectData.tasks, t.id).length > 0;
+    const hasChildren = parentIdSet.has(t.id);
     const isCollapsed = state.collapsedTasks.has(t.id);
     // A parent whose children are hidden by the depth ceiling (not by manual collapse).
     const cappedByDepth = hasChildren && state.ganttDepthFilter != null && level >= state.ganttDepthFilter;

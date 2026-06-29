@@ -73,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v6.5.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.6.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -740,6 +740,10 @@ function openWeightPanel(idx) {
       <input class="sp-form-input" id="wt-edit-est" type="number" step="0.1" min="0" value="${w.estimated}">
     </div>
     <div class="sp-form-group">
+      <label class="sp-form-label" for="wt-edit-cont">Contingency / MGA (%)</label>
+      <input class="sp-form-input" id="wt-edit-cont" type="number" step="1" min="0" value="${w.contingency || 0}">
+    </div>
+    <div class="sp-form-group">
       <label class="sp-form-label" for="wt-edit-status">Status</label>
       <select class="sp-form-input" id="wt-edit-status">${statusOpts}</select>
     </div>
@@ -770,6 +774,7 @@ function saveWeightRow(idx) {
   w.group     = document.getElementById('wt-edit-group').value.trim();
   w.target    = parseFloat(document.getElementById('wt-edit-target').value) || 0;
   w.estimated = parseFloat(document.getElementById('wt-edit-est').value) || 0;
+  w.contingency = Math.max(0, parseFloat(document.getElementById('wt-edit-cont').value) || 0);
   w.status    = document.getElementById('wt-edit-status').value;
   w.notes     = document.getElementById('wt-edit-notes').value;
   document.getElementById('sp-title').textContent = w.subsystem || 'Weight Row';
@@ -800,7 +805,7 @@ function deleteWeightRow(idx) {
 
 function addWeightRow() {
   pushUndo('add weight row');
-  state.ProjectData.weights.push({ subsystem: 'New Subsystem', group: 'Other', target: 0, estimated: 0, status: 'TBD', notes: '' });
+  state.ProjectData.weights.push({ subsystem: 'New Subsystem', group: 'Other', target: 0, estimated: 0, contingency: 0, status: 'TBD', notes: '' });
   document.getElementById('weight-tab-btn').style.display = '';
   safeRender(renderWeightBudget, 'Weight Budget');
   openWeightPanel(state.ProjectData.weights.length - 1);

@@ -6,7 +6,7 @@ import { PHASE_NAMES_FALLBACK } from '../constants.js';
 import { computeConflicts } from '../compute/conflicts.js';
 import { computeCriticalPath } from '../compute/criticalPath.js';
 import { buildOrgIndex, resolveNames } from '../compute/orgLookup.js';
-import { childrenOf, ancestorsOf, isPhaseHeader } from '../compute/wbs.js';
+import { ancestorsOf, isPhaseHeader } from '../compute/wbs.js';
 import { getPhaseNames } from './progDash.js';
 import { showToast, safeSetItem } from '../ui/toast.js';
 import { toggleCheckboxDropdown, closeCheckboxDropdown } from '../ui/checkboxDropdown.js';
@@ -313,6 +313,8 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
 
   // Variance only renders once a baseline is set (otherwise it's a column of dashes).
   const cols = srVisibleCols().filter(c => c !== 'variance' || anyBaseline());
+  // O(1) hasChildren lookups (avoids an O(n) childrenOf scan per row).
+  const parentIdSet = new Set(state.ProjectData.tasks.filter(t => t.parentId != null).map(t => t.parentId));
   const { col: sortCol, dir: sortDir } = state.statusReportSort;
   const today = getToday();
 
@@ -353,7 +355,7 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
           const indent = treeMode ? (((t.level || 1) - 1) * 16) : 0;
           let toggle = '';
           if (treeMode) {
-            if (childrenOf(state.ProjectData.tasks, t.id).length) {
+            if (parentIdSet.has(t.id)) {
               const isColl = state.collapsedTasks.has(t.id);
               toggle = `<button class="sr-tree-toggle" data-toggle-id="${t.id}" aria-label="${isColl ? 'Expand' : 'Collapse'}" title="${isColl ? 'Expand' : 'Collapse'}">${isColl ? '▶' : '▼'}</button>`;
             } else {

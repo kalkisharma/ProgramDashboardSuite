@@ -183,13 +183,14 @@ describe('buildWorkbook — Weight Budget sheet', () => {
 
   it('writes weight row values correctly', () => {
     const pd = minimalData();
-    pd.weights = [{ subsystem: 'Wing', group: 'Structures', target: 100, estimated: 95, status: 'Estimated', notes: 'ok' }];
+    pd.weights = [{ subsystem: 'Wing', group: 'Structures', target: 100, estimated: 95, contingency: 8, status: 'Estimated', notes: 'ok' }];
     const wb = buildWorkbook(pd, 'lb');
     const row = rows(wb, 'Weight Budget')[1];
     expect(row[0]).toBe('Wing');
     expect(row[2]).toBe(100);
     expect(row[3]).toBe(95);
-    expect(row[4]).toBe('Estimated');
+    expect(row[4]).toBe(8);          // Contingency (%)
+    expect(row[5]).toBe('Estimated'); // Status
   });
 });
 

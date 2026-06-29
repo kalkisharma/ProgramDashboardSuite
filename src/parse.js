@@ -97,12 +97,13 @@ export function parseWeightSheet(ws) {
   return rows.slice(1).filter(r => r[h.indexOf('Subsystem')] != null).map(r => {
     const g = k => r[h.indexOf(k)];
     return {
-      subsystem: String(g('Subsystem') || ''),
-      group:     String(g('Group') || ''),
-      target:    Number(g(tgtCol)) || 0,
-      estimated: Number(g(estCol)) || 0,
-      status:    String(g('Status') || 'TBD'),
-      notes:     String(g('Notes') || ''),
+      subsystem:   String(g('Subsystem') || ''),
+      group:       String(g('Group') || ''),
+      target:      Number(g(tgtCol)) || 0,
+      estimated:   Number(g(estCol)) || 0,
+      contingency: Number(g('Contingency (%)')) || 0,  // maturity-based mass growth allowance
+      status:      String(g('Status') || 'TBD'),
+      notes:       String(g('Notes') || ''),
     };
   });
 }
