@@ -485,6 +485,15 @@ function pptxAddHeader(slide, title, subtitle) {
   slide.addText(subtitle, { x: 9,    y: 0, w: 4.08, h: 0.6, color: 'D1D5DB', fontSize: 10, align: 'right', valign: 'middle' });
 }
 
+// Truncate on a word boundary with an ellipsis (avoids mid-word cuts on exec slides).
+function truncWords(s, max) {
+  s = String(s || '');
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const sp = cut.lastIndexOf(' ');
+  return (sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/\s+$/, '') + '…';
+}
+
 async function buildPPTX() {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 inches
@@ -530,87 +539,96 @@ async function buildPPTX() {
 
   // ── Slide 1: KPI Summary ──────────────────────────────────────────────────
   const s1 = pptx.addSlide({ masterName: 'SR_MASTER' });
-  pptxAddHeader(s1, `${projectTitle} — Program Status`, `Generated: ${dateStr}`);
+  pptxAddHeader(s1, `${projectTitle} — Program Status`, `Status as of ${dateStr}`);
   // Scope caption — slides 1–2 summarize the whole program (slide 3 mirrors the filtered view).
   s1.addText(`Entire program · ${leafTasks.length} task${leafTasks.length !== 1 ? 's' : ''}`, {
     x: 0.3, y: 0.6, w: 12.73, h: 0.18, fontSize: 9, italic: true, color: '6B7280',
   });
 
-  // KPI table (2 rows: value + label)
-  const pctCol   = overallPct >= 75 ? '3FB950' : overallPct >= 40 ? '58A6FF' : 'D29922';
-  const overdueCol = overdueTasks.length > 0 ? 'F85149' : '6B7280';
-  const atRiskCol  = atRiskTasks.length  > 0 ? 'D29922' : '6B7280';
-  const nextMsText = nextMs
-    ? `${fmt(nextMs.start || nextMs.end)}\n${(nextMs.name || '').slice(0, 28)}`
-    : 'None';
+  // Executive summary sentence
+  const slipped = (state.originalTasks || []).length
+    ? leafTasks.filter(t => {
+        const o = state.originalTasks.find(x => x.id === t.id);
+        return o && o.end && t.end && t.end > new Date(o.end) && t.pct < 100;
+      }).length
+    : 0;
+  const nextMsLabel = nextMs ? `${fmt(nextMs.start || nextMs.end)} (${truncWords(nextMs.name, 36)})` : 'none scheduled';
+  const summary = `Program is ${overallPct}% complete · ${openTasks.length} open · ${overdueTasks.length} overdue · ${atRiskTasks.length} at risk · next milestone ${nextMsLabel}` +
+    (slipped ? ` · ${slipped} task${slipped !== 1 ? 's' : ''} slipped vs baseline.` : '.');
+  s1.addText(summary, { x: 0.3, y: 0.84, w: 12.73, h: 0.3, fontSize: 11, color: '374151' });
 
-  const kpiValueRow = [
-    { text: `${overallPct}%`,         options: { fontSize: 28, bold: true, color: pctCol,    align: 'center', valign: 'bottom', fill: { color: 'F9FAFB' } } },
-    { text: String(openTasks.length), options: { fontSize: 28, bold: true, color: '374151',  align: 'center', valign: 'bottom', fill: { color: 'F9FAFB' } } },
-    { text: String(overdueTasks.length), options: { fontSize: 28, bold: true, color: overdueCol, align: 'center', valign: 'bottom', fill: { color: 'F9FAFB' } } },
-    { text: String(atRiskTasks.length),  options: { fontSize: 28, bold: true, color: atRiskCol,  align: 'center', valign: 'bottom', fill: { color: 'F9FAFB' } } },
-    { text: nextMsText,               options: { fontSize: 12, bold: false, color: '1F2937', align: 'center', valign: 'bottom', fill: { color: 'F9FAFB' } } },
+  // KPI cards (rounded shapes, not a spreadsheet grid)
+  const kpis = [
+    { val: `${overallPct}%`, label: 'Overall Complete', color: overallPct >= 75 ? '047857' : overallPct >= 40 ? '0369A1' : 'B45309', fs: 30 },
+    { val: String(openTasks.length),    label: 'Open Tasks', color: '1F2937', fs: 30 },
+    { val: String(overdueTasks.length), label: 'Overdue',  color: overdueTasks.length ? 'DC2626' : '6B7280', fs: 30 },
+    { val: String(atRiskTasks.length),  label: 'At Risk',   color: atRiskTasks.length  ? 'B45309' : '6B7280', fs: 30 },
+    { val: nextMs ? fmt(nextMs.start || nextMs.end) : 'None', label: 'Next Milestone', color: '1F2937', fs: 16 },
   ];
-  const kpiLabelRow = [
-    { text: 'Overall Complete',  options: { fontSize: 9, color: '6B7280', align: 'center', valign: 'top', fill: { color: 'F3F4F6' } } },
-    { text: 'Open Tasks',        options: { fontSize: 9, color: '6B7280', align: 'center', valign: 'top', fill: { color: 'F3F4F6' } } },
-    { text: 'Overdue',           options: { fontSize: 9, color: '6B7280', align: 'center', valign: 'top', fill: { color: 'F3F4F6' } } },
-    { text: 'At Risk',           options: { fontSize: 9, color: '6B7280', align: 'center', valign: 'top', fill: { color: 'F3F4F6' } } },
-    { text: 'Next Milestone',    options: { fontSize: 9, color: '6B7280', align: 'center', valign: 'top', fill: { color: 'F3F4F6' } } },
-  ];
-  s1.addTable([kpiValueRow, kpiLabelRow], {
-    x: 0.3, y: 0.8, w: 12.73, h: 2.0,
-    colW: [2.546, 2.546, 2.546, 2.546, 2.546],
-    rowH: [1.3, 0.6],
-    border: { type: 'solid', pt: 1, color: 'E5E7EB' },
-    margin: [0.1, 0.1, 0.05, 0.1],
+  const cardY = 1.25, cardH = 1.3, gap = 0.2;
+  const cardW = (12.73 - gap * 4) / 5;
+  kpis.forEach((k, i) => {
+    const cx = 0.3 + i * (cardW + gap);
+    s1.addShape(pptx.ShapeType.roundRect, { x: cx, y: cardY, w: cardW, h: cardH, fill: { color: 'F9FAFB' }, line: { color: 'E5E7EB', width: 1 }, rectRadius: 0.06 });
+    s1.addText(k.val,   { x: cx, y: cardY + 0.08, w: cardW, h: cardH - 0.5, fontSize: k.fs, bold: true, color: k.color, align: 'center', valign: 'middle' });
+    s1.addText(k.label, { x: cx, y: cardY + cardH - 0.42, w: cardW, h: 0.32, fontSize: 9, color: '4B5563', align: 'center', valign: 'top' });
   });
 
-  // Phase summary table on slide 1
-  const phaseHeaderRow = [
-    { text: 'Phase', options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9 } },
-    { text: 'Phase Name', options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9 } },
-    { text: 'Tasks', options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-    { text: 'Complete', options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-    { text: 'Overdue', options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-    { text: '% Done', options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: 'center' } },
-  ];
-  const phaseRows = phaseNums.map((ph, idx) => {
-    const tasks    = phaseMap[ph];
-    const pName    = phaseNames[ph] || PHASE_NAMES_FALLBACK[ph - 1] || `Phase ${ph}`;
-    const total    = tasks.length;
-    const done     = tasks.filter(t => t.pct >= 100).length;
-    const overdue  = tasks.filter(t => t.end && t.end < today && t.pct < 100).length;
-    const pct      = weightedPct(tasks);
-    const rowFill  = idx % 2 === 0 ? 'FFFFFF' : 'F9FAFB';
-    const pctColHex = pct >= 75 ? '3FB950' : pct >= 40 ? '58A6FF' : 'D29922';
-    const phColor  = phaseColor(`${ph}.1`).replace('#', '');
-    return [
-      { text: `Phase ${ph}`, options: { fontSize: 9, color: phColor, bold: true, fill: { color: rowFill } } },
-      { text: pName,          options: { fontSize: 9, color: '374151', fill: { color: rowFill } } },
-      { text: String(total),  options: { fontSize: 9, color: '374151', align: 'center', fill: { color: rowFill } } },
-      { text: String(done),   options: { fontSize: 9, color: '374151', align: 'center', fill: { color: rowFill } } },
-      { text: overdue > 0 ? String(overdue) : '—', options: { fontSize: 9, color: overdue > 0 ? 'F85149' : '9CA3AF', align: 'center', fill: { color: rowFill } } },
-      { text: `${pct}%`,      options: { fontSize: 9, bold: true, color: pctColHex, align: 'center', fill: { color: rowFill } } },
-    ];
-  });
-  s1.addTable([phaseHeaderRow, ...phaseRows], {
-    x: 0.3, y: 3.05, w: 12.73,
-    colW: [1.0, 4.5, 1.0, 1.0, 1.0, 1.23],
-    border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
-    fontSize: 9,
-    margin: [0.05, 0.1, 0.05, 0.1],
-    autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 0.85, masterName: 'SR_MASTER',
-  });
+  // Top Concerns — the worst open red/amber tasks (replaces the slide-2-duplicate phase table)
+  s1.addText('Top Concerns', { x: 0.3, y: 2.78, w: 6, h: 0.25, fontSize: 12, bold: true, color: '1F2937' });
+  const concerns = leafTasks
+    .filter(t => t.pct < 100)
+    .map(t => ({ t, rag: ragStatus(t, conflictSet) }))
+    .filter(o => o.rag === 'red' || o.rag === 'amber')
+    .map(o => {
+      const overdue  = o.t.end && o.t.end < today;
+      const daysLate = overdue ? Math.max(1, Math.round((today - o.t.end) / 86400000)) : 0;
+      return { ...o, overdue, daysLate };
+    })
+    .sort((a, b) => (b.overdue - a.overdue) || (b.daysLate - a.daysLate) || (a.t.pct - b.t.pct))
+    .slice(0, 8);
 
-  s1.addText('Phase Progress', {
-    x: 0.3, y: 2.9, w: 6, h: 0.2,
-    fontSize: 10, bold: true, color: '374151',
+  if (concerns.length) {
+    const cHeader = ['Status', 'Task', 'POC', 'End', 'Detail'].map((h, i) => ({
+      text: h, options: { bold: true, color: 'FFFFFF', fill: { color: '374151' }, fontSize: 9, align: i >= 3 ? 'center' : 'left' },
+    }));
+    const cRows = concerns.map(({ t, rag, overdue, daysLate }) => {
+      const fill  = rag === 'red' ? 'FEE2E2' : 'FEF3C7';
+      const stTxt = rag === 'red' ? 'Overdue' : 'At Risk';
+      const stCol = rag === 'red' ? 'B91C1C' : 'B45309';
+      const detail = overdue
+        ? `${daysLate} day${daysLate !== 1 ? 's' : ''} late`
+        : `${t.pct}% · ${t.end ? workDaysRemaining(t.end, state.ganttWorkDays, today) + ' wd left' : 'no end date'}`;
+      const base = { fontSize: 9, fill: { color: fill } };
+      return [
+        { text: stTxt,                       options: { ...base, bold: true, color: stCol } },
+        { text: truncWords(t.name, 52),      options: { ...base, color: '1F2937' } },
+        { text: truncWords(t.poc || '—', 24),options: { ...base, color: '374151' } },
+        { text: t.end ? fmt(t.end) : '—',    options: { ...base, color: overdue ? 'B91C1C' : '374151', align: 'center' } },
+        { text: detail,                      options: { ...base, color: '4B5563', align: 'center' } },
+      ];
+    });
+    s1.addTable([cHeader, ...cRows], {
+      x: 0.3, y: 3.05, w: 12.73,
+      colW: [1.2, 5.6, 2.2, 1.4, 2.33],
+      border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
+      fontSize: 9, margin: [0.05, 0.1, 0.05, 0.1],
+      autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 0.85, masterName: 'SR_MASTER',
+    });
+  } else {
+    s1.addText('✓  No overdue or at-risk tasks — all open work is on track.', {
+      x: 0.3, y: 3.05, w: 12.73, h: 0.4, fontSize: 12, bold: true, color: '047857',
+    });
+  }
+
+  // Footnote: methodology + as-of date
+  s1.addText('% complete is schedule-duration-weighted. "At Risk" = ≤10 work-days to end and <50% complete, or a scheduling conflict. Status as of ' + dateStr + '.', {
+    x: 0.3, y: 7.05, w: 12.73, h: 0.3, fontSize: 8, italic: true, color: '6B7280',
   });
 
   // ── Slide 2: Phase Breakdown ──────────────────────────────────────────────
   const s2 = pptx.addSlide({ masterName: 'SR_MASTER' });
-  pptxAddHeader(s2, `${projectTitle} — Phase Breakdown`, `Generated: ${dateStr}`);
+  pptxAddHeader(s2, `${projectTitle} — Phase Breakdown`, `Status as of ${dateStr}`);
   s2.addText(`Entire program · ${leafTasks.length} task${leafTasks.length !== 1 ? 's' : ''}`, {
     x: 0.3, y: 0.6, w: 12.73, h: 0.18, fontSize: 9, italic: true, color: '6B7280',
   });
@@ -635,20 +653,32 @@ async function buildPPTX() {
     const overdue    = tasks.filter(t => t.end && t.end < today && t.pct < 100).length;
     const pct        = weightedPct(tasks);
     const rowFill    = idx % 2 === 0 ? 'FFFFFF' : 'F3F4F6';
-    const pctColHex  = pct >= 75 ? '3FB950' : pct >= 40 ? '58A6FF' : 'D29922';
+    const pctColHex  = pct >= 75 ? '047857' : '4B5563';   // green when on/ahead; neutral otherwise (no categorical blue)
     const phColor    = phaseColor(`${ph}.1`).replace('#', '');
     return [
       { text: `Phase ${ph}`, options: { fontSize: 10, color: phColor, bold: true, fill: { color: rowFill } } },
       { text: pName,          options: { fontSize: 10, color: '374151', fill: { color: rowFill } } },
       { text: String(total),  options: { fontSize: 10, color: '374151', align: 'center', fill: { color: rowFill } } },
-      { text: String(done),   options: { fontSize: 10, color: done > 0 ? '3FB950' : '9CA3AF', align: 'center', bold: done > 0, fill: { color: rowFill } } },
-      { text: String(inProg), options: { fontSize: 10, color: inProg > 0 ? '58A6FF' : '9CA3AF', align: 'center', fill: { color: rowFill } } },
-      { text: String(notStart), options: { fontSize: 10, color: '9CA3AF', align: 'center', fill: { color: rowFill } } },
-      { text: overdue > 0 ? String(overdue) : '—', options: { fontSize: 10, color: overdue > 0 ? 'F85149' : '9CA3AF', align: 'center', bold: overdue > 0, fill: { color: rowFill } } },
+      { text: String(done),   options: { fontSize: 10, color: done > 0 ? '047857' : '6B7280', align: 'center', bold: done > 0, fill: { color: rowFill } } },
+      { text: String(inProg), options: { fontSize: 10, color: inProg > 0 ? '0369A1' : '6B7280', align: 'center', fill: { color: rowFill } } },
+      { text: String(notStart), options: { fontSize: 10, color: '6B7280', align: 'center', fill: { color: rowFill } } },
+      { text: overdue > 0 ? String(overdue) : '—', options: { fontSize: 10, color: overdue > 0 ? 'B91C1C' : '6B7280', align: 'center', bold: overdue > 0, fill: { color: rowFill } } },
       { text: `${pct}%`,      options: { fontSize: 10, bold: true, color: pctColHex, align: 'center', fill: { color: rowFill } } },
     ];
   });
-  s2.addTable([phDetailHeader, ...phDetailRows], {
+  // Program totals row
+  const tTotal = leafTasks.length;
+  const tDone  = leafTasks.filter(t => t.pct >= 100).length;
+  const tProg  = leafTasks.filter(t => t.pct > 0 && t.pct < 100).length;
+  const tNot   = leafTasks.filter(t => t.pct === 0).length;
+  const tOver  = overdueTasks.length;
+  const totalRow = [
+    { text: 'Program', options: { fontSize: 10, bold: true, color: 'FFFFFF', fill: { color: '1F2937' } } },
+    { text: 'All phases', options: { fontSize: 10, bold: true, color: 'FFFFFF', fill: { color: '1F2937' } } },
+    ...[tTotal, tDone, tProg, tNot, tOver === 0 ? '—' : tOver, `${overallPct}%`].map(v =>
+      ({ text: String(v), options: { fontSize: 10, bold: true, color: 'FFFFFF', align: 'center', fill: { color: '1F2937' } } })),
+  ];
+  s2.addTable([phDetailHeader, ...phDetailRows, totalRow], {
     x: 0.3, y: 0.95, w: 12.73,
     colW: [1.0, 3.73, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
@@ -673,12 +703,21 @@ async function buildPPTX() {
                    start:1.0, end:1.0, pct:0.6, wd:0.8, rag:1.0, notes:2.6 };
   const centered = new Set(['start','end','pct','wd','rag']);
 
-  pptxAddHeader(s3, `${projectTitle} — Tasks`, `Generated: ${dateStr}`);
+  pptxAddHeader(s3, `${projectTitle} — Tasks`, `Status as of ${dateStr}`);
 
   s3.addText(`${filterDesc} · ${exportTasks.length} task${exportTasks.length !== 1 ? 's' : ''}`, {
-    x: 0.3, y: 0.7, w: 12.73, h: 0.2,
+    x: 0.3, y: 0.66, w: 12.73, h: 0.2,
     fontSize: 9, color: '6B7280', italic: true,
   });
+
+  // RAG legend (colored chips) + org-validation key — on the first task slide.
+  s3.addText([
+    { text: '■ ', options: { color: 'B91C1C' } }, { text: 'Overdue    ', options: { color: '4B5563' } },
+    { text: '■ ', options: { color: 'B45309' } }, { text: 'At Risk (≤10 work-days left & <50%, or a conflict)    ', options: { color: '4B5563' } },
+    { text: '■ ', options: { color: '047857' } }, { text: 'On Track    ', options: { color: '4B5563' } },
+    { text: '■ ', options: { color: '1D4ED8' } }, { text: 'Done', options: { color: '4B5563' } },
+    { text: '        ⚠ = name not in org chart', options: { color: 'B45309' } },
+  ], { x: 0.3, y: 0.88, w: 12.73, h: 0.2, fontSize: 8 });
 
   const taskTableHeader = cols.map(c => ({
     text: SR_LABELS[c],
@@ -688,33 +727,39 @@ async function buildPPTX() {
   const taskRows = exportTasks.map((t, idx) => {
     const rag      = ragStatus(t, conflictSet);
     const rowFill  = idx % 2 === 0 ? 'FFFFFF' : 'F9FAFB';
-    const ragFill  = rag === 'red' ? 'FEE2E2' : rag === 'amber' ? 'FEF3C7' : 'D1FAE5';
-    const ragText  = rag === 'red' ? 'DC2626' : rag === 'amber' ? 'D97706' : '059669';
+    // 4 distinct states (Done is blue, not lumped with On Track).
+    const ragFill  = rag === 'red' ? 'FEE2E2' : rag === 'amber' ? 'FEF3C7' : rag === 'done' ? 'DBEAFE' : 'D1FAE5';
+    const ragText  = rag === 'red' ? 'B91C1C' : rag === 'amber' ? 'B45309' : rag === 'done' ? '1D4ED8' : '047857';
     const overdue  = t.end && t.end < today && t.pct < 100;
-    const endColor = overdue ? 'DC2626' : '374151';
+    const endColor = overdue ? 'B91C1C' : '374151';
     const phColor  = phaseColor(t.wbs).replace('#', '');
-    const pocTeams = resolveNames(t.poc, orgIndex).teams.join(', ');
-    const custTeams = resolveNames(t.customer, orgIndex).teams.join(', ');
+    const pocRes   = resolveNames(t.poc, orgIndex);
+    const custRes  = resolveNames(t.customer, orgIndex);
+    const mark     = (val, res) => (val || '') + (res.hasUnknown ? '  ⚠' : '');  // flag names not in the org chart
     const wdText   = t.pct >= 100 ? '✓' : t.milestone ? '◆' :
                      !t.end ? '—' : overdue ? '0 wd' :
                      workDaysRemaining(t.end, state.ganttWorkDays, today) + ' wd';
-    const wdColor  = overdue ? 'DC2626' : '374151';
-    const notes    = (t.notes || '').slice(0, 60) + ((t.notes || '').length > 60 ? '…' : '');
+    const wdColor  = overdue ? 'B91C1C' : '374151';
+    const notes    = truncWords(t.notes, 60);
+    // Convey the WBS tree: indent by depth, mark milestones, bold parent (summary) rows.
+    const isParent = parentIds.has(t.id);
+    const indent   = '  '.repeat(Math.max(0, (t.level || 1) - 1));
+    const nameTxt  = indent + (t.milestone ? '◆ ' : '') + (t.name || '');
     const base8    = { fontSize: 8, fill: { color: rowFill } };
     const txt      = (text, opt) => ({ text: text || '—', options: { ...base8, ...opt } });
     const map = {
       wbs:          txt(t.wbs, { color: phColor, bold: true }),
-      name:         txt(t.name, { color: '1F2937' }),
-      poc:          txt(t.poc, { color: '374151' }),
-      pocTeam:      txt(pocTeams, { color: '6B7280' }),
-      customer:     txt(t.customer, { color: '374151' }),
-      customerTeam: txt(custTeams, { color: '6B7280' }),
+      name:         txt(nameTxt, { color: '1F2937', bold: isParent }),
+      poc:          txt(mark(t.poc, pocRes), { color: pocRes.hasUnknown ? 'B45309' : '374151' }),
+      pocTeam:      txt(pocRes.teams.join(', '), { color: '4B5563' }),
+      customer:     txt(mark(t.customer, custRes), { color: custRes.hasUnknown ? 'B45309' : '374151' }),
+      customerTeam: txt(custRes.teams.join(', '), { color: '4B5563' }),
       start:        txt(fmt(t.start), { color: '374151', align: 'center' }),
       end:          txt(fmt(t.end), { color: endColor, align: 'center' }),
       pct:          txt(`${t.pct}%`, { color: '374151', align: 'center' }),
       wd:           txt(wdText, { color: wdColor, align: 'center' }),
       rag:          { text: ragLabel(rag), options: { ...base8, bold: true, color: ragText, align: 'center', fill: { color: ragFill } } },
-      notes:        txt(notes, { color: '6B7280' }),
+      notes:        txt(notes, { color: '4B5563' }),
     };
     return cols.map(c => map[c]);
   });
@@ -723,13 +768,13 @@ async function buildPPTX() {
     const totalW = cols.reduce((s, c) => s + (PPTX_W[c] || 1), 0);
     const colW   = cols.map(c => +((PPTX_W[c] || 1) / totalW * 12.73).toFixed(2));
     s3.addTable([taskTableHeader, ...taskRows], {
-      x: 0.3, y: 1.05, w: 12.73,
+      x: 0.3, y: 1.15, w: 12.73,
       colW,
       border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
       fontSize: 8,
       margin: [0.04, 0.08, 0.04, 0.08],
       // Paginate long task lists across slides instead of running off the bottom edge.
-      autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.05, masterName: 'SR_MASTER',
+      autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.15, masterName: 'SR_MASTER',
     });
   } else {
     s3.addText('No open tasks match the current filter.', {
