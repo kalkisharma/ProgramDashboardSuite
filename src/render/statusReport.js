@@ -478,16 +478,25 @@ async function exportStatusReportPPTX() {
   }
 }
 
-function pptxHeaderRow(title, subtitle) {
-  return [[
-    { text: title,    options: { bold: true, color: 'FFFFFF', fontSize: 15, align: 'left',  valign: 'middle' } },
-    { text: subtitle, options: { color: 'D1D5DB',  fontSize: 10, align: 'right', valign: 'middle' } },
-  ]];
+// Title + date text placed over the dark header bar (the bar itself lives in the slide
+// master so it — and the slide number — repeat on auto-paginated continuation slides).
+function pptxAddHeader(slide, title, subtitle) {
+  slide.addText(title,    { x: 0.25, y: 0, w: 9,    h: 0.6, bold: true, color: 'FFFFFF', fontSize: 15, align: 'left',  valign: 'middle' });
+  slide.addText(subtitle, { x: 9,    y: 0, w: 4.08, h: 0.6, color: 'D1D5DB', fontSize: 10, align: 'right', valign: 'middle' });
 }
 
 async function buildPPTX() {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE'; // 13.33 × 7.5 inches
+
+  // Master: white background, dark header bar, and a slide number — all repeat on the
+  // continuation slides that auto-pagination creates for long tables.
+  pptx.defineSlideMaster({
+    title: 'SR_MASTER',
+    background: { color: 'FFFFFF' },
+    objects: [{ rect: { x: 0, y: 0, w: 13.33, h: 0.6, fill: { color: '1F2937' } } }],
+    slideNumber: { x: 12.4, y: 7.12, w: 0.8, h: 0.3, fontSize: 8, color: '9CA3AF', align: 'right' },
+  });
 
   const projectTitle = state.ProjectData.info['Project Title'] || 'Program';
   const today        = getToday();
@@ -495,21 +504,24 @@ async function buildPPTX() {
   const phaseNames   = getPhaseNames();
 
   const allTasks   = state.ProjectData.tasks;
-  const nonHeaders = allTasks.filter(t => !isPhaseHeader(t));
+  // Metrics run over LEAF tasks only — parent rows hold rolled-up values, so counting
+  // both a parent and its children would double-count work (and over-weight deep branches).
+  const parentIds  = new Set(allTasks.filter(t => t.parentId != null).map(t => t.parentId));
+  const leafTasks  = allTasks.filter(t => !parentIds.has(t.id) && !isPhaseHeader(t));
   const conflictSet = computeConflicts(allTasks);
   const orgIndex    = buildOrgIndex(state.ProjectData.org);
 
-  const overallPct   = weightedPct(nonHeaders);
-  const openTasks    = nonHeaders.filter(t => t.pct < 100);
-  const overdueTasks = nonHeaders.filter(t => t.end && t.end < today && t.pct < 100);
+  const overallPct   = weightedPct(leafTasks);
+  const openTasks    = leafTasks.filter(t => t.pct < 100);
+  const overdueTasks = leafTasks.filter(t => t.end && t.end < today && t.pct < 100);
   const atRiskTasks  = openTasks.filter(t => ragStatus(t, conflictSet) === 'amber');
-  const milestones   = nonHeaders.filter(t => t.milestone);
+  const milestones   = leafTasks.filter(t => t.milestone);
   const nextMs       = milestones.filter(t => t.pct < 100)
-    .sort((a, b) => (a.start || a.end) - (b.start || b.end))[0];
+    .sort((a, b) => (a.start || a.end || new Date(9e15)) - (b.start || b.end || new Date(9e15)))[0];
 
-  // Build phase data
+  // Build phase data (leaf tasks grouped by top-level phase)
   const phaseMap = {};
-  nonHeaders.forEach(t => {
+  leafTasks.forEach(t => {
     const ph = parseInt(String(t.wbs).split('.')[0]) || 1;
     if (!phaseMap[ph]) phaseMap[ph] = [];
     phaseMap[ph].push(t);
@@ -517,16 +529,11 @@ async function buildPPTX() {
   const phaseNums = Object.keys(phaseMap).map(Number).sort((a, b) => a - b);
 
   // ── Slide 1: KPI Summary ──────────────────────────────────────────────────
-  const s1 = pptx.addSlide();
-  s1.background = { color: 'FFFFFF' };
-
-  // Header bar
-  s1.addTable(pptxHeaderRow(`${projectTitle} — Program Status`, `Generated: ${dateStr}`), {
-    x: 0, y: 0, w: 13.33, h: 0.6,
-    colW: [9, 4.33],
-    fill: { color: '1F2937' },
-    border: { type: 'none' },
-    margin: [0.1, 0.25, 0.1, 0.25],
+  const s1 = pptx.addSlide({ masterName: 'SR_MASTER' });
+  pptxAddHeader(s1, `${projectTitle} — Program Status`, `Generated: ${dateStr}`);
+  // Scope caption — slides 1–2 summarize the whole program (slide 3 mirrors the filtered view).
+  s1.addText(`Entire program · ${leafTasks.length} task${leafTasks.length !== 1 ? 's' : ''}`, {
+    x: 0.3, y: 0.6, w: 12.73, h: 0.18, fontSize: 9, italic: true, color: '6B7280',
   });
 
   // KPI table (2 rows: value + label)
@@ -593,6 +600,7 @@ async function buildPPTX() {
     border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
     fontSize: 9,
     margin: [0.05, 0.1, 0.05, 0.1],
+    autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 0.85, masterName: 'SR_MASTER',
   });
 
   s1.addText('Phase Progress', {
@@ -601,15 +609,10 @@ async function buildPPTX() {
   });
 
   // ── Slide 2: Phase Breakdown ──────────────────────────────────────────────
-  const s2 = pptx.addSlide();
-  s2.background = { color: 'FFFFFF' };
-
-  s2.addTable(pptxHeaderRow(`${projectTitle} — Phase Breakdown`, `Generated: ${dateStr}`), {
-    x: 0, y: 0, w: 13.33, h: 0.6,
-    colW: [9, 4.33],
-    fill: { color: '1F2937' },
-    border: { type: 'none' },
-    margin: [0.1, 0.25, 0.1, 0.25],
+  const s2 = pptx.addSlide({ masterName: 'SR_MASTER' });
+  pptxAddHeader(s2, `${projectTitle} — Phase Breakdown`, `Generated: ${dateStr}`);
+  s2.addText(`Entire program · ${leafTasks.length} task${leafTasks.length !== 1 ? 's' : ''}`, {
+    x: 0.3, y: 0.6, w: 12.73, h: 0.18, fontSize: 9, italic: true, color: '6B7280',
   });
 
   const phDetailHeader = [
@@ -646,16 +649,16 @@ async function buildPPTX() {
     ];
   });
   s2.addTable([phDetailHeader, ...phDetailRows], {
-    x: 0.3, y: 0.85, w: 12.73,
+    x: 0.3, y: 0.95, w: 12.73,
     colW: [1.0, 3.73, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
     border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
     fontSize: 10,
     margin: [0.08, 0.12, 0.08, 0.12],
+    autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 0.85, masterName: 'SR_MASTER',
   });
 
   // ── Slide 3: Task Table ───────────────────────────────────────────────────
-  const s3 = pptx.addSlide();
-  s3.background = { color: 'FFFFFF' };
+  const s3 = pptx.addSlide({ masterName: 'SR_MASTER' });
 
   const filter = state.statusReportFilter;
   // Mirror exactly what's visible on screen: same rows (filters + collapse + depth, tree or
@@ -670,13 +673,7 @@ async function buildPPTX() {
                    start:1.0, end:1.0, pct:0.6, wd:0.8, rag:1.0, notes:2.6 };
   const centered = new Set(['start','end','pct','wd','rag']);
 
-  s3.addTable(pptxHeaderRow(`${projectTitle} — Tasks`, `Generated: ${dateStr}`), {
-    x: 0, y: 0, w: 13.33, h: 0.6,
-    colW: [9, 4.33],
-    fill: { color: '1F2937' },
-    border: { type: 'none' },
-    margin: [0.1, 0.25, 0.1, 0.25],
-  });
+  pptxAddHeader(s3, `${projectTitle} — Tasks`, `Generated: ${dateStr}`);
 
   s3.addText(`${filterDesc} · ${exportTasks.length} task${exportTasks.length !== 1 ? 's' : ''}`, {
     x: 0.3, y: 0.7, w: 12.73, h: 0.2,
@@ -731,6 +728,8 @@ async function buildPPTX() {
       border: { type: 'solid', pt: 0.5, color: 'E5E7EB' },
       fontSize: 8,
       margin: [0.04, 0.08, 0.04, 0.08],
+      // Paginate long task lists across slides instead of running off the bottom edge.
+      autoPage: true, autoPageRepeatHeader: true, autoPageSlideStartY: 1.05, masterName: 'SR_MASTER',
     });
   } else {
     s3.addText('No open tasks match the current filter.', {
@@ -739,9 +738,9 @@ async function buildPPTX() {
     });
   }
 
-  // Write file
-  const safeTitle = projectTitle.replace(/[/\\?%*:|"<>]/g, '-');
-  const fileDateStr = today.toISOString().slice(0, 10);
+  // Write file — local calendar date (matches the in-deck date; avoids the UTC off-by-one).
+  const safeTitle = projectTitle.replace(/[/\\?%*:|"<>]/g, '-').replace(/[. ]+$/, '').slice(0, 80) || 'Program';
+  const fileDateStr = fmt(today);
   await pptx.writeFile({ fileName: `${safeTitle} - Status Report - ${fileDateStr}.pptx` });
   showToast('PowerPoint exported successfully.');
 }
