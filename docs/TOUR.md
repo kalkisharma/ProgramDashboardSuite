@@ -21,7 +21,7 @@ npm run build   # outputs dist/ProgramDashboardSuite.html (single self-contained
 npm test        # Vitest unit tests
 ```
 
-Load sample data with the "Generate Sample" button to see the Excel-driven tabs populated.
+Load sample data instantly with the "Load Sample Project" button to see the Excel-driven tabs populated.
 
 ---
 

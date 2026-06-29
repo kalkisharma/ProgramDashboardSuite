@@ -1,4 +1,4 @@
-<!-- Program Dashboard Suite v6.1.1 — 2026-06-29 -->
+<!-- Program Dashboard Suite v6.2.0 — 2026-06-29 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,7 +14,7 @@
     <div id="project-subtitle">Drop an Excel file to load your project</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <button class="btn-secondary" id="generate-sample-btn" title="Download a pre-filled sample Excel to get started">Generate Sample Excel</button>
+    <button class="btn-secondary" id="generate-sample-btn" title="Load a pre-filled sample project to explore the app">Load Sample Project</button>
     <button class="btn-secondary" id="save-excel-btn" title="Save all tabs including Gantt edits to Excel" style="display:none">Export to Excel</button>
     <button class="btn-secondary btn-sm" id="proj-info-btn" title="Edit project information" style="display:none">Project Info</button>
     <button class="btn-secondary" id="help-btn" aria-label="Help and keyboard shortcuts" title="Help and keyboard shortcuts">?</button>
@@ -47,9 +47,10 @@
       <div class="drop-icon">📊</div>
       <div class="drop-title">Drop your Excel file here</div>
       <div class="drop-sub">
-        Accepts any .xlsx file with <strong>Project Info</strong>, <strong>Schedule</strong>, and <strong>Specifications</strong> sheets<br>
-        <em style="font-size:0.82em">Optional: <strong>Org Chart</strong> sheet (org view) · <strong>Weight Budget</strong> sheet (mass tracking) · <strong>Phase N Name</strong> rows in Project Info to name each phase</em><br><br>
-        — or click below to generate a sample file first —
+        Accepts any .xlsx file with <strong>Project Info</strong>, <strong>Schedule</strong>, and <strong>Specifications</strong> sheets.<br>
+        The Schedule supports nested <strong>subtasks</strong> (dotted WBS) and POC/Customer names that resolve to <strong>teams</strong> via the Org Chart.<br>
+        <em style="font-size:0.82em">Optional sheets: <strong>Org Chart</strong> · <strong>Weight Budget</strong> · <strong>Reference Files</strong> · <strong>Phase N Name</strong> rows in Project Info</em><br><br>
+        — or click below to load a sample project instantly —
       </div>
       <div id="load-error" role="alert" aria-live="assertive"
            style="display:none;background:var(--danger-bg,#3d1a1a);color:var(--danger,#f85149);

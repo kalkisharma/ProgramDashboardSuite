@@ -60,7 +60,7 @@ export function buildWorkbook(projectData, weightUnit) {
   return wb;
 }
 
-export function generateSampleExcel() {
+export function buildSampleWorkbook() {
   const wb = XLSX.utils.book_new();
 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -207,5 +207,10 @@ export function generateSampleExcel() {
     ['FAA Issue Paper Log',         'https://example.com/docs/issue-papers.pdf', '2027-03-03', 'External Consultant', 'Author not in org chart — demonstrates validation flag'],
   ]), 'Reference Files');
 
-  XLSX.writeFile(wb, 'vehicle_project.xlsx');
+  return wb;
+}
+
+// Download the sample as an .xlsx (kept for back-compat; the in-app button now loads it directly).
+export function generateSampleExcel() {
+  XLSX.writeFile(buildSampleWorkbook(), 'vehicle_project.xlsx');
 }

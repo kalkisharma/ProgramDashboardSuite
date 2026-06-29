@@ -9,7 +9,7 @@ import { wouldCreateCycle, inferHierarchyFromWBS, descendantsOf } from './comput
 import { recalcHierarchy } from './compute/hierarchy.js';
 import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, extractWorkDays } from './parse.js';
 import { buildOrgIndex, resolveNames } from './compute/orgLookup.js';
-import { buildWorkbook, generateSampleExcel } from './excel.js';
+import { buildWorkbook, buildSampleWorkbook } from './excel.js';
 import { state } from './state.js';
 import { showToast, safeSetItem, safeRender } from './ui/toast.js';
 import { showTooltip, hideTooltip, positionTooltip } from './ui/tooltip.js';
@@ -73,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v6.1.1'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.2.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -316,6 +316,9 @@ function loadFile(file) {
   r.onload = ev => {
     try {
       const wb = XLSX.read(ev.target.result, { type: 'array', cellDates: true });
+      // _justLoaded must be true DURING parseWorkbook too — that's where the milestone-demotion
+      // and subtask-discoverability hint toasts fire.
+      _justLoaded = true;
       parseWorkbook(wb);
       const missing = [];
       if (!state.ProjectData.tasks.length)  missing.push("'Schedule' (columns: Task ID, WBS, Task Name, POC, Customer, Start Date, End Date, % Complete, Dependencies, Milestone, Notes)");
@@ -323,10 +326,9 @@ function loadFile(file) {
       if (missing.length) {
         showLoadError('Required sheets missing:\n\n' + missing.join('\n\n') + '\n\nSheet names are case-sensitive. Check that the names match exactly.');
       }
-      _justLoaded = true;
       renderDashboard();
       _justLoaded = false;
-    } catch(e) { showLoadError('Could not parse file: ' + e.message); }
+    } catch(e) { _justLoaded = false; showLoadError('Could not parse file: ' + e.message); }
   };
   r.readAsArrayBuffer(file);
 }
@@ -373,6 +375,7 @@ function parseWorkbook(wb) {
   const parentSet = new Set(state.ProjectData.tasks.filter(t => t.parentId != null).map(t => t.parentId));
   state.collapsedTasks = new Set(state.ProjectData.tasks.filter(t => (t.level || 1) >= 2 && parentSet.has(t.id)).map(t => t.id));
   state.ganttDepthFilter = null;
+
 
   // Deep-copy tasks for reset (post-hierarchy, so reset restores the resolved tree)
   state.originalTasks = state.ProjectData.tasks.map(t => ({ ...t, deps: [...t.deps] }));
@@ -447,7 +450,11 @@ function renderDashboard() {
     if (dupTaskIds.size)  parts.push(`⚠ ${dupTaskIds.size} duplicate task ID${dupTaskIds.size !== 1 ? 's' : ''}`);
     if (dupSpecIds.size)  parts.push(`⚠ ${dupSpecIds.size} duplicate spec ID${dupSpecIds.size !== 1 ? 's' : ''}`);
     const hasWarnings = badDates.length || dupTaskIds.size || dupSpecIds.size;
-    showToast('Loaded: ' + parts.join(' · '), null, hasWarnings ? 10000 : 6000);
+    // Fold the subtask-discoverability hint into the single load toast (avoids it being
+    // clobbered by this one). Subtasks (L3+) start collapsed.
+    const maxLvl = Math.max(1, ...state.ProjectData.tasks.map(t => t.level || 1));
+    const hint = maxLvl >= 3 ? '  ·  subtasks collapsed — click ▶ or use Depth to expand' : '';
+    showToast('Loaded: ' + parts.join(' · ') + hint, null, (hasWarnings || maxLvl >= 3) ? 10000 : 6000);
   }
   // Default to Program Dashboard on file load / draft-restore.
   const progBtn = document.querySelector('.tab-btn[data-tab="prog"]');
@@ -1473,8 +1480,20 @@ document.querySelectorAll('.tab-btn[data-tab]').forEach(btn => {
   btn.addEventListener('click', () => switchTab(btn, btn.dataset.tab));
 });
 
-// Topbar buttons
-document.getElementById('generate-sample-btn').addEventListener('click', generateSampleExcel);
+// Topbar buttons — "Generate Sample" now loads the demo project in-memory (one click →
+// populated dashboard) instead of forcing a download/re-import round-trip.
+document.getElementById('generate-sample-btn').addEventListener('click', () => {
+  if (state.isDirty && !window.confirm('You have unsaved edits. Load the sample and discard your changes?')) return;
+  try {
+    _justLoaded = true;
+    parseWorkbook(buildSampleWorkbook());  // shows the subtask-discoverability hint toast
+    renderDashboard();
+  } catch (e) {
+    showToast('Could not load sample: ' + e.message, null, 5000);
+  } finally {
+    _justLoaded = false;
+  }
+});
 document.getElementById('save-excel-btn').addEventListener('click', saveToExcel);
 document.getElementById('help-btn').addEventListener('click', toggleHelp);
 document.getElementById('theme-toggle').addEventListener('click', toggleTheme);

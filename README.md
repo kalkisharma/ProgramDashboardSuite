@@ -16,7 +16,7 @@ A client-side program dashboard for aerospace and vehicle development programs. 
 
 Drag your `.xlsx` file anywhere onto the page, or click **Browse for File**. The dashboard auto-populates immediately.
 
-To try the tool before building your own Excel file, click **Generate Sample Excel** on the landing page. This downloads a complete sample program (TW-2 Hybrid-Electric Tilt-Wing UAM) that populates every Excel-driven tab — Gantt, Specifications, Program Dashboard, Weight Budget, Org Chart, and Status Report. The Requirements tab is independent; it loads its own CSV (see below).
+To try the tool before building your own Excel file, click **Load Sample Project** on the landing page. This instantly loads a complete sample program (TW-2 Hybrid-Electric Tilt-Wing UAM) — no download or re-import — populating every Excel-driven tab: Gantt, Specifications, Program Dashboard, Weight Budget, Org Chart, Reference Files, and Status Report. Use **Export to Excel** afterward to save an editable copy. The Requirements tab is independent; it loads its own CSV (see below).
 
 ---
 
