@@ -19,7 +19,7 @@ import { renderProgDash, getPhaseNames } from './render/progDash.js';
 import { renderWeightBudget, getWeightUnit } from './render/weightBudget.js';
 import { renderOrgChart } from './render/orgChart.js';
 import { renderRequirements } from './render/requirements.js';
-import { renderStatusReport } from './render/statusReport.js';
+import { renderStatusReport, ragConfig } from './render/statusReport.js';
 import { renderReferenceFiles } from './render/referenceFiles.js';
 import { renderSpecs, renderSpecTable, setSpecsCategoryFilter, clearSpecsFilters, cycleSpecStatus } from './render/specs.js';
 import {
@@ -73,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v6.6.1'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.7.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -1366,15 +1366,33 @@ function openInfoPanel() {
 
   const STANDARD = ['Project Title','Project Subtitle','File Administrator','Program Start','Program End','Work Days','Weight Unit'];
   const PHASES   = Array.from({ length: 20 }, (_, i) => `Phase ${i + 1} Name`);
-  const extraKeys = Object.keys(state.ProjectData.info).filter(k => !STANDARD.includes(k) && !PHASES.includes(k));
+  const RAG_KEYS = ['RAG At-Risk Days','RAG At-Risk %','RAG Slip Tolerance %'];
+  const extraKeys = Object.keys(state.ProjectData.info).filter(k => !STANDARD.includes(k) && !PHASES.includes(k) && !RAG_KEYS.includes(k));
 
   const field = (key) => `<div class="sp-form-group" data-info-key="${esc(key)}">
     <label class="sp-form-label">${esc(key)}</label>
     <input class="sp-form-input info-edit-input" type="text" value="${esc(String(state.ProjectData.info[key] || ''))}">
   </div>`;
 
+  // At-risk (RAG) thresholds — always shown, pre-filled with the active values (defaults
+  // when the keys aren't in the file). Number inputs; saved like any other info key.
+  const rc = ragConfig();
+  const ragVal  = { 'RAG At-Risk Days': rc.atRiskDays, 'RAG At-Risk %': rc.atRiskPct, 'RAG Slip Tolerance %': rc.slipTol };
+  const ragMeta = {
+    'RAG At-Risk Days':      { label: 'At-Risk window (work-days)', hint: 'Work-days-to-deadline that, combined with low % complete, flags a task At Risk.' },
+    'RAG At-Risk %':         { label: 'At-Risk completion (%)',     hint: 'Within the window above, a task below this % complete is At Risk.' },
+    'RAG Slip Tolerance %':  { label: 'Slip tolerance (%)',         hint: 'How far below expected progress (earned-schedule) a task may fall before being At Risk.' },
+  };
+  const ragField = (key) => `<div class="sp-form-group" data-info-key="${esc(key)}">
+    <label class="sp-form-label">${esc(ragMeta[key].label)}</label>
+    <input class="sp-form-input info-edit-input" type="number" min="0" step="1" value="${esc(String(ragVal[key]))}">
+    <div style="font-size:0.72rem;color:var(--muted);margin-top:3px">${esc(ragMeta[key].hint)}</div>
+  </div>`;
+
   let html = `<div class="sp-meta" style="padding:14px 14px 4px">
     ${STANDARD.map(field).join('')}
+    <div class="sp-section-label" style="margin:8px 0 6px">Status (RAG) Thresholds</div>
+    ${RAG_KEYS.map(ragField).join('')}
     <div class="sp-section-label" style="margin:8px 0 6px">Phase Names</div>
     ${PHASES.map(field).join('')}
   </div>`;
@@ -1417,6 +1435,7 @@ function saveInfoPanel() {
   document.title = title + ' — Program Dashboard';
   safeRender(renderGantt,    'Gantt Chart');
   safeRender(renderProgDash, 'Program Dashboard');
+  safeRender(renderStatusReport, 'Status Report'); // RAG threshold edits take effect here
   showToast('Project info saved');
 }
 
