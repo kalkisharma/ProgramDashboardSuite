@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ragStatus, expectedPct, ragConfig } from '../render/statusReport.js';
+import { ragStatus, expectedPct, ragConfig, varianceDays } from '../render/statusReport.js';
 import { state, resetState } from '../state.js';
 
 const d = (s) => { const [y, m, day] = s.split('-').map(Number); return new Date(y, m - 1, day); };
@@ -56,5 +56,21 @@ describe('ragStatus', () => {
   it('honors a relaxed slip tolerance override (stays green)', () => {
     state.ProjectData.info = { 'RAG Slip Tolerance %': '100' };
     expect(ragStatus({ pct: 0, start: d('2025-01-06'), end: d('2025-06-30') }, NOCONF, d('2025-02-03'))).toBe('green');
+  });
+});
+
+describe('varianceDays', () => {
+  it('is null without a baseline end', () => {
+    expect(varianceDays({ end: d('2025-01-10'), baselineEnd: null })).toBeNull();
+  });
+  it('is 0 when current end equals baseline', () => {
+    expect(varianceDays({ end: d('2025-01-10'), baselineEnd: d('2025-01-10') })).toBe(0);
+  });
+  it('is positive (late) when current end is past baseline', () => {
+    // baseline Mon 01-06, slipped to Fri 01-10 → 4 work-days late
+    expect(varianceDays({ end: d('2025-01-10'), baselineEnd: d('2025-01-06') })).toBe(4);
+  });
+  it('is negative (early) when current end is before baseline', () => {
+    expect(varianceDays({ end: d('2025-01-06'), baselineEnd: d('2025-01-10') })).toBe(-4);
   });
 });

@@ -29,12 +29,27 @@ export function parseScheduleSheet(ws) {
       level:     1,
       start:     parseDate(g('Start Date')),
       end:       parseDate(g('End Date')),
+      baselineStart: null,   // populated from the optional Baseline sheet (by Task ID)
+      baselineEnd:   null,
       pct:       +g('% Complete') || 0,
       deps:      parseDeps(g('Dependencies')),
       milestone: String(g('Milestone') || '').toUpperCase() === 'Y',
       notes:     String(g('Notes') || ''),
     };
   });
+}
+
+// Optional "Baseline" sheet — frozen schedule for variance tracking. Returns { [taskId]: {start, end} }.
+export function parseBaselineSheet(ws) {
+  if (!ws) return {};
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  const h = rows[0] || [];
+  const map = {};
+  rows.slice(1).filter(r => r[h.indexOf('Task ID')] != null).forEach(r => {
+    const g = k => r[h.indexOf(k)];
+    map[+g('Task ID')] = { start: parseDate(g('Baseline Start')), end: parseDate(g('Baseline End')) };
+  });
+  return map;
 }
 
 export function parseSpecsSheet(ws) {

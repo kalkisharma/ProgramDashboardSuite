@@ -6,7 +6,7 @@ let _exportReminderTimer = null;
 
 export function fullSnapshot() {
   return {
-    tasks:   state.ProjectData.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, deps: [...t.deps] })),
+    tasks:   state.ProjectData.tasks.map(t => ({ ...t, start: t.start ? new Date(t.start) : null, end: t.end ? new Date(t.end) : null, baselineStart: t.baselineStart ? new Date(t.baselineStart) : null, baselineEnd: t.baselineEnd ? new Date(t.baselineEnd) : null, deps: [...t.deps] })),
     specs:   state.ProjectData.specs.map(s => ({ ...s, depIds: [...s.depIds] })),
     org:     state.ProjectData.org.map(p => ({ ...p, reportsTo: [...(p.reportsTo || [])] })),
     weights: state.ProjectData.weights.map(w => ({ ...w })),

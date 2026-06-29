@@ -7,7 +7,7 @@ import { computeCriticalPath } from './compute/criticalPath.js';
 import { computeConflicts } from './compute/conflicts.js';
 import { wouldCreateCycle, inferHierarchyFromWBS, descendantsOf } from './compute/wbs.js';
 import { recalcHierarchy } from './compute/hierarchy.js';
-import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, extractWorkDays } from './parse.js';
+import { parseInfoSheet, parseScheduleSheet, parseSpecsSheet, parseOrgSheet, parseWeightSheet, parseReferenceSheet, parseBaselineSheet, extractWorkDays } from './parse.js';
 import { buildOrgIndex, resolveNames } from './compute/orgLookup.js';
 import { buildWorkbook, buildSampleWorkbook } from './excel.js';
 import { state } from './state.js';
@@ -73,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v6.3.0'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.4.0'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -353,6 +353,13 @@ function parseWorkbook(wb) {
   state.ProjectData.org     = parseOrgSheet(wb.Sheets['Org Chart']);
   state.ProjectData.weights = parseWeightSheet(wb.Sheets['Weight Budget']);
   state.ProjectData.referenceFiles = parseReferenceSheet(wb.Sheets['Reference Files']);
+
+  // Apply the optional frozen baseline (by Task ID) for variance tracking.
+  const baseline = parseBaselineSheet(wb.Sheets['Baseline']);
+  state.ProjectData.tasks.forEach(t => {
+    const b = baseline[t.id];
+    if (b) { t.baselineStart = b.start; t.baselineEnd = b.end; }
+  });
 
   const wds = extractWorkDays(state.ProjectData.info);
   if (wds) {
@@ -647,6 +654,32 @@ function buildSpecLinkPickerList(input, t, listEl) {
 }
 
 // ─── SAVE TO EXCEL ────────────────────────────────────────────────────────────
+// Freeze the current schedule as the baseline (for variance tracking). Two-tap to replace
+// an existing baseline. Stored on each task; round-trips via the optional Baseline sheet.
+function setBaselineFromCurrent() {
+  const btn = document.getElementById('gantt-baseline-btn');
+  const hasBaseline = state.ProjectData.tasks.some(t => t.baselineStart || t.baselineEnd);
+  if (hasBaseline && btn && btn.dataset.confirming !== '1') {
+    btn.dataset.confirming = '1';
+    btn.textContent = 'Click again to replace baseline';
+    btn.style.borderColor = '#d29922'; btn.style.color = '#d29922';
+    setTimeout(() => {
+      if (btn.dataset.confirming === '1') { btn.dataset.confirming = ''; btn.textContent = '⚑ Set Baseline'; btn.style.borderColor = ''; btn.style.color = ''; }
+    }, 3000);
+    return;
+  }
+  if (btn) { btn.dataset.confirming = ''; btn.textContent = '⚑ Set Baseline'; btn.style.borderColor = ''; btn.style.color = ''; }
+  pushUndo('set baseline');
+  state.ProjectData.tasks.forEach(t => {
+    t.baselineStart = t.start ? new Date(t.start) : null;
+    t.baselineEnd   = t.end   ? new Date(t.end)   : null;
+  });
+  safeRender(renderGantt, 'Gantt Chart');
+  safeRender(renderStatusReport, 'Status Report');
+  showToast('Baseline set from the current schedule — variance now tracks drift from these dates.',
+    () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 6000);
+}
+
 function saveToExcel() {
   const wb = buildWorkbook(state.ProjectData, getWeightUnit());
   const title = (state.ProjectData.info['Project Title'] || 'Dashboard').replace(/[/\\?%*:|"<>]/g, '-');
@@ -1515,6 +1548,7 @@ document.getElementById('gantt-export-png-btn').addEventListener('click', export
 document.getElementById('gantt-undo-btn').addEventListener('click', applyUndo);
 document.getElementById('gantt-redo-btn').addEventListener('click', applyRedo);
 document.getElementById('gantt-add-task-btn').addEventListener('click', addGanttTask);
+document.getElementById('gantt-baseline-btn').addEventListener('click', setBaselineFromCurrent);
 document.getElementById('gantt-reset-btn').addEventListener('click', resetGanttToImported);
 
 // Specs toolbar
@@ -1587,6 +1621,8 @@ window.addEventListener('beforeunload', e => {
     snap.tasks.forEach(t => {
       if (t.start) t.start = new Date(t.start);
       if (t.end)   t.end   = new Date(t.end);
+      if (t.baselineStart) t.baselineStart = new Date(t.baselineStart);
+      if (t.baselineEnd)   t.baselineEnd   = new Date(t.baselineEnd);
     });
     state.ProjectData.tasks   = snap.tasks;
     state.ProjectData.specs   = snap.specs   || [];

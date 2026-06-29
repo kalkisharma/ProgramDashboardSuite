@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
 import { buildWorkbook } from '../excel.js';
-import { parseScheduleSheet } from '../parse.js';
+import { parseScheduleSheet, parseBaselineSheet } from '../parse.js';
 import { inferHierarchyFromWBS } from '../compute/wbs.js';
 import { recalcHierarchy } from '../compute/hierarchy.js';
 
@@ -299,5 +299,28 @@ describe('buildWorkbook — hierarchy round-trip', () => {
     expect(sub.pocInherited).toBe(true);
     expect(sub.poc).toBe('Alice');     // re-inherited from the phase
     expect(sub.customer).toBe('Acme');
+  });
+});
+
+describe('buildWorkbook — Baseline sheet round-trip', () => {
+  it('writes a Baseline sheet only when set, and re-imports it by Task ID', () => {
+    const base = () => ({
+      info: {}, specs: [], org: [], weights: [], referenceFiles: [],
+      tasks: [{ id: 1, wbs: '1.1', name: 'T', poc: '', customer: '', pocInherited: false, customerInherited: false,
+        parentId: null, level: 1, start: d(2025,1,6), end: d(2025,1,17),
+        baselineStart: null, baselineEnd: null, pct: 0, deps: [], milestone: false, notes: '' }],
+    });
+    // No baseline → no sheet
+    expect(buildWorkbook(base(), 'lb').SheetNames).not.toContain('Baseline');
+    // With baseline → sheet present + round-trips
+    const pd = base();
+    pd.tasks[0].baselineStart = d(2025,1,6);
+    pd.tasks[0].baselineEnd   = d(2025,1,20);
+    const wb = buildWorkbook(pd, 'lb');
+    expect(wb.SheetNames).toContain('Baseline');
+    const map = parseBaselineSheet(wb.Sheets['Baseline']);
+    expect(map[1].end.getFullYear()).toBe(2025);
+    expect(map[1].end.getMonth()).toBe(0);
+    expect(map[1].end.getDate()).toBe(20);
   });
 });

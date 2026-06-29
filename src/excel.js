@@ -27,6 +27,15 @@ export function buildWorkbook(projectData, weightUnit) {
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(schRows), 'Schedule');
 
+  // Baseline (optional) — frozen schedule for variance tracking; only written when set.
+  const baselined = projectData.tasks.filter(t => t.baselineStart || t.baselineEnd);
+  if (baselined.length) {
+    const fmtD = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : '';
+    const bRows = [['Task ID','Baseline Start','Baseline End']];
+    baselined.forEach(t => bRows.push([t.id, fmtD(t.baselineStart), fmtD(t.baselineEnd)]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bRows), 'Baseline');
+  }
+
   // Specifications
   const spRows = [['Spec ID','Category','Specification Name','Value','Units','Status','Responsible Group','Notes','Dependent Task IDs']];
   projectData.specs.forEach(s => spRows.push([

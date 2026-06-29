@@ -13,12 +13,23 @@ import { toggleCheckboxDropdown, closeCheckboxDropdown } from '../ui/checkboxDro
 
 // Column order for the Status Report table. POC/Customer Team are derived from the org
 // chart at render time. All columns are user-toggleable; everything except Notes sorts.
-const SR_COLS = ['wbs','name','poc','pocTeam','customer','customerTeam','start','end','pct','wd','rag','notes'];
+const SR_COLS = ['wbs','name','poc','pocTeam','customer','customerTeam','start','end','variance','pct','wd','rag','notes'];
 const SR_LABELS = {
   wbs:'WBS', name:'Task Name', poc:'POC', pocTeam:'POC Team', customer:'Customer',
-  customerTeam:'Customer Team', start:'Start Date', end:'End Date', pct:'%', wd:'WD Left',
+  customerTeam:'Customer Team', start:'Start Date', end:'End Date', variance:'Variance', pct:'%', wd:'WD Left',
   rag:'Status', notes:'Notes',
 };
+
+// Signed schedule variance in work-days: current end vs frozen baseline end. + = late, − = early,
+// 0 = on baseline, null = no baseline. (Variance column only shows when a baseline is set.)
+export function varianceDays(t) {
+  if (!t.baselineEnd || !t.end) return null;
+  if (t.baselineEnd.getTime() === t.end.getTime()) return 0;
+  const late = t.end > t.baselineEnd;
+  const wd = Math.max(0, countWorkDays(late ? t.baselineEnd : t.end, late ? t.end : t.baselineEnd, state.ganttWorkDays) - 1);
+  return late ? wd : -wd;
+}
+function anyBaseline() { return state.ProjectData.tasks.some(t => t.baselineStart || t.baselineEnd); }
 const SR_NOSORT = new Set(['notes']);
 function srVisibleCols() { return SR_COLS.filter(c => !state.statusReportHiddenCols.includes(c)); }
 
@@ -163,6 +174,7 @@ function sortTasks(tasks, conflictSet, orgIndex) {
       case 'customerTeam': va = teamsStr(a.customer); vb = teamsStr(b.customer); break;
       case 'start': va = a.start || new Date(9e15); vb = b.start || new Date(9e15); break;
       case 'end':   va = a.end   || new Date(9e15); vb = b.end   || new Date(9e15); break;
+      case 'variance': va = varianceDays(a); vb = varianceDays(b); va = va == null ? -Infinity : va; vb = vb == null ? -Infinity : vb; break;
       case 'pct':  va = a.pct; vb = b.pct; break;
       case 'wd':   va = a.end ? workDaysRemaining(a.end, state.ganttWorkDays, today) : Infinity;
                    vb = b.end ? workDaysRemaining(b.end, state.ganttWorkDays, today) : Infinity; break;
@@ -299,7 +311,8 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
     return;
   }
 
-  const cols = srVisibleCols();
+  // Variance only renders once a baseline is set (otherwise it's a column of dashes).
+  const cols = srVisibleCols().filter(c => c !== 'variance' || anyBaseline());
   const { col: sortCol, dir: sortDir } = state.statusReportSort;
   const today = getToday();
 
@@ -355,6 +368,13 @@ function renderStatusTable(body, tasks, conflictSet, orgIndex, treeMode) {
         case 'customerTeam': return `<td style="color:var(--muted)">${esc(custRes.teams.join(', ') || '—')}</td>`;
         case 'start': return `<td>${fmt(t.start)}</td>`;
         case 'end':  return `<td style="color:${isOverdue ? '#f85149' : 'var(--text)'}">${fmt(t.end)}</td>`;
+        case 'variance': {
+          const v = varianceDays(t);
+          if (v == null) return '<td style="color:var(--muted)">—</td>';
+          const col = v > 0 ? '#f85149' : v < 0 ? '#3fb950' : 'var(--muted)';
+          const txt = v > 0 ? `+${v} wd` : v < 0 ? `${v} wd` : '0';
+          return `<td style="color:${col};font-size:0.8rem" title="Work-days vs baseline end date">${txt}</td>`;
+        }
         case 'pct':  return `<td><div style="display:flex;align-items:center;gap:6px">
             <span style="min-width:32px;text-align:right;font-size:0.78rem">${t.pct}%</span>
             <div style="flex:1;height:5px;background:rgba(88,166,255,0.12);border-radius:3px;min-width:40px">
@@ -733,11 +753,12 @@ async function buildPPTX() {
   const filterDesc   = filter === 'concerns' ? 'Concerns only (overdue + at risk)'
                      : filter === 'tasks'    ? 'All tasks'
                      : 'All open (incomplete) tasks';
-  // Mirror the on-screen visible columns (fall back to all if the user hid everything).
-  const cols = srVisibleCols().length ? srVisibleCols() : SR_COLS;
+  // Mirror the on-screen visible columns (fall back to all if the user hid everything);
+  // variance only when a baseline is set.
+  const cols = (srVisibleCols().length ? srVisibleCols() : SR_COLS).filter(c => c !== 'variance' || anyBaseline());
   const PPTX_W = { wbs:0.7, name:2.6, poc:1.4, pocTeam:1.2, customer:1.4, customerTeam:1.2,
-                   start:1.0, end:1.0, pct:0.6, wd:0.8, rag:1.0, notes:2.6 };
-  const centered = new Set(['start','end','pct','wd','rag']);
+                   start:1.0, end:1.0, variance:0.9, pct:0.6, wd:0.8, rag:1.0, notes:2.6 };
+  const centered = new Set(['start','end','variance','pct','wd','rag']);
 
   pptxAddHeader(s3, `${projectTitle} — Tasks`, `Status as of ${dateStr}`);
 
@@ -792,6 +813,8 @@ async function buildPPTX() {
       customerTeam: txt(custRes.teams.join(', '), { color: '4B5563' }),
       start:        txt(fmt(t.start), { color: '374151', align: 'center' }),
       end:          txt(fmt(t.end), { color: endColor, align: 'center' }),
+      variance:     (() => { const v = varianceDays(t); const c = v > 0 ? 'B91C1C' : v < 0 ? '047857' : '6B7280';
+                      return txt(v == null ? '—' : v > 0 ? `+${v} wd` : v < 0 ? `${v} wd` : '0', { color: c, align: 'center' }); })(),
       pct:          txt(`${t.pct}%`, { color: '374151', align: 'center' }),
       wd:           txt(wdText, { color: wdColor, align: 'center' }),
       rag:          { text: ragLabel(rag), options: { ...base8, bold: true, color: ragText, align: 'center', fill: { color: ragFill } } },

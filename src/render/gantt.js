@@ -1219,6 +1219,14 @@ export function renderGanttSVG({ visibleTasks, minD, maxD, W, bodyH, cpSet, tx }
     const midY = i*RH + RH/2;
     const color = phaseColor(t.wbs);
 
+    // Baseline overlay — thin grey bar under the task showing the frozen baseline span.
+    if (t.baselineStart && t.baselineEnd && !t.milestone) {
+      const bx = daysBetween(minD, t.baselineStart) * state.ganttZoom;
+      const bw = Math.max(daysBetween(t.baselineStart, t.baselineEnd) * state.ganttZoom, 2);
+      const baseBar = appendRect(svg, NS, bx, i*RH + RH*0.76, bw, 3, '#8b949e', 1.5);
+      baseBar.style.opacity = '0.7'; baseBar.style.pointerEvents = 'none';
+    }
+
     // Invisible hit area for the full row (carries task id for drag detection)
     const hit = document.createElementNS(NS, 'rect');
     hit.setAttribute('x', 0); hit.setAttribute('y', i*RH);
