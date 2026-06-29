@@ -1,55 +1,83 @@
-import { daysBetween } from '../utils.js';
+import { countWorkDays } from '../utils.js';
 
-export function computeCriticalPath(tasks) {
+// Critical path over LEAF tasks. Improvements over the old topological-only version:
+//  - durations are in WORK-DAYS (not calendar days), matching the rest of the app
+//  - early-start is ANCHORED to each task's actual scheduled start (in work-day offsets
+//    from the earliest start), so float reflects real calendar position, not just topology
+//  - dependencies that point at a PARENT/summary task resolve to all its leaf descendants
+//    ("after Phase 2" = after every leaf of Phase 2)
+//  - each dependency-connected COMPONENT is evaluated against its own end date, so two
+//    independent chains are each critical within themselves
+//  - COMPLETED tasks (100%) contribute 0 duration and are excluded → a *remaining* path
+// `wds` is the work-day array (defaults to Mon–Fri so callers/tests can omit it).
+export function computeCriticalPath(tasks, wds = [1, 2, 3, 4, 5]) {
   if (!tasks || tasks.length === 0) return new Set();
-  // Run CPM over leaf tasks only — parents have derived (rolled-up) dates, so including
-  // them would double-count. Deps pointing at excluded parents are dropped by the guard
-  // below. Flat data (no parentId) yields every task as a leaf → unchanged behavior.
+  const byId = {}; tasks.forEach(t => { byId[t.id] = t; });
   const parentIds = new Set(tasks.map(t => t.parentId).filter(p => p != null));
-  const nodes = tasks.filter(t => !parentIds.has(t.id));
+  const isParent = id => parentIds.has(id);
+  const nodes = tasks.filter(t => !isParent(t.id)); // leaves only (parents hold rolled-up dates)
   if (!nodes.length) return new Set();
-  const dur = {}, successors = {}, inDeg = {};
+
+  // Resolve a dependency id → leaf node ids (expand a parent dep to its leaf descendants).
+  const childrenOf = id => tasks.filter(t => t.parentId === id);
+  const leavesOf = id => {
+    const out = [], stack = [...childrenOf(id)];
+    while (stack.length) { const c = stack.pop(); if (isParent(c.id)) stack.push(...childrenOf(c.id)); else out.push(c.id); }
+    return out;
+  };
+  const resolveDep = did => !(did in byId) ? [] : (isParent(did) ? leavesOf(did) : [did]);
+
+  // Work-day offset of each task's actual start from the earliest start in the schedule.
+  const starts = nodes.map(t => t.start).filter(Boolean);
+  const epoch = starts.length ? new Date(Math.min(...starts)) : null;
+  const startOff = {}, dur = {};
   nodes.forEach(t => {
-    dur[t.id]        = t.start && t.end ? Math.max(1, daysBetween(t.start, t.end)) : 1;
-    successors[t.id] = [];
-    inDeg[t.id]      = 0;
+    startOff[t.id] = (epoch && t.start) ? Math.max(0, countWorkDays(epoch, t.start, wds) - 1) : 0;
+    const done = (t.pct || 0) >= 100;
+    dur[t.id] = done ? 0 : (t.start && t.end ? Math.max(1, countWorkDays(t.start, t.end, wds)) : 1);
   });
-  nodes.forEach(t => {
-    (t.deps || []).forEach(did => {
-      if (successors[did] !== undefined) { successors[did].push(t.id); inDeg[t.id]++; }
-    });
-  });
-  // Kahn's topological sort
-  const tmpDeg = { ...inDeg };
-  const queue  = nodes.filter(t => tmpDeg[t.id] === 0).map(t => t.id);
-  const order  = [];
+
+  // Directed edges (pred → succ) + undirected components (union-find).
+  const succ = {}, inDeg = {}, uf = {};
+  nodes.forEach(t => { succ[t.id] = []; inDeg[t.id] = 0; uf[t.id] = t.id; });
+  const find = x => { while (uf[x] !== x) { uf[x] = uf[uf[x]]; x = uf[x]; } return x; };
+  nodes.forEach(t => (t.deps || []).forEach(did => resolveDep(did).forEach(pid => {
+    if (succ[pid] !== undefined && pid !== t.id) { succ[pid].push(t.id); inDeg[t.id]++; uf[find(pid)] = find(t.id); }
+  })));
+
+  // Topological order (Kahn). A cycle anywhere → no meaningful CP.
+  const tmp = { ...inDeg };
+  const queue = nodes.filter(t => tmp[t.id] === 0).map(t => t.id);
+  const order = [];
   while (queue.length) {
     const id = queue.shift(); order.push(id);
-    successors[id].forEach(sid => { if (--tmpDeg[sid] === 0) queue.push(sid); });
+    succ[id].forEach(s => { if (--tmp[s] === 0) queue.push(s); });
   }
-  if (order.length < nodes.length) return new Set(); // cycle detected
-  // Forward pass
+  if (order.length < nodes.length) return new Set();
+
+  // Forward pass — ES anchored to actual start, raised by predecessors.
   const es = {}, ef = {};
-  nodes.forEach(t => { es[t.id] = 0; });
+  order.forEach(id => { es[id] = startOff[id]; });
   order.forEach(id => {
     ef[id] = es[id] + dur[id];
-    successors[id].forEach(sid => { if (ef[id] > (es[sid] || 0)) es[sid] = ef[id]; });
+    succ[id].forEach(s => { if (ef[id] > es[s]) es[s] = ef[id]; });
   });
-  // Backward pass
-  const maxEF = Math.max(...order.map(id => ef[id]));
+
+  // Backward pass — each component bounded by its own latest finish.
+  const compMax = {};
+  order.forEach(id => { const r = find(id); compMax[r] = Math.max(compMax[r] ?? -Infinity, ef[id]); });
   const lf = {};
-  order.forEach(id => { lf[id] = maxEF; });
+  order.forEach(id => { lf[id] = compMax[find(id)]; });
   [...order].reverse().forEach(id => {
-    successors[id].forEach(sid => {
-      const lsSid = lf[sid] - dur[sid];
-      if (lsSid < lf[id]) lf[id] = lsSid;
-    });
+    succ[id].forEach(s => { const ls = lf[s] - dur[s]; if (ls < lf[id]) lf[id] = ls; });
   });
-  // Identify critical path: slack ≤ 0 and connected to dependency chain
-  const cpSet = new Set();
+
+  // Critical = zero slack, connected to the dependency network, and not already complete.
+  const cp = new Set();
   order.forEach(id => {
+    if ((byId[id].pct || 0) >= 100) return;
     const slack = (lf[id] - dur[id]) - es[id];
-    if (Math.round(slack) <= 0 && (inDeg[id] > 0 || successors[id].length > 0)) cpSet.add(id);
+    if (Math.round(slack) <= 0 && (inDeg[id] > 0 || succ[id].length > 0)) cp.add(id);
   });
-  return cpSet;
+  return cp;
 }

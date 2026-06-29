@@ -1020,7 +1020,7 @@ export function prepareGanttData() {
   const bodyH = visibleTasks.length * RH;
   // CPM runs at leaf level (Phase 3). For collapsed parents, surface criticality on the
   // parent row if any hidden descendant is critical (D4).
-  const cpLeaves = state.showCriticalPath ? computeCriticalPath(state.ProjectData.tasks) : new Set();
+  const cpLeaves = state.showCriticalPath ? computeCriticalPath(state.ProjectData.tasks, state.ganttWorkDays) : new Set();
   const cpSet = new Set(cpLeaves);
   if (state.showCriticalPath) {
     state.ProjectData.tasks.forEach(t => {

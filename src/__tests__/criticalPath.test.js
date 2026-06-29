@@ -128,3 +128,42 @@ describe('computeCriticalPath — hierarchy', () => {
     expect(cp.has(2)).toBe(true);
   });
 });
+
+describe('computeCriticalPath — v6.5 rewrite (dates, work-days, parent deps, remaining)', () => {
+  it('resolves a dependency on a PARENT to its leaf descendants', () => {
+    // succ (3) depends on parent 10; 10 has leaves 1,2 → 3 should sit after 1 & 2.
+    const tasks = [
+      { id: 10, parentId: null, deps: [], start: d('2024-01-01'), end: d('2024-01-12') },
+      { id: 1, parentId: 10, deps: [], start: d('2024-01-01'), end: d('2024-01-05') },
+      { id: 2, parentId: 10, deps: [], start: d('2024-01-08'), end: d('2024-01-12') },
+      { id: 3, parentId: null, deps: [10], start: d('2024-01-15'), end: d('2024-01-19') },
+    ];
+    const cp = computeCriticalPath(tasks);
+    expect(cp.has(3)).toBe(true);   // connected via the resolved parent dep
+    expect(cp.has(2)).toBe(true);   // latest leaf of the parent drives the successor
+    expect(cp.has(10)).toBe(false); // parent itself never on the path
+  });
+
+  it('drops COMPLETED tasks from the remaining critical path', () => {
+    const tasks = [
+      { id: 1, deps: [],  pct: 100, start: d('2024-01-01'), end: d('2024-01-05') },
+      { id: 2, deps: [1], pct: 0,   start: d('2024-01-08'), end: d('2024-01-12') },
+    ];
+    const cp = computeCriticalPath(tasks);
+    expect(cp.has(1)).toBe(false); // done → off the remaining path
+    expect(cp.has(2)).toBe(true);
+  });
+
+  it('uses work-day durations (weekend spans do not inflate)', () => {
+    // both branches from 1; branch via 3 spans a weekend but is the same WORK-day length as 2.
+    const tasks = [
+      { id: 1, deps: [],     start: d('2024-01-01'), end: d('2024-01-01') },
+      { id: 2, deps: [1],    start: d('2024-01-02'), end: d('2024-01-04') }, // Tue–Thu = 3 wd
+      { id: 3, deps: [1],    start: d('2024-01-02'), end: d('2024-01-04') }, // same
+      { id: 4, deps: [2, 3], start: d('2024-01-05'), end: d('2024-01-05') },
+    ];
+    const cp = computeCriticalPath(tasks);
+    expect(cp.has(1)).toBe(true);
+    expect(cp.has(4)).toBe(true);
+  });
+});

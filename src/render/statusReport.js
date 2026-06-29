@@ -630,7 +630,7 @@ async function buildPPTX() {
   // Top Concerns — worst open red/amber tasks, critical-path items first (replaces the
   // slide-2-duplicate phase table). ⛓ marks a task on the critical path.
   s1.addText('Top Concerns', { x: 0.3, y: 2.78, w: 6, h: 0.25, fontSize: 12, bold: true, color: '1F2937' });
-  const cpSet = computeCriticalPath(allTasks);
+  const cpSet = computeCriticalPath(allTasks, state.ganttWorkDays);
   const concerns = leafTasks
     .filter(t => t.pct < 100)
     .map(t => ({ t, rag: ragStatus(t, conflictSet), critical: cpSet.has(t.id) }))
