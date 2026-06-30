@@ -183,7 +183,7 @@ The build uses [vite-plugin-singlefile](https://github.com/richardtallent/vite-p
 
 Start with **[docs/TOUR.md](docs/TOUR.md)** for a guided walkthrough of the module layout, data model, rendering pattern, and common gotchas. Then read **[docs/FLOW.md](docs/FLOW.md)** for key data flows (file load, bar drag, undo/redo) as Mermaid diagrams.
 
-**[CLAUDE.md](CLAUDE.md)** is the full developer reference — state model, localStorage keys, versioning convention, and the complete module API table. It is the authoritative source for release history.
+**[CHANGELOG.md](CHANGELOG.md)** is the user-facing version history. **[CLAUDE.md](CLAUDE.md)** is the full developer reference — state model, localStorage keys, versioning convention, the complete module API table, and the granular per-release record.
 
 ### Versioning
 
