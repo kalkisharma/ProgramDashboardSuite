@@ -67,4 +67,51 @@ The full, granular per-release record (including pre-6.0 versions) lives in the
 
 ---
 
-For releases prior to v6.0.0, see the [Release History table in CLAUDE.md](CLAUDE.md#release-history).
+Older releases (condensed; newest first within each series).
+
+## v5.x
+- **v5.0.1** — Org Chart: every team gets its own distinct color.
+- **v5.0.0** — **POC/Customer model.** The Schedule sheet now takes **POC** and **Customer** names (teams derived from the Org Chart) instead of a Category / Responsible Team. Major Status Report expansion (POC/Customer columns + teams, org validation, three task filters, Phase / POC-Team / Customer-Team multi-selects, toggleable columns). New **Reference Files** tab/sheet; Program Dashboard becomes the default tab. *(Changes the Excel input format.)*
+
+## v4.x
+- **v4.7.1** — Status Report / Requirements polish: help entry, sortable-header `aria-sort`, larger status badges, a listener-leak fix.
+- **v4.7.0** — **Status Report tab** — open task table with Red/Amber/Green status, sort, and a concerns filter, plus a one-click 3-slide **PowerPoint** export.
+- **v4.6.1** — Distinct phase-header rows; Requirements CSV remembered across reloads.
+- **v4.6.0** — Full team UI review: scroll preservation, click/double-click disambiguation, an edit guard before switching tabs, filter-aware add-task, and more polish.
+- **v4.5.4** — "Save Changes" flashes a green ✓ before returning to the detail view.
+- **v4.5.3** — Fixes: help modal restored, side panel no longer opens after a bar drag, tooltip timing, reset-button label; user-guide pass.
+- **v4.5.2** — Fixed the filter input losing focus after each keystroke.
+- **v4.5.1** — Requirements tab fixes: accessible table semantics, a filter popover, ARIA labels, "Clear filters" also resets columns.
+- **v4.5.0** — **Requirements tab** — load any CSV for search, sort, per-column filters, and column visibility (independent of your Excel file).
+- **v4.4.0** — Duration-weighted progress %, overdue-milestone highlighting, Phase 1–20 naming in the info panel, plus motion + accessibility polish.
+- **v4.3.2** — Renamed the build to `ProgramDashboardSuite.html`; compact dependency tooltip.
+- **v4.3.1** — Dependency arrows, critical-path ring, and overdue ring update live while dragging a bar.
+- **v4.3.0** — Header redesign: two-band topbar + tab navigation, underline tabs, version in the help footer.
+- **v4.2.0** — Unified explicit "Edit Task / Edit Spec / Edit Person" forms in the side panel.
+- **v4.1.0** — Org profiles editable directly in the panel (no separate "Edit Person" step).
+- **v4.0.0** — Full module split, a 170-test suite, and Gantt screen-reader announcements *(internal; same app)*.
+
+## v3.x
+- **v3.2.1** — `resetState()` + fixed stale state when reloading a file.
+- **v3.2.0** — Centralized app state into one injectable object *(internal refactor)*.
+- **v3.1.0** — Extracted the Excel logic into its own module *(internal)*.
+- **v3.0.0** — Rebuilt as a **Vite** project with ES modules and a **Vitest** unit-test suite *(internal; same app)*.
+
+## v2.x
+- **v2.7.0** — Resizable Gantt name column + an export-reminder toast.
+- **v2.6.0** — Removed all inline `onclick` attributes *(internal cleanup)*.
+- **v2.5.0** — Inline date picker on double-clicking a Gantt bar or milestone.
+- **v2.4.0** — Auto-save draft to the browser + a warning before closing with unsaved edits; storage-quota fix.
+- **v2.3.0** — Draggable handle to resize the Gantt's left panel.
+- **v2.2.0** — Collapse / expand phases on the Gantt.
+- **v2.1.0** — In-app editing for Weight Budget, Org Chart, and Project Info.
+- **v2.0.0** — Milestone / quality-gate release.
+
+## v1.x
+- **v1.26.0** — Code-quality pass *(internal)*.
+- **v1.25.0** — Keyboard accessibility across the app.
+- **v1.24.0** — Delete operations (tasks, specs) with confirm + undo.
+- **v1.23.0** — Safety & validation improvements.
+- **v1.22.0** — Undo/redo completion.
+
+*Versions before v1.22.0 predate the tracked history.*
