@@ -12,6 +12,7 @@ import { showTooltip, hideTooltip, positionTooltip } from '../ui/tooltip.js';
 import { showToast, safeSetItem } from '../ui/toast.js';
 import { pushUndo, pushUndoSnapshot, fullSnapshot } from '../core/undo.js';
 import { startRowDrag, doRowDragMove, endRowDrag } from '../ui/rowReorder.js';
+import { wireCellEdit } from '../ui/editCell.js';
 
 // ZOOM_STEPS, RH, HH imported from ./constants.js
 // ganttMinDateRef, ganttTodayX — moved to state.js
@@ -1131,25 +1132,28 @@ export function renderGanttLeft({ visibleTasks, isFiltered, conflictSet }) {
     }
 
     if (!isPhaseHeader) {
-      // Task name inline edit
+      const openPanel = () => { if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); };
+      // Task name: single-click opens the panel (consistent with the rest of the app),
+      // double-click / Enter edits in place.
       const nameEl = div.querySelector('.g-name');
-      nameEl.style.cursor = 'text';
+      nameEl.classList.add('editable-cell');
       nameEl.setAttribute('tabindex', '0');
-      nameEl.addEventListener('click',   e => { e.stopPropagation(); startTaskNameEdit(nameEl, t); });
-      nameEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskNameEdit(nameEl, t); } });
+      nameEl.setAttribute('title', 'Single-click: details · double-click or Enter: edit');
+      wireCellEdit(nameEl, openPanel, () => startTaskNameEdit(nameEl, t));
 
       // (POC Team column is read-only — derived from the org chart; edit POC via the task panel)
 
-      // Pct inline edit — leaf tasks only (parents' % is rolled up from children)
+      // % complete — leaf tasks only (parents' % is rolled up from children)
       if (!hasChildren) {
         const pctEl = div.querySelector('.g-pct');
-        pctEl.style.cursor = 'text';
+        pctEl.classList.add('editable-cell');
         pctEl.setAttribute('tabindex', '0');
-        pctEl.addEventListener('click',   e => { e.stopPropagation(); startTaskPctEdit(pctEl, t); });
-        pctEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.stopPropagation(); startTaskPctEdit(pctEl, t); } });
+        pctEl.setAttribute('title', 'Single-click: details · double-click or Enter: edit');
+        wireCellEdit(pctEl, openPanel, () => startTaskPctEdit(pctEl, t));
       }
 
-      div.addEventListener('click', () => { if (state.handlers.openTaskPanel) state.handlers.openTaskPanel(t.id); });
+      // Any other cell in the row opens the panel on a plain click.
+      div.addEventListener('click', openPanel);
     }
     div.addEventListener('mouseenter', e => {
       clearTimeout(_tooltipTimer);

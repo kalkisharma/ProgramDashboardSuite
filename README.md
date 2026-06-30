@@ -84,8 +84,9 @@ Changes are made directly in the browser and exported back to Excel with **Expor
 | Promote / demote a task | Open a task in the side panel → **Promote** (up one level) or **Demote** (pick a new parent) |
 | Set a schedule baseline | Gantt toolbar → **⚑ Set Baseline** (freezes current dates; Status Report then shows variance, Gantt draws a baseline overlay) |
 | Adjust at-risk (RAG) thresholds | Top-right **Project Info** → *Status (RAG) Thresholds* (at-risk window, completion %, slip tolerance) |
-| Edit task name | Click the name cell |
-| Edit % complete | Click the % cell (leaf tasks only — parents roll up from children) |
+| Edit task name | **Double-click** the name cell (single-click opens the task panel) |
+| Edit % complete | **Double-click** the % cell (leaf tasks only — parents roll up from children) |
+| Edit a spec / weight cell | **Double-click** an editable cell in Vehicle Specs (Name/Value/Units/Notes) or Weight Budget (Estimated/Target). Enter works too; single-click opens the row panel |
 | Edit POC / Customer | Open a task in the side panel → click **Edit Task** → edit the POC / Customer fields (POC Team / Customer Team are derived from the Org Chart and shown read-only) |
 | Edit task details / notes | Open a task in the side panel → click **Edit Task** → edit fields → **Save Changes** |
 | Add a dependency | Open a task in the side panel → click **+ Add dependency**; search by name, WBS, or ID |

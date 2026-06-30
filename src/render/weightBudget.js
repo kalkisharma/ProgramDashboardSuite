@@ -1,6 +1,9 @@
 import { state } from '../state.js';
 import { esc } from '../utils.js';
 import { positionTooltip } from '../ui/tooltip.js';
+import { pushUndo } from '../core/undo.js';
+import { showToast } from '../ui/toast.js';
+import { editCell, wireCellEdit } from '../ui/editCell.js';
 
 export function getWeightUnit() { return String(state.ProjectData.info['Weight Unit'] || 'lb'); }
 
@@ -30,6 +33,18 @@ function showWtTooltip(e, el) {
   positionTooltip(e);
 }
 function hideWtTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+function commitWeightField(idx, field, raw) {
+  const w = state.ProjectData.weights[idx];
+  if (!w) return;
+  const v = parseFloat(raw);
+  if (!Number.isFinite(v) || v < 0) { renderWeightBudget(); showToast('Enter a weight of 0 or more.', null, 3000); return; }
+  pushUndo('edit weight');
+  w[field] = v;
+  renderWeightBudget();
+  showToast('Weight updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+  if (state.spCurrentType === 'weight' && state.spCurrentId === idx && state.handlers.openWeightPanel) state.handlers.openWeightPanel(idx);
+}
 
 function toggleWtGroup(el) {
   const items   = el.nextElementSibling;
@@ -140,8 +155,8 @@ export function renderWeightBudget() {
                 <div class="wt-bar-est" style="width:${estPct}%;background:${barColor}"></div>
                 <div class="wt-bar-tgt" style="left:${tgtPct}%"></div>
               </div>
-              <div style="text-align:right">${w.estimated.toLocaleString()}</div>
-              <div style="text-align:right;color:var(--muted)">${w.target.toLocaleString()}</div>
+              <div class="editable-cell" data-edit-field="estimated" tabindex="0" title="Double-click or Enter to edit" style="text-align:right">${w.estimated.toLocaleString()}</div>
+              <div class="editable-cell" data-edit-field="target" tabindex="0" title="Double-click or Enter to edit" style="text-align:right;color:var(--muted)">${w.target.toLocaleString()}</div>
               <div style="text-align:right" class="${mClass}">${mSign}${Math.round(margin).toLocaleString()}</div>
             </div>`;
           }).join('');
@@ -157,6 +172,18 @@ export function renderWeightBudget() {
       </div>
     </div>
   `;
+  // Inline editing of the estimated / target numbers: single-click opens the panel,
+  // double-click / Enter edits in place. The bar + margin are derived → stay read-only.
+  body.querySelectorAll('.editable-cell[data-edit-field]').forEach(cell => {
+    const idx = +cell.closest('.wt-row[data-wt-idx]').dataset.wtIdx;
+    const field = cell.dataset.editField;
+    const open = () => { if (state.handlers.openWeightPanel) state.handlers.openWeightPanel(idx); };
+    wireCellEdit(cell, open, () => {
+      const w = state.ProjectData.weights[idx];
+      if (!w) return;
+      editCell(cell, { value: w[field], type: 'number', step: '0.1', min: '0', onCommit: raw => commitWeightField(idx, field, raw) });
+    });
+  });
   body.querySelectorAll('.wt-bar-wrap').forEach(el => {
     el.addEventListener('mouseenter', e => showWtTooltip(e, el));
     el.addEventListener('mousemove', positionTooltip);

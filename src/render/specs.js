@@ -1,8 +1,9 @@
 import { state } from '../state.js';
 import { esc, getToday } from '../utils.js';
 import { SPEC_COLORS } from '../colors.js';
-import { safeSetItem } from '../ui/toast.js';
+import { safeSetItem, showToast } from '../ui/toast.js';
 import { pushUndo } from '../core/undo.js';
+import { editCell, wireCellEdit } from '../ui/editCell.js';
 
 export function renderSpecs() {
   const sel = document.getElementById('specs-filter');
@@ -76,14 +77,15 @@ export function renderSpecTable() {
     const depText = s.depIds.length
       ? `<span aria-label="${s.depIds.length} dependent task${s.depIds.length!==1?'s':''}${riskDesc}" style="color:${hasRisk?'var(--danger)':'var(--muted)'};font-weight:${hasRisk?700:400}">${s.depIds.length}${hasRisk?' ⚠':''}</span>`
       : `<span aria-label="No dependent tasks" style="color:#484f58">—</span>`;
+    const ed = 'class="editable-cell" tabindex="0" title="Double-click or Enter to edit"';
     return `<tr class="spec-row" data-spec-id="${esc(s.id)}">
       <td><code style="color:${col.text};font-size:0.78rem">${esc(s.id)}</code></td>
-      <td><strong>${esc(s.name)}</strong></td>
-      <td>${esc(s.value)}</td>
-      <td style="color:var(--muted)">${esc(s.units)}</td>
+      <td ${ed} data-edit-field="name"><strong>${esc(s.name)}</strong></td>
+      <td ${ed} data-edit-field="value">${esc(s.value)}</td>
+      <td ${ed} data-edit-field="units" style="color:var(--muted)">${esc(s.units)}</td>
       <td><span class="badge ${sc}" role="button" tabindex="0" data-spec-status-id="${esc(s.id)}" aria-label="Status: ${esc(s.status)} — press Enter or Space to change" title="Click to change status" style="cursor:pointer">${esc(s.status)}</span></td>
       <td style="color:var(--muted);font-size:0.8rem">${esc(s.group)}</td>
-      <td style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${esc(s.notes)}">${esc(s.notes)||'—'}</td>
+      <td class="editable-cell" data-edit-field="notes" tabindex="0" style="color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem" title="${esc(s.notes)}">${esc(s.notes)||'—'}</td>
       <td style="text-align:center">${depText}</td>
     </tr>`;
   };
@@ -162,6 +164,29 @@ export function renderSpecTable() {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); cycleSpecStatus(badge.dataset.specStatusId); }
     });
   });
+
+  // Inline editing: single-click opens the spec panel, double-click / Enter edits in place.
+  wrap.querySelectorAll('.editable-cell[data-edit-field]').forEach(cell => {
+    const id = cell.closest('tr[data-spec-id]').dataset.specId;
+    const field = cell.dataset.editField;
+    const open = () => { if (state.handlers.openSpecPanel) state.handlers.openSpecPanel(id); };
+    wireCellEdit(cell, open, () => {
+      const s = state.ProjectData.specs.find(x => x.id === id);
+      if (!s) return;
+      editCell(cell, { value: s[field], type: 'text', onCommit: raw => commitSpecField(s, field, raw) });
+    });
+  });
+}
+
+function commitSpecField(s, field, raw) {
+  const v = raw.trim();
+  if (field === 'name' && !v) { renderSpecTable(); showToast('Specification name cannot be empty', null, 3000); return; }
+  pushUndo('edit spec');
+  if (field === 'units') s.units = v || '—';
+  else s[field] = v;
+  renderSpecTable();
+  showToast('Specification updated', () => { if (state.handlers.applyUndo) state.handlers.applyUndo(); }, 5000);
+  if (state.spCurrentType === 'spec' && state.spCurrentId === s.id && state.handlers.openSpecPanel) state.handlers.openSpecPanel(s.id);
 }
 
 export function cycleSpecStatus(specId) {
