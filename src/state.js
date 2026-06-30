@@ -15,6 +15,7 @@ export const state = {
   undoStack: [], // max 50 entries, LIFO; each: { label, snapshot }
   redoStack: [], // max 50 entries; populated by applyUndo(), cleared by pushUndo()
   isDirty:   false, // true when ProjectData has unsaved edits since last load/export
+  spFormDirty: false, // true when an open side-panel edit form has been changed (guards tab switch)
 
   // ── Side panel ──────────────────────────────────────────────────────────────
   spCurrentType: null, // 'spec' | 'task' | 'org' | 'weight' | 'info'

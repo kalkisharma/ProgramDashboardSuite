@@ -24,6 +24,19 @@ describe('parseInfoSheet', () => {
     expect(info['Work Days']).toBe('Mon,Tue,Wed,Thu,Fri');
   });
 
+  it('skips the Field/Value header row (no junk "Field" entry)', () => {
+    const ws = sheet([
+      ['Field', 'Value'],
+      ['Project Title', 'Test Program'],
+    ]);
+    expect(parseInfoSheet(ws)).not.toHaveProperty('Field');
+  });
+
+  it('still parses a sheet with no header row', () => {
+    const ws = sheet([['Project Title', 'Headerless']]);
+    expect(parseInfoSheet(ws)['Project Title']).toBe('Headerless');
+  });
+
   it('trims whitespace from keys', () => {
     const ws = sheet([['  Project Title  ', 'Padded']]);
     expect(parseInfoSheet(ws)['Project Title']).toBe('Padded');

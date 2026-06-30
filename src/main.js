@@ -73,7 +73,7 @@ import { addNewSpec, deleteTask, deleteSpec, addGanttTask, resetGanttToImported,
 // are all in src/state.js — import { state } from './state.js'
 // getToday() imported from ./utils.js
 
-const APP_VERSION = 'v6.7.1'; // also update the HTML comment on line 1 of index.html
+const APP_VERSION = 'v6.7.2'; // also update the HTML comment on line 1 of index.html
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('help-version').textContent = 'Program Dashboard Suite ' + APP_VERSION;
 });
@@ -262,8 +262,11 @@ document.getElementById('help-overlay').addEventListener('click', e => {
 // ─── Tab Switching ────────────────────────────────────────────────────────────
 /** @param {HTMLElement} btn - The clicked tab button. @param {string} id - Tab key ('gantt'|'specs'|'prog'|'weight'|'org'). */
 function switchTab(btn, id) {
+  // An edit form is open AND actually changed → confirm before discarding it. A pristine
+  // panel (just opened, nothing typed) switches freely and simply closes.
   const saveBtn = document.querySelector('#sp-body [id$="-save-btn"]');
-  if (saveBtn) { showToast('Unsaved changes — save or cancel before switching tabs.', null, 3500); return; }
+  if (saveBtn && state.spFormDirty &&
+      !window.confirm('Discard the unsaved changes in the open panel and switch tabs?')) return;
   document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   btn.classList.add('active');

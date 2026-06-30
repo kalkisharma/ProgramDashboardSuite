@@ -4,8 +4,10 @@ import { parseDate, parseDeps, parseWorkDays } from './utils.js';
 export function parseInfoSheet(ws) {
   if (!ws) return {};
   const info = {};
-  XLSX.utils.sheet_to_json(ws, { header: 1 })
-    .forEach(r => { if (r[0] && r[1] != null) info[String(r[0]).trim()] = r[1]; });
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  // Skip the "Field / Value" header row if present (otherwise it imports as a junk entry).
+  const start = rows[0] && String(rows[0][0]).trim().toLowerCase() === 'field' ? 1 : 0;
+  rows.slice(start).forEach(r => { if (r[0] && r[1] != null) info[String(r[0]).trim()] = r[1]; });
   return info;
 }
 

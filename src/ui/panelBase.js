@@ -15,6 +15,8 @@ function trapFocus(e) {
   }
 }
 
+function markFormDirty() { state.spFormDirty = true; }
+
 export function showSidePanel() {
   const panel = document.getElementById('side-panel');
   panel.classList.add('open');
@@ -22,6 +24,9 @@ export function showSidePanel() {
   const onGantt = document.getElementById('gantt-panel').classList.contains('active');
   document.getElementById('org-container').style.paddingRight  = onOrg   ? '440px' : '';
   document.getElementById('gantt-right-col').style.marginRight  = onGantt ? '440px' : '';
+  // A freshly (re)shown panel is pristine; flag it dirty only once the user changes a field.
+  state.spFormDirty = false;
+  panel.addEventListener('input', markFormDirty);
   panel.addEventListener('keydown', trapFocus);
   requestAnimationFrame(() => {
     const first = panel.querySelector(FOCUSABLE);
@@ -33,6 +38,8 @@ export function closeSidePanel() {
   const panel = document.getElementById('side-panel');
   panel.classList.remove('open');
   panel.removeEventListener('keydown', trapFocus);
+  panel.removeEventListener('input', markFormDirty);
+  state.spFormDirty = false;
   document.getElementById('org-container').style.paddingRight  = '';
   document.getElementById('gantt-right-col').style.marginRight = '';
   state.spCurrentType = null;
