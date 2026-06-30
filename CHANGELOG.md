@@ -10,6 +10,9 @@ The full, granular per-release record (including pre-6.0 versions) lives in the
 
 ---
 
+## v6.8.1 — Complete changelog
+- Added this user-facing version history, backfilled with the full release record (v1.22.0 → v6.8.1). No application changes.
+
 ## v6.8.0 — Uniform inline editing
 - **Single-click opens the row's panel everywhere; double-click (or Enter) edits a cell in place.** Editable cells show a ✎ on hover; every edit is undoable.
 - Inline editing on the **Gantt** (task name / %), **Vehicle Specs** (Name / Value / Units / Notes), and **Weight Budget** (Estimated / Target).
